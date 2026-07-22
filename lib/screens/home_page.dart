@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
+import '../ajustes.dart';
 import '../sync_service.dart';
 import 'dashboard_page.dart';
 import 'elementos_page.dart';
@@ -44,6 +45,7 @@ class _HomePageState extends State<HomePage> {
     // Ya hay sesión: descargar el catálogo para poder trabajar sin señal
     // y subir lo que hubiera quedado pendiente de una sesión anterior.
     SyncService.alSesionIniciada();
+    Ajustes.cargar(); // config regional de exportaciones del usuario
   }
 
   bool get _admin => _roles.contains(Roles.admin);
@@ -144,6 +146,12 @@ class _HomePageState extends State<HomePage> {
                 subtitle: const Text('Descargar en Excel/CSV'),
                 onTap: () => _ir(const ReportesPage()),
               ),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Configuración'),
+                subtitle: const Text('Formato de exportaciones (por usuario)'),
+                onTap: () => _ir(const ConfiguracionPage()),
+              ),
             ],
             if (_admin)
               ListTile(
@@ -158,12 +166,6 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Trabajo sin conexión'),
               subtitle: const Text('Descargar catálogo y subir pendientes'),
               onTap: () => _ir(const SincronizacionPage()),
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Configuración'),
-              subtitle: const Text('Formato de exportaciones (CSV)'),
-              onTap: () => _ir(const ConfiguracionPage()),
             ),
             ListTile(
               leading: const Icon(Icons.account_circle),

@@ -22,6 +22,10 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
     super.initState();
     _csv = Ajustes.csvSep;
     _dec = Ajustes.decSep;
+    // Asegura la config del usuario actual.
+    Ajustes.cargar().then((_) {
+      if (mounted) setState(() { _csv = Ajustes.csvSep; _dec = Ajustes.decSep; });
+    });
   }
 
   bool get _conflicto => _csv == _dec;
