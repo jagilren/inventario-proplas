@@ -140,7 +140,7 @@ class _BodegaFormState extends State<_BodegaForm> {
             TextButton.icon(
               onPressed: _guardando ? null : _eliminar,
               icon: const Icon(Icons.delete, color: Colors.red),
-              label: const Text('Eliminar bodega',
+              label: const Text('Desactivar bodega',
                   style: TextStyle(color: Colors.red)),
             ),
         ],
@@ -152,14 +152,14 @@ class _BodegaFormState extends State<_BodegaForm> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar bodega'),
+        title: const Text('Desactivar bodega'),
         content: const Text('Se dará de baja (desaparece de las listas). '
             'El historial de movimientos se conserva. ¿Continuar?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Eliminar')),
+              child: const Text('Desactivar')),
         ],
       ),
     );
