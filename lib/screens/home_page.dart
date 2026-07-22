@@ -8,6 +8,7 @@ import 'movimiento_page.dart';
 import 'alertas_page.dart';
 import 'perfil_page.dart';
 import 'centros_page.dart';
+import 'bodegas_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
@@ -108,6 +109,12 @@ class _HomePageState extends State<HomePage> {
                 child: Text('GESTIÓN',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
                         letterSpacing: 1, color: Colors.grey)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.warehouse),
+                title: const Text('Bodegas'),
+                subtitle: const Text('Crear y editar'),
+                onTap: () => _ir(const BodegasPage()),
               ),
               ListTile(
                 leading: const Icon(Icons.account_tree),
