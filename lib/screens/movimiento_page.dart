@@ -17,6 +17,8 @@ class _MovimientoPageState extends State<MovimientoPage> {
   Elemento? _elemento;
   CentroCosto? _cc;
   List<CentroCosto> _centros = [];
+  Bodega? _bodega;
+  List<Bodega> _bodegas = [];
   final _cantidad = TextEditingController();
   final _costo = TextEditingController();
   final _obs = TextEditingController();
@@ -29,6 +31,14 @@ class _MovimientoPageState extends State<MovimientoPage> {
     super.initState();
     InventarioService.centrosCosto().then((c) {
       if (mounted) setState(() => _centros = c);
+    });
+    InventarioService.bodegas().then((b) {
+      if (mounted) {
+        setState(() {
+          _bodegas = b;
+          if (b.length == 1) _bodega = b.first; // una sola: la elige sola
+        });
+      }
     });
   }
 
@@ -67,6 +77,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
     final el = _elemento;
     final cant = num.tryParse(_cantidad.text.replaceAll(',', '.'));
     if (el == null) return _msg('Selecciona un elemento');
+    if (_bodega == null) return _msg('Selecciona la bodega');
     if (cant == null || cant <= 0) return _msg('Cantidad inválida');
     if (_esSalida && _cc == null) return _msg('Selecciona el centro de costo');
     if (!_esSalida) {
@@ -79,6 +90,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
       final subido = await InventarioService.registrarMovimiento(
         tipo: widget.tipoInicial,
         elementoId: el.id,
+        bodegaId: _bodega!.id,
         cantidad: cant,
         centroCostoId: _cc?.id,
         costoUnitario: _esSalida
@@ -147,6 +159,22 @@ class _MovimientoPageState extends State<MovimientoPage> {
               ),
               onTap: _elegirElemento,
             ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<Bodega>(
+            initialValue: _bodega,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Bodega',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.warehouse),
+            ),
+            items: _bodegas
+                .map((b) => DropdownMenuItem(
+                    value: b,
+                    child: Text(b.nombre, overflow: TextOverflow.ellipsis)))
+                .toList(),
+            onChanged: (v) => setState(() => _bodega = v),
           ),
           const SizedBox(height: 8),
           TextField(

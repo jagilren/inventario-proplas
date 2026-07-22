@@ -77,13 +77,17 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         final cant = num.tryParse(_cantIni.text.replaceAll(',', '.'));
         final costo = num.tryParse(_costoIni.text.replaceAll(',', '.'));
         if (cant != null && cant > 0 && elementoId != null) {
-          await InventarioService.registrarMovimiento(
-            tipo: 'inicial',
-            elementoId: elementoId,
-            cantidad: cant,
-            costoUnitario: costo ?? 0,
-            observacion: 'Existencia inicial al crear el elemento',
-          );
+          final bods = await InventarioService.bodegas();
+          if (bods.isNotEmpty) {
+            await InventarioService.registrarMovimiento(
+              tipo: 'inicial',
+              elementoId: elementoId,
+              bodegaId: bods.first.id,
+              cantidad: cant,
+              costoUnitario: costo ?? 0,
+              observacion: 'Existencia inicial al crear el elemento',
+            );
+          }
         }
       } else {
         await InventarioService.actualizarElemento(widget.elemento!.id, datos);

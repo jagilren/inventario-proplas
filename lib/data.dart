@@ -68,6 +68,26 @@ class CentroCosto {
       [codigo, descripcion, cliente].where((e) => e != null && e.isNotEmpty).join(' · ');
 }
 
+class Bodega {
+  final String id;
+  final String nombre;
+  final String? codigo;
+  Bodega.fromMap(Map<String, dynamic> m)
+      : id = m['id'] as String,
+        nombre = m['nombre'] as String,
+        codigo = m['codigo'] as String?;
+}
+
+class ExistenciaBodega {
+  final String bodega;
+  final num existencia;
+  final num costoPromedio;
+  ExistenciaBodega.fromMap(Map<String, dynamic> m)
+      : bodega = m['bodega'] as String,
+        existencia = (m['existencia'] ?? 0) as num,
+        costoPromedio = (m['costo_promedio'] ?? 0) as num;
+}
+
 class MovKardex {
   final String? id;
   final DateTime fecha;
@@ -212,6 +232,39 @@ class InventarioService {
   }
 
   /// Centros de costo. Sin señal, los toma del caché local.
+  static Future<List<Bodega>> bodegas() async {
+    final res = await supabase.from('bodegas').select()
+        .eq('activo', true).order('nombre');
+    return (res as List).map((e) => Bodega.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<ExistenciaBodega>> existenciasPorBodega(String elementoId) async {
+    final res = await supabase.rpc('existencias_por_bodega',
+        params: {'p_elemento': elementoId});
+    return (res as List)
+        .map((e) => ExistenciaBodega.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<void> trasladar({
+    required String elementoId, required num cantidad,
+    required String origenId, required String destinoId, String? obs}) async {
+    await supabase.rpc('trasladar', params: {
+      'p_elemento': elementoId, 'p_cantidad': cantidad,
+      'p_origen': origenId, 'p_destino': destinoId, 'p_obs': obs,
+    });
+    revision.value++;
+  }
+
+  static Future<void> guardarBodega({String? id, required String nombre,
+      String? codigo}) async {
+    final row = {'nombre': nombre, 'codigo': codigo};
+    if (id == null) {
+      await supabase.from('bodegas').insert(row);
+    } else {
+      await supabase.from('bodegas').update(row).eq('id', id);
+    }
+  }
+
   static Future<List<CentroCosto>> centrosCosto() async {
     try {
       final res = await supabase
@@ -396,6 +449,7 @@ class InventarioService {
   static Future<bool> registrarMovimiento({
     required String tipo,
     required String elementoId,
+    required String bodegaId,
     required num cantidad,
     String? centroCostoId,
     num? costoUnitario,
@@ -412,6 +466,7 @@ class InventarioService {
     final fila = {
       'tipo': tipo,
       'elemento_id': elementoId,
+      'bodega_id': bodegaId,
       'cantidad': cantidad,
       'centro_costo_id': centroCostoId,
       'costo_unitario': costoUnitario,
