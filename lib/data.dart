@@ -98,13 +98,16 @@ class MovKardex {
   final String? referencia;
   final String? observacion;
 
+  final String? bodega;
+
   MovKardex.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String?,
         fecha = DateTime.parse(m['fecha'] as String),
         tipo = m['tipo'] as String,
         cantidad = (m['cantidad'] ?? 0) as num,
         costoUnitario = m['costo_unitario'] as num?,
-        centroCosto = m['centro_costo'] as String?,
+        centroCosto = ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo']) as String?,
+        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
         referencia = m['referencia'] as String?,
         observacion = m['observacion'] as String?;
 
@@ -315,7 +318,12 @@ class InventarioService {
   }
 
   static Future<List<MovKardex>> kardex(String elementoId) async {
-    final res = await supabase.rpc('kardex_elemento', params: {'p_elemento': elementoId});
+    final res = await supabase.from('movimientos')
+        .select('id, fecha, tipo, cantidad, costo_unitario, referencia, '
+            'observacion, bodegas(nombre), centros_costo(codigo)')
+        .eq('elemento_id', elementoId)
+        .order('fecha', ascending: false)
+        .order('created_at', ascending: false);
     return (res as List).map((e) => MovKardex.fromMap(e as Map<String, dynamic>)).toList();
   }
 

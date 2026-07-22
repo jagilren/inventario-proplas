@@ -244,6 +244,7 @@ class _KardexPageState extends State<KardexPage> {
                           '${m.cantidad} ${e.unidad}'),
                       subtitle: Text([
                         _fecha.format(m.fecha),
+                        if (m.bodega != null) m.bodega!,
                         if (m.costoUnitario != null) _money.format(m.costoUnitario),
                         if (m.centroCosto != null) m.centroCosto!,
                         if (m.referencia != null) m.referencia!,
