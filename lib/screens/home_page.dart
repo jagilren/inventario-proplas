@@ -9,6 +9,7 @@ import 'alertas_page.dart';
 import 'perfil_page.dart';
 import 'centros_page.dart';
 import 'bodegas_page.dart';
+import 'traslados_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
@@ -116,6 +117,13 @@ class _HomePageState extends State<HomePage> {
                 subtitle: const Text('Crear y editar'),
                 onTap: () => _ir(const BodegasPage()),
               ),
+              if (_admin)
+                ListTile(
+                  leading: const Icon(Icons.swap_horiz),
+                  title: const Text('Traslados'),
+                  subtitle: const Text('Mover stock entre bodegas'),
+                  onTap: () => _ir(const TrasladosPage()),
+                ),
               ListTile(
                 leading: const Icon(Icons.account_tree),
                 title: const Text('Centros de costo'),

@@ -248,13 +248,30 @@ class InventarioService {
         .map((e) => ExistenciaBodega.fromMap(e as Map<String, dynamic>)).toList();
   }
 
+  /// Traslado = salida del origen + entrada al destino, en una sola operación
+  /// atómica sobre la tabla (evita el RPC). El costo viaja con el material.
   static Future<void> trasladar({
     required String elementoId, required num cantidad,
     required String origenId, required String destinoId, String? obs}) async {
-    await supabase.rpc('trasladar', params: {
-      'p_elemento': elementoId, 'p_cantidad': cantidad,
-      'p_origen': origenId, 'p_destino': destinoId, 'p_obs': obs,
-    });
+    final ex = await supabase.from('existencias')
+        .select('costo_promedio')
+        .eq('elemento_id', elementoId).eq('bodega_id', origenId).maybeSingle();
+    final costo = (ex?['costo_promedio'] ?? 0) as num;
+    final uid = supabase.auth.currentUser?.id;
+    await supabase.from('movimientos').insert([
+      {
+        'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': origenId,
+        'cantidad': cantidad, 'costo_unitario': null, 'referencia': 'TRASLADO',
+        'observacion': obs, 'usuario_id': uid,
+        'fecha': DateTime.now().toIso8601String(),
+      },
+      {
+        'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': destinoId,
+        'cantidad': cantidad, 'costo_unitario': costo, 'referencia': 'TRASLADO',
+        'observacion': obs, 'usuario_id': uid,
+        'fecha': DateTime.now().toIso8601String(),
+      },
+    ]);
     revision.value++;
   }
 
