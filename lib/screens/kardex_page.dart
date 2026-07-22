@@ -20,6 +20,7 @@ class _KardexPageState extends State<KardexPage> {
   bool _esAdmin = false;
   bool _puedeEditar = false;
   List<ImagenElem> _fotos = [];
+  List<ExistenciaBodega> _porBodega = [];
   late Future<List<MovKardex>> _future;
 
   @override
@@ -28,6 +29,7 @@ class _KardexPageState extends State<KardexPage> {
     _elemento = widget.elemento;
     _future = InventarioService.kardex(_elemento.id);
     _cargarFotos();
+    _cargarBodegas();
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() {
@@ -47,6 +49,15 @@ class _KardexPageState extends State<KardexPage> {
     }
   }
 
+  Future<void> _cargarBodegas() async {
+    try {
+      final b = await InventarioService.existenciasPorBodega(_elemento.id);
+      if (mounted) setState(() => _porBodega = b);
+    } catch (_) {
+      // sin red: se muestra solo el total
+    }
+  }
+
   Future<void> _recargar() async {
     // vuelve a leer existencia/costo actualizados
     final actualizado = await InventarioService.buscar(_elemento.nombre);
@@ -56,6 +67,7 @@ class _KardexPageState extends State<KardexPage> {
       _future = InventarioService.kardex(_elemento.id);
     });
     await _cargarFotos();
+    await _cargarBodegas();
   }
 
   Color _color(String tipo) => switch (tipo) {
@@ -169,6 +181,26 @@ class _KardexPageState extends State<KardexPage> {
                           _money.format(e.existencia * e.costoPromedio)),
                     ],
                   ),
+                  if (_porBodega.isNotEmpty) ...[
+                    const Divider(height: 20),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Existencia por bodega',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 8, runSpacing: 6,
+                        children: _porBodega.map((x) => Chip(
+                          avatar: const Icon(Icons.warehouse, size: 16),
+                          label: Text('${x.bodega}: ${x.existencia} ${e.unidad}'),
+                          visualDensity: VisualDensity.compact,
+                        )).toList(),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

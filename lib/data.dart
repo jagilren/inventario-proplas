@@ -83,7 +83,7 @@ class ExistenciaBodega {
   final num existencia;
   final num costoPromedio;
   ExistenciaBodega.fromMap(Map<String, dynamic> m)
-      : bodega = m['bodega'] as String,
+      : bodega = ((m['bodegas'] as Map?)?['nombre'] ?? m['bodega'] ?? '—') as String,
         existencia = (m['existencia'] ?? 0) as num,
         costoPromedio = (m['costo_promedio'] ?? 0) as num;
 }
@@ -239,8 +239,11 @@ class InventarioService {
   }
 
   static Future<List<ExistenciaBodega>> existenciasPorBodega(String elementoId) async {
-    final res = await supabase.rpc('existencias_por_bodega',
-        params: {'p_elemento': elementoId});
+    final res = await supabase.from('existencias')
+        .select('existencia, costo_promedio, bodegas(nombre)')
+        .eq('elemento_id', elementoId)
+        .neq('existencia', 0)
+        .order('existencia', ascending: false);
     return (res as List)
         .map((e) => ExistenciaBodega.fromMap(e as Map<String, dynamic>)).toList();
   }
