@@ -11,6 +11,7 @@ import 'centros_page.dart';
 import 'bodegas_page.dart';
 import 'traslados_page.dart';
 import 'reportes_page.dart';
+import 'configuracion_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
@@ -157,6 +158,12 @@ class _HomePageState extends State<HomePage> {
               title: const Text('Trabajo sin conexión'),
               subtitle: const Text('Descargar catálogo y subir pendientes'),
               onTap: () => _ir(const SincronizacionPage()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Configuración'),
+              subtitle: const Text('Formato de exportaciones (CSV)'),
+              onTap: () => _ir(const ConfiguracionPage()),
             ),
             ListTile(
               leading: const Icon(Icons.account_circle),

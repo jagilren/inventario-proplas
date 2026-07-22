@@ -3,12 +3,19 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
 import 'package:file_saver/file_saver.dart';
+import 'ajustes.dart';
 import 'data.dart';
 
 class Reportes {
   /// Convierte las filas a CSV y dispara la descarga (web y móvil).
   static Future<void> _descargar(String nombre, List<List<dynamic>> filas) async {
-    final csv = const ListToCsvConverter().convert(filas);
+    // Configuración regional: separador de decimales en los números.
+    final dec = Ajustes.decSep;
+    final fmt = filas
+        .map((row) => row.map((c) =>
+            c is num ? c.toString().replaceAll('.', dec) : c).toList())
+        .toList();
+    final csv = ListToCsvConverter(fieldDelimiter: Ajustes.csvSep).convert(fmt);
     // BOM UTF-8 para que Excel muestre bien las tildes.
     final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
     final fecha = DateTime.now().toIso8601String().substring(0, 10);

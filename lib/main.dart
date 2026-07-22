@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
+import 'ajustes.dart';
 import 'sync_service.dart';
 import 'screens/login_page.dart';
 import 'screens/home_page.dart';
@@ -11,6 +12,7 @@ Future<void> main() async {
     url: Config.supabaseUrl,
     publishableKey: Config.supabasePublishableKey,
   );
+  await Ajustes.cargar(); // config regional de exportaciones
   // Vigilancia de la red + subida de lo que quedó pendiente.
   // No se espera (unawaited) para no demorar el arranque de la app.
   SyncService.iniciar();
