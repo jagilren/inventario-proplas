@@ -20,19 +20,25 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Gestión de inventarios PROPLAS">
 
-  <!-- Anti-caché: elimina cualquier service worker viejo y sus cachés para que
-       la app SIEMPRE cargue la última versión (evita quedar pegada en una
-       versión anterior al probar por web/ngrok). Se ejecuta en cada carga. -->
+  <!-- Auto-actualización del service worker (versionado por hash de Flutter):
+       cuando el navegador activa una versión NUEVA del service worker, la
+       página se recarga sola UNA vez para mostrarla. Así el usuario siempre
+       ve la última versión sin limpiar caché ni recargar a mano, y conserva
+       la carga rápida y el funcionamiento sin conexión. -->
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (r) { r.unregister(); });
-      }).catch(function () {});
-    }
-    if (window.caches && caches.keys) {
-      caches.keys().then(function (keys) {
-        keys.forEach(function (k) { caches.delete(k); });
-      }).catch(function () {});
+      // ¿ya había una versión controlando la página al cargar?
+      var teniaControlador = !!navigator.serviceWorker.controller;
+      var recargando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (recargando) return;
+        // Solo recargar cuando es una ACTUALIZACIÓN (no la primera instalación),
+        // para no entrar en un bucle de recargas en la primera visita.
+        if (teniaControlador) {
+          recargando = true;
+          window.location.reload();
+        }
+      });
     }
   </script>
 
