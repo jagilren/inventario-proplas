@@ -101,6 +101,16 @@ class LocalStore {
 
   static Future<int> cantidadPendientes() async => (await pendientes()).length;
 
+  /// Existencia guardada en caché para un elemento (null si no está en caché).
+  /// Sirve para validar el stock cuando no hay conexión.
+  static Future<num?> existenciaLocal(String elementoId) async {
+    final elementos = await leerElementos();
+    for (final e in elementos) {
+      if (e['id'] == elementoId) return (e['existencia'] ?? 0) as num;
+    }
+    return null;
+  }
+
   /// Ajusta la existencia guardada en caché, para que el bodeguero vea el
   /// stock correcto aunque el movimiento todavía no haya subido.
   static Future<void> ajustarExistenciaLocal(

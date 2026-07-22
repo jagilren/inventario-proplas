@@ -438,8 +438,17 @@ class InventarioService {
           txt.contains('violates row-level security')) {
         rethrow;
       }
-      // Falla de red: guardar en la cola y ajustar el stock local para que
-      // el bodeguero vea la existencia correcta mientras tanto.
+      // Falla de red: antes de encolar una SALIDA, validar el stock local
+      // para no sacar más de lo que hay (el servidor la rechazaría después).
+      if (tipo == 'salida') {
+        final existLocal = await LocalStore.existenciaLocal(elementoId);
+        if (existLocal != null && cantidad > existLocal) {
+          throw Exception('Existencia insuficiente: hay $existLocal y se '
+              'intenta sacar $cantidad');
+        }
+      }
+      // Guardar en la cola y ajustar el stock local para que el bodeguero
+      // vea la existencia correcta mientras tanto.
       await LocalStore.encolar(fila);
       await LocalStore.ajustarExistenciaLocal(
           elementoId, tipo == 'salida' ? -cantidad : cantidad);
