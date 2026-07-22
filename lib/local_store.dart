@@ -32,8 +32,10 @@ class LocalStore {
     var id = p.getString(_kDeviceId);
     if (id == null) {
       final r = Random();
+      // 0xFFFFFFFF (no "1 << 32"): en web, 1<<32 se desborda a 0 y nextInt(0)
+      // revienta con RangeError. 0xFFFFFFFF es seguro en web y en móvil.
       id = 'dev-${DateTime.now().millisecondsSinceEpoch}-'
-          '${r.nextInt(1 << 32).toRadixString(16)}';
+          '${r.nextInt(0xFFFFFFFF).toRadixString(16)}';
       await p.setString(_kDeviceId, id);
     }
     return id;
