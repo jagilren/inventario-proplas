@@ -1,4 +1,5 @@
 // Modelos y acceso a datos (Supabase).
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'local_store.dart';
@@ -48,7 +49,7 @@ class ImagenElem {
         url = m['url'] as String,
         ruta = m['ruta'] as String,
         principal = (m['principal'] ?? false) as bool,
-        orden = (m['orden'] ?? 0) as int;
+        orden = ((m['orden'] ?? 0) as num).toInt();
 }
 
 class CentroCosto {
@@ -96,10 +97,10 @@ class Resumen {
   final int bajoMinimo;
   final int totalMovimientos;
   Resumen.fromMap(Map<String, dynamic> m)
-      : totalElementos = (m['total_elementos'] ?? 0) as int,
+      : totalElementos = ((m['total_elementos'] ?? 0) as num).toInt(),
         valorizacionTotal = (m['valorizacion_total'] ?? 0) as num,
-        bajoMinimo = (m['bajo_minimo'] ?? 0) as int,
-        totalMovimientos = (m['total_movimientos'] ?? 0) as int;
+        bajoMinimo = ((m['bajo_minimo'] ?? 0) as num).toInt(),
+        totalMovimientos = ((m['total_movimientos'] ?? 0) as num).toInt();
 }
 
 class MovReciente {
@@ -398,7 +399,10 @@ class InventarioService {
   }) async {
     // (device_id, local_id) es la llave que impide subir dos veces lo mismo.
     final deviceId = await LocalStore.deviceId();
-    final localId = '${DateTime.now().microsecondsSinceEpoch}';
+    // En web solo hay precisión de milisegundos: dos movimientos en el mismo
+    // ms tendrían igual id y uno se perdería. Se añade un sufijo aleatorio.
+    final localId = '${DateTime.now().microsecondsSinceEpoch}-'
+        '${Random().nextInt(0xFFFFFF).toRadixString(16)}';
 
     final fila = {
       'tipo': tipo,
