@@ -1,0 +1,9 @@
+# Configuración del proyecto Supabase (CLI)
+project_id = "nyvaswimcxbqxnlcnxij"
+
+[functions.crear-usuario]
+verify_jwt = true
+
+# La web debe ser pública (sin token), es el sitio en sí.
+[functions.web]
+verify_jwt = false

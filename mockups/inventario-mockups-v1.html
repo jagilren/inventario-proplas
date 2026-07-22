@@ -1,0 +1,339 @@
+<title>Inventario PROPLAS — Mockups de la app</title>
+<style>
+  :root {
+    --teal:#00695c; --teal-600:#00897b; --teal-100:#b2dfdb;
+    --orange:#e8890c; --orange-bg:#fdf1e0;
+    --green:#2e7d32; --green-bg:#e9f5ea;
+    --blue:#1565c0; --blue-bg:#e6eefa;
+    --ink:#12201e; --muted:#5b6b68;
+    --line:#dfe6e4; --card:#ffffff;
+    --canvas:#eef2f1; --frame:#0d1b19;
+    --chip:#eef3f2;
+    --shadow:0 18px 45px -20px rgba(13,27,25,.45);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e7efed; --muted:#93a5a1; --line:#25332f; --card:#12201d;
+      --canvas:#0b1512; --chip:#182824; --teal-100:#1f3b36;
+      --orange-bg:#2a1e0d; --green-bg:#12251a; --blue-bg:#111f30;
+      --shadow:0 18px 45px -20px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="light"]{
+    --ink:#12201e; --muted:#5b6b68; --line:#dfe6e4; --card:#fff;
+    --canvas:#eef2f1; --chip:#eef3f2; --teal-100:#b2dfdb;
+    --orange-bg:#fdf1e0; --green-bg:#e9f5ea; --blue-bg:#e6eefa;
+    --shadow:0 18px 45px -20px rgba(13,27,25,.45);
+  }
+  :root[data-theme="dark"]{
+    --ink:#e7efed; --muted:#93a5a1; --line:#25332f; --card:#12201d;
+    --canvas:#0b1512; --chip:#182824; --teal-100:#1f3b36;
+    --orange-bg:#2a1e0d; --green-bg:#12251a; --blue-bg:#111f30;
+    --shadow:0 18px 45px -20px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);background:var(--canvas);color:var(--ink);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 24px 80px}
+  header.intro{max-width:660px;margin-bottom:8px}
+  .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--teal-600);font-weight:700;margin:0 0 14px}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0 0 16px;
+    letter-spacing:-.02em;text-wrap:balance;font-weight:800}
+  .lede{font-size:18px;color:var(--muted);margin:0 0 10px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .tag{font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;
+    background:var(--chip);color:var(--muted);border:1px solid var(--line)}
+  .tag b{color:var(--teal-600)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+    gap:44px 34px;margin-top:52px;align-items:start}
+  figure{margin:0}
+  .cap{margin-top:18px}
+  .cap .n{font-size:12px;font-weight:700;color:var(--teal-600);letter-spacing:.08em}
+  .cap h3{margin:6px 0 5px;font-size:19px;letter-spacing:-.01em}
+  .cap p{margin:0;color:var(--muted);font-size:14.5px}
+
+  /* ---- phone frame ---- */
+  .phone{width:300px;max-width:100%;margin:0 auto;background:var(--frame);
+    border-radius:40px;padding:11px;box-shadow:var(--shadow);position:relative}
+  .phone::after{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);
+    width:52px;height:5px;border-radius:3px;background:rgba(255,255,255,.22)}
+  .screen{background:var(--card);border-radius:30px;overflow:hidden;height:600px;
+    display:flex;flex-direction:column;position:relative}
+  .status{display:flex;justify-content:space-between;align-items:center;
+    padding:12px 18px 4px;font-size:11.5px;font-weight:700;color:var(--muted)}
+  .status .dots{display:flex;gap:4px;align-items:center}
+  .appbar{background:var(--teal);color:#fff;padding:12px 16px;display:flex;
+    align-items:center;justify-content:space-between}
+  .appbar .t{font-size:16px;font-weight:700}
+  .appbar .ic{opacity:.9;font-size:17px}
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .navbar{display:flex;border-top:1px solid var(--line);background:var(--card)}
+  .navbar div{flex:1;text-align:center;padding:9px 2px 11px;font-size:10px;color:var(--muted)}
+  .navbar div .g{font-size:18px;display:block;margin-bottom:2px}
+  .navbar div.on{color:var(--teal-600);font-weight:700}
+  .navbar div.on .g{filter:none}
+
+  /* search + list */
+  .search{margin:12px 12px 6px;display:flex;align-items:center;gap:8px;
+    border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:13px}
+  .row{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .av{width:38px;height:38px;border-radius:50%;background:var(--teal-100);color:var(--teal);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:0 0 auto}
+  .av.warn{background:var(--orange-bg);color:var(--orange)}
+  .row .tx{min-width:0;flex:1}
+  .row .tx b{display:block;font-size:13px;font-weight:600;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .row .tx span{font-size:11.5px;color:var(--muted)}
+  .chev{color:var(--muted);font-size:15px}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* login */
+  .login{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:0 28px;gap:14px;text-align:center}
+  .logo{width:66px;height:66px;border-radius:20px;background:var(--teal);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:var(--shadow)}
+  .login h2{margin:6px 0 12px;font-size:19px}
+  .field{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;
+    display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px}
+  .btn{width:100%;background:var(--teal);color:#fff;border-radius:12px;padding:13px;
+    text-align:center;font-weight:700;font-size:14px;margin-top:4px}
+
+  /* movimiento form */
+  .banner{margin:12px;border-radius:14px;padding:13px 15px;display:flex;gap:10px;align-items:center;
+    font-weight:700;font-size:14px}
+  .banner.sal{background:var(--orange-bg);color:var(--orange)}
+  .banner.ent{background:var(--green-bg);color:var(--green)}
+  .fcard{margin:0 12px 9px;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px}
+  .fcard .lb{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  .fcard .vl{font-size:13.5px;margin-top:3px}
+  .fcard .vl.ph{color:var(--muted)}
+  .save{margin:10px 12px;background:var(--teal);color:#fff;border-radius:12px;padding:13px;
+    text-align:center;font-weight:700;font-size:14px;display:flex;gap:8px;justify-content:center;align-items:center}
+
+  /* kardex */
+  .ksum{display:flex;justify-content:space-around;margin:12px;padding:15px 8px;
+    border:1px solid var(--line);border-radius:14px;background:var(--chip)}
+  .ksum .s{text-align:center}
+  .ksum .s b{display:block;font-size:15px;font-weight:800}
+  .ksum .s span{font-size:10.5px;color:var(--muted)}
+  .klabel{padding:2px 14px 8px;font-size:12px;font-weight:700;color:var(--muted)}
+  .krow{display:flex;gap:11px;padding:10px 14px;border-bottom:1px solid var(--line);align-items:center}
+  .kdot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:14px;flex:0 0 auto}
+  .kdot.sal{background:var(--orange-bg);color:var(--orange)}
+  .kdot.ini{background:var(--blue-bg);color:var(--blue)}
+  .krow .kt{flex:1;min-width:0}
+  .krow .kt b{font-size:12.5px}
+  .krow .kt span{display:block;font-size:11px;color:var(--muted)}
+
+  /* alertas */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted)}
+  .empty .big{font-size:44px}
+  .footnote{max-width:660px;margin:64px auto 0;padding-top:26px;border-top:1px solid var(--line);
+    color:var(--muted);font-size:14px}
+  .footnote b{color:var(--ink)}
+  .g{font-family:var(--sans)}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <p class="eyebrow">Mockups · versión 1</p>
+    <h1>Inventario PROPLAS</h1>
+    <p class="lede">Cómo se ve la app que ya está compilada en el APK — pantallas reales,
+      con datos migrados desde tu Excel: 959 elementos, 9 centros de costo, existencias
+      y costo promedio calculados por la base de datos.</p>
+    <div class="meta">
+      <span class="tag"><b>Flutter</b> · Android + Web</span>
+      <span class="tag"><b>Supabase</b> · base compartida</span>
+      <span class="tag">Búsqueda inteligente</span>
+      <span class="tag">Costo promedio móvil</span>
+      <span class="tag">Auditoría + roles</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- 1. LOGIN -->
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots">▪▪▪ ▪ ▮</span></div>
+        <div class="login">
+          <div class="logo">📦</div>
+          <h2>Inventario PROPLAS</h2>
+          <div class="field">✉️ jagilren@gmail.com</div>
+          <div class="field">🔒 ••••••••••</div>
+          <div class="btn">Ingresar</div>
+        </div>
+      </div></div>
+      <figcaption class="cap">
+        <div class="n">ACCESO</div>
+        <h3>Inicio de sesión</h3>
+        <p>Cada usuario entra con su cuenta. El rol (admin o bodeguero) define qué puede hacer.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 2. EXISTENCIAS -->
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots">▪▪▪ ▪ ▮</span></div>
+        <div class="appbar"><span class="t">Inventario PROPLAS</span><span class="ic">⏻</span></div>
+        <div class="body">
+          <div class="search">🔎 brida inox 4</div>
+          <div class="row">
+            <div class="av num">1</div>
+            <div class="tx"><b>Brida Lisa So Inox 304 4" Clase 150</b>
+              <span class="num">1 UND · costo prom. $99.000</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="av num">494</div>
+            <div class="tx"><b>Arandela Plana Galvanizado 1"</b>
+              <span class="num">494 UND · costo prom. $89</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="av num">339</div>
+            <div class="tx"><b>Tuerca Hexagonal Galvanizado</b>
+              <span class="num">339 UND · costo prom. $446</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="av warn num">2</div>
+            <div class="tx"><b>Codo 45° PVC Presión SCH 40 1"</b>
+              <span class="num">2 UND · costo prom. $1.923</span></div>
+            <span class="chev">⚠️</span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div class="on"><span class="g">🔎</span>Existencias</div>
+          <div><span class="g">⬆️</span>Salida</div>
+          <div><span class="g">⬇️</span>Entrada</div>
+          <div><span class="g">⚠️</span>Alertas</div>
+        </div>
+      </div></div>
+      <figcaption class="cap">
+        <div class="n">CONSULTA</div>
+        <h3>Existencias + búsqueda inteligente</h3>
+        <p>Escribes palabras en cualquier orden ("brida inox 4") y encuentra el elemento. Muestra existencia y costo promedio al instante.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 3. REGISTRAR SALIDA -->
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots">▪▪▪ ▪ ▮</span></div>
+        <div class="appbar"><span class="t">Inventario PROPLAS</span><span class="ic">⏻</span></div>
+        <div class="body">
+          <div class="banner sal">⬆️ Registrar SALIDA</div>
+          <div class="fcard">
+            <div class="lb">Elemento</div>
+            <div class="vl">Acople OPW Parte F PP 1"</div>
+            <div class="vl ph num">Existencia: 12 UND · costo prom. $4.400</div>
+          </div>
+          <div class="fcard"><div class="lb">Cantidad (UND)</div><div class="vl num">1</div></div>
+          <div class="fcard"><div class="lb">Centro de costo destino</div>
+            <div class="vl">NP00034 · TANQUES DE RESINA · Familia Essity</div></div>
+          <div class="fcard"><div class="lb">Observación</div>
+            <div class="vl ph">Acople rápido 1" polietileno…</div></div>
+          <div class="save">💾 Guardar salida</div>
+        </div>
+        <div class="navbar">
+          <div><span class="g">🔎</span>Existencias</div>
+          <div class="on"><span class="g">⬆️</span>Salida</div>
+          <div><span class="g">⬇️</span>Entrada</div>
+          <div><span class="g">⚠️</span>Alertas</div>
+        </div>
+      </div></div>
+      <figcaption class="cap">
+        <div class="n">MOVIMIENTO</div>
+        <h3>Registrar una salida</h3>
+        <p>Buscas el elemento, indicas cantidad y centro de costo. La base descuenta el stock y bloquea si no hay existencia.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 4. KARDEX -->
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots">▪▪▪ ▪ ▮</span></div>
+        <div class="appbar"><span class="t">Tuerca Hexagonal Galv.</span><span class="ic">‹</span></div>
+        <div class="body">
+          <div class="ksum">
+            <div class="s"><b class="num">339 UND</b><span>Existencia</span></div>
+            <div class="s"><b class="num">$446</b><span>Costo prom.</span></div>
+            <div class="s"><b class="num">$151.114</b><span>Valorización</span></div>
+          </div>
+          <div class="klabel">Kardex (movimientos)</div>
+          <div class="krow">
+            <div class="kdot ini">⬇️</div>
+            <div class="kt"><b>INICIAL · 300 UND</b>
+              <span class="num">30/04/2026 · $440 · OC-02742</span></div>
+          </div>
+          <div class="krow">
+            <div class="kdot ini">⬇️</div>
+            <div class="kt"><b>INICIAL · 45 UND</b>
+              <span class="num">30/04/2026 · $465 · OC-03616</span></div>
+          </div>
+          <div class="krow">
+            <div class="kdot sal">⬆️</div>
+            <div class="kt"><b>SALIDA · 6 UND</b>
+              <span class="num">21/06/2026 · NP00034 · Tanques de resina</span></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption class="cap">
+        <div class="n">TRAZABILIDAD</div>
+        <h3>Kardex por elemento</h3>
+        <p>Toca cualquier elemento y ves su historia completa: entradas, salidas, costos y en qué centro de costo se consumió. Algo que Excel no da.</p>
+      </figcaption>
+    </figure>
+
+    <!-- 5. ALERTAS -->
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots">▪▪▪ ▪ ▮</span></div>
+        <div class="appbar"><span class="t">Inventario PROPLAS</span><span class="ic">⏻</span></div>
+        <div class="body">
+          <div class="row">
+            <div class="av warn">⚠️</div>
+            <div class="tx"><b>Codo 45° PVC Presión SCH 40 1"</b>
+              <span class="num">Existencia 2 · mínimo 10 UND</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="av warn">⚠️</div>
+            <div class="tx"><b>Brida Lisa So Inox 304 4" Clase 150</b>
+              <span class="num">Existencia 1 · mínimo 5 UND</span></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="row">
+            <div class="av warn">⚠️</div>
+            <div class="tx"><b>Sellador conexiones fuerza media 36ml</b>
+              <span class="num">Existencia 0 · mínimo 4 UND</span></div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+        <div class="navbar">
+          <div><span class="g">🔎</span>Existencias</div>
+          <div><span class="g">⬆️</span>Salida</div>
+          <div><span class="g">⬇️</span>Entrada</div>
+          <div class="on"><span class="g">⚠️</span>Alertas</div>
+        </div>
+      </div></div>
+      <figcaption class="cap">
+        <div class="n">CONTROL</div>
+        <h3>Alertas de stock mínimo</h3>
+        <p>Defines un mínimo por elemento y la app lista lo que hay que reponer. Si todo está bien, muestra un check verde.</p>
+      </figcaption>
+    </figure>
+
+  </div>
+
+  <p class="footnote">
+    <b>Nota sobre esta versión.</b> Estos mockups reflejan la app v1 ya compilada (online, habla directo con Supabase).
+    El <b>escaneo por código de barras</b>, la <b>foto del elemento</b> y el modo <b>offline-first</b> con
+    sincronización quedan para la fase 2. Los datos mostrados son reales de tu inventario migrado.
+  </p>
+</div>

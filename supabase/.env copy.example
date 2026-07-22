@@ -1,0 +1,9 @@
+# Copia este archivo a  .env  y rellena los valores reales.
+# El archivo .env está en .gitignore: NO se sube ni se comparte.
+
+# Project URL  (Supabase -> Project Settings -> API -> Project URL)
+SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+
+# service_role key  (Supabase -> Project Settings -> API -> service_role)
+# ¡SECRETA! Solo para migración/administración. Nunca en la app ni en el chat.
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
