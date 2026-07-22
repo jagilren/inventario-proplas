@@ -10,6 +10,7 @@ import 'perfil_page.dart';
 import 'centros_page.dart';
 import 'bodegas_page.dart';
 import 'traslados_page.dart';
+import 'reportes_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
@@ -135,6 +136,12 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Auditoría de cambios'),
                 subtitle: const Text('Quién cambió qué y cuándo'),
                 onTap: () => _ir(const HistorialPage(titulo: 'Auditoría de cambios')),
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_for_offline),
+                title: const Text('Informes'),
+                subtitle: const Text('Descargar en Excel/CSV'),
+                onTap: () => _ir(const ReportesPage()),
               ),
             ],
             if (_admin)
