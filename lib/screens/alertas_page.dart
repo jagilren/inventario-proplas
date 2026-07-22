@@ -18,6 +18,17 @@ class _AlertasPageState extends State<AlertasPage> {
   void initState() {
     super.initState();
     _future = InventarioService.bajoMinimo();
+    InventarioService.revision.addListener(_recargar);
+  }
+
+  void _recargar() {
+    if (mounted) setState(() => _future = InventarioService.bajoMinimo());
+  }
+
+  @override
+  void dispose() {
+    InventarioService.revision.removeListener(_recargar);
+    super.dispose();
   }
 
   @override

@@ -26,12 +26,26 @@ class _ElementosPageState extends State<ElementosPage> {
   void initState() {
     super.initState();
     _buscar('');
+    // Recargar la lista cuando haya un movimiento (salida/entrada/anulación),
+    // aunque esta pantalla quede viva en segundo plano (IndexedStack).
+    InventarioService.revision.addListener(_onCambioInventario);
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() => _puedeCrear =
             r.contains(Roles.admin) || r.contains(Roles.coordinador));
       }
     });
+  }
+
+  void _onCambioInventario() {
+    if (mounted) _buscar(_ctrl.text);
+  }
+
+  @override
+  void dispose() {
+    InventarioService.revision.removeListener(_onCambioInventario);
+    _ctrl.dispose();
+    super.dispose();
   }
 
   Future<void> _buscar(String q) async {

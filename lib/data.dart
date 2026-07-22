@@ -1,6 +1,6 @@
 // Modelos y acceso a datos (Supabase).
 import 'dart:math';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'local_store.dart';
 import 'sync_service.dart';
@@ -176,6 +176,10 @@ class Roles {
 }
 
 class InventarioService {
+  /// Se incrementa tras cada cambio de inventario (movimiento o anulación).
+  /// Las vistas abiertas (existencias, dashboard, alertas) lo escuchan y se
+  /// recargan solas, sin que el usuario tenga que refrescar a mano.
+  static final ValueNotifier<int> revision = ValueNotifier(0);
   /// Búsqueda inteligente (palabras en cualquier orden, sin tildes).
   /// Si no hay señal, busca en el caché local con las mismas reglas.
   static Future<List<Elemento>> buscar(String q) async {
@@ -256,6 +260,7 @@ class InventarioService {
   static Future<void> anularMovimiento(String movId, String? motivo) async {
     await supabase.rpc('anular_movimiento',
         params: {'p_mov': movId, 'p_motivo': motivo});
+    revision.value++;
   }
 
   /// Roles del usuario actual (puede tener varios).
@@ -421,6 +426,7 @@ class InventarioService {
     try {
       await supabase.from('movimientos').insert(fila);
       SyncService.enLinea.value = true;
+      revision.value++;
       return true;
     } on Object catch (e) {
       // Si el rechazo viene de una REGLA DEL NEGOCIO (por ejemplo, no hay
@@ -439,6 +445,7 @@ class InventarioService {
           elementoId, tipo == 'salida' ? -cantidad : cantidad);
       SyncService.enLinea.value = false;
       await SyncService.refrescarPendientes();
+      revision.value++;
       return false;
     }
   }

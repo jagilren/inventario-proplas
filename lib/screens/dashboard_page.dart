@@ -22,6 +22,13 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _cargar();
+    InventarioService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    InventarioService.revision.removeListener(_cargar);
+    super.dispose();
   }
 
   Future<void> _cargar() async {
