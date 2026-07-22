@@ -13,11 +13,11 @@ class _CentrosPageState extends State<CentrosPage> {
   @override
   void initState() {
     super.initState();
-    _future = InventarioService.centrosCosto();
+    _future = InventarioService.centrosTodos();
   }
 
   void _recargar() => setState(() {
-        _future = InventarioService.centrosCosto();
+        _future = InventarioService.centrosTodos();
       });
 
   Future<void> _editar([CentroCosto? cc]) async {
@@ -55,8 +55,10 @@ class _CentrosPageState extends State<CentrosPage> {
             itemBuilder: (_, i) {
               final c = centros[i];
               return ListTile(
-                leading: const Icon(Icons.account_tree),
-                title: Text(c.codigo),
+                leading: Icon(Icons.account_tree,
+                    color: c.activo ? null : Colors.grey),
+                title: Text(c.activo ? c.codigo : '${c.codigo}  (inactivo)',
+                    style: c.activo ? null : const TextStyle(color: Colors.grey)),
                 subtitle: Text([c.descripcion, c.cliente]
                     .where((e) => e != null && e.isNotEmpty).join(' · ')),
                 trailing: const Icon(Icons.edit, size: 20),
@@ -150,10 +152,15 @@ class _CentroFormState extends State<_CentroForm> {
           )),
           if (widget.centro != null)
             TextButton.icon(
-              onPressed: _guardando ? null : _eliminar,
-              icon: const Icon(Icons.delete, color: Colors.red),
-              label: const Text('Desactivar centro',
-                  style: TextStyle(color: Colors.red)),
+              onPressed: _guardando
+                  ? null
+                  : (widget.centro!.activo ? _eliminar : _reactivar),
+              icon: Icon(widget.centro!.activo ? Icons.delete : Icons.check_circle,
+                  color: widget.centro!.activo ? Colors.red : Colors.green),
+              label: Text(
+                  widget.centro!.activo ? 'Desactivar centro' : 'Reactivar centro',
+                  style: TextStyle(
+                      color: widget.centro!.activo ? Colors.red : Colors.green)),
             ),
         ],
       ),
@@ -179,6 +186,20 @@ class _CentroFormState extends State<_CentroForm> {
     setState(() => _guardando = true);
     try {
       await InventarioService.eliminarCentro(widget.centro!.id);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _guardando = false);
+      }
+    }
+  }
+
+  Future<void> _reactivar() async {
+    setState(() => _guardando = true);
+    try {
+      await InventarioService.reactivarCentro(widget.centro!.id);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {

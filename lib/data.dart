@@ -58,11 +58,13 @@ class CentroCosto {
   final String? descripcion;
   final String? cliente;
 
+  final bool activo;
   CentroCosto.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String,
         codigo = m['codigo'] as String,
         descripcion = m['descripcion'] as String?,
-        cliente = m['cliente'] as String?;
+        cliente = m['cliente'] as String?,
+        activo = (m['activo'] ?? true) as bool;
 
   String get etiqueta =>
       [codigo, descripcion, cliente].where((e) => e != null && e.isNotEmpty).join(' · ');
@@ -72,10 +74,12 @@ class Bodega {
   final String id;
   final String nombre;
   final String? codigo;
+  final bool activo;
   Bodega.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String,
         nombre = m['nombre'] as String,
-        codigo = m['codigo'] as String?;
+        codigo = m['codigo'] as String?,
+        activo = (m['activo'] ?? true) as bool;
 }
 
 class ExistenciaBodega {
@@ -288,13 +292,38 @@ class InventarioService {
     }
   }
 
-  /// Baja lógica: la oculta de listas pero conserva el historial.
+  /// Todas las bodegas (activas e inactivas), para la pantalla de gestión.
+  static Future<List<Bodega>> bodegasTodas() async {
+    final res = await supabase.from('bodegas').select().order('nombre');
+    return (res as List).map((e) => Bodega.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<CentroCosto>> centrosTodos() async {
+    final res = await supabase.from('centros_costo').select().order('codigo');
+    return (res as List).map((e) => CentroCosto.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Baja lógica. No se permite si la bodega tiene inventario.
   static Future<void> eliminarBodega(String id) async {
+    final ex = await supabase.from('existencias')
+        .select('existencia').eq('bodega_id', id).neq('existencia', 0).limit(1);
+    if ((ex as List).isNotEmpty) {
+      throw Exception('No se puede desactivar: la bodega tiene inventario. '
+          'Traslada o consume el stock primero.');
+    }
     await supabase.from('bodegas').update({'activo': false}).eq('id', id);
+  }
+
+  static Future<void> reactivarBodega(String id) async {
+    await supabase.from('bodegas').update({'activo': true}).eq('id', id);
   }
 
   static Future<void> eliminarCentro(String id) async {
     await supabase.from('centros_costo').update({'activo': false}).eq('id', id);
+  }
+
+  static Future<void> reactivarCentro(String id) async {
+    await supabase.from('centros_costo').update({'activo': true}).eq('id', id);
   }
 
   static Future<List<CentroCosto>> centrosCosto() async {

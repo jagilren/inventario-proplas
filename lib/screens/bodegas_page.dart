@@ -13,10 +13,10 @@ class _BodegasPageState extends State<BodegasPage> {
   @override
   void initState() {
     super.initState();
-    _future = InventarioService.bodegas();
+    _future = InventarioService.bodegasTodas();
   }
 
-  void _recargar() => setState(() => _future = InventarioService.bodegas());
+  void _recargar() => setState(() => _future = InventarioService.bodegasTodas());
 
   Future<void> _editar([Bodega? b]) async {
     final guardado = await showModalBottomSheet<bool>(
@@ -51,8 +51,10 @@ class _BodegasPageState extends State<BodegasPage> {
             itemBuilder: (_, i) {
               final b = bodegas[i];
               return ListTile(
-                leading: const Icon(Icons.warehouse),
-                title: Text(b.nombre),
+                leading: Icon(Icons.warehouse,
+                    color: b.activo ? null : Colors.grey),
+                title: Text(b.activo ? b.nombre : '${b.nombre}  (inactiva)',
+                    style: b.activo ? null : const TextStyle(color: Colors.grey)),
                 subtitle: b.codigo == null ? null : Text(b.codigo!),
                 trailing: const Icon(Icons.edit, size: 20),
                 onTap: () => _editar(b),
@@ -138,10 +140,15 @@ class _BodegaFormState extends State<_BodegaForm> {
           )),
           if (widget.bodega != null)
             TextButton.icon(
-              onPressed: _guardando ? null : _eliminar,
-              icon: const Icon(Icons.delete, color: Colors.red),
-              label: const Text('Desactivar bodega',
-                  style: TextStyle(color: Colors.red)),
+              onPressed: _guardando
+                  ? null
+                  : (widget.bodega!.activo ? _eliminar : _reactivar),
+              icon: Icon(widget.bodega!.activo ? Icons.delete : Icons.check_circle,
+                  color: widget.bodega!.activo ? Colors.red : Colors.green),
+              label: Text(
+                  widget.bodega!.activo ? 'Desactivar bodega' : 'Reactivar bodega',
+                  style: TextStyle(
+                      color: widget.bodega!.activo ? Colors.red : Colors.green)),
             ),
         ],
       ),
@@ -167,6 +174,20 @@ class _BodegaFormState extends State<_BodegaForm> {
     setState(() => _guardando = true);
     try {
       await InventarioService.eliminarBodega(widget.bodega!.id);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', ''))));
+        setState(() => _guardando = false);
+      }
+    }
+  }
+
+  Future<void> _reactivar() async {
+    setState(() => _guardando = true);
+    try {
+      await InventarioService.reactivarBodega(widget.bodega!.id);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
