@@ -148,8 +148,44 @@ class _CentroFormState extends State<_CentroForm> {
                 : const Icon(Icons.save),
             label: const Text('Guardar'),
           )),
+          if (widget.centro != null)
+            TextButton.icon(
+              onPressed: _guardando ? null : _eliminar,
+              icon: const Icon(Icons.delete, color: Colors.red),
+              label: const Text('Eliminar centro',
+                  style: TextStyle(color: Colors.red)),
+            ),
         ],
       ),
     );
+  }
+
+  Future<void> _eliminar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar centro de costo'),
+        content: const Text('Se dará de baja (desaparece de las listas). '
+            'El historial de movimientos se conserva. ¿Continuar?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _guardando = true);
+    try {
+      await InventarioService.eliminarCentro(widget.centro!.id);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _guardando = false);
+      }
+    }
   }
 }

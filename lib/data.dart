@@ -288,6 +288,15 @@ class InventarioService {
     }
   }
 
+  /// Baja lógica: la oculta de listas pero conserva el historial.
+  static Future<void> eliminarBodega(String id) async {
+    await supabase.from('bodegas').update({'activo': false}).eq('id', id);
+  }
+
+  static Future<void> eliminarCentro(String id) async {
+    await supabase.from('centros_costo').update({'activo': false}).eq('id', id);
+  }
+
   static Future<List<CentroCosto>> centrosCosto() async {
     try {
       final res = await supabase
