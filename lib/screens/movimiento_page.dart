@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
 import 'escaner_page.dart';
+import 'devoluciones_page.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
@@ -189,6 +190,15 @@ class _MovimientoPageState extends State<MovimientoPage> {
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
+          if (!_esSalida) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const DevolucionesPage())),
+              icon: const Icon(Icons.assignment_return),
+              label: const Text('Devoluciones (cargar Excel)'),
+            ),
+          ],
           const SizedBox(height: 12),
           // Selector de elemento
           Card(

@@ -50,6 +50,10 @@ dependencies:
   csv: ^6.0.0
   file_saver: ^0.2.14
   image: ^4.3.0
+  # Elegir archivos (Excel/CSV de devoluciones) desde el dispositivo o la web
+  file_picker: ^8.1.2
+  # Leer archivos .xlsx (carga masiva de devoluciones)
+  excel: ^4.0.6
 
 dev_dependencies:
   flutter_test:

@@ -378,6 +378,31 @@ class InventarioService {
         .toList();
   }
 
+  /// Todos los elementos activos (para emparejar la carga de devoluciones).
+  static Future<List<Elemento>> todosElementos() async {
+    final res = await supabase
+        .from('elementos')
+        .select()
+        .eq('activo', true)
+        .order('nombre');
+    return (res as List)
+        .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Elementos con existencia pero costo promedio en 0 (no valorizados).
+  static Future<List<Elemento>> costoCero() async {
+    final res = await supabase
+        .from('elementos')
+        .select()
+        .gt('existencia', 0)
+        .eq('costo_promedio', 0)
+        .order('nombre');
+    return (res as List)
+        .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<List<MovKardex>> kardex(String elementoId) async {
     final res = await supabase.from('movimientos')
         .select('id, fecha, tipo, cantidad, costo_unitario, referencia, '
