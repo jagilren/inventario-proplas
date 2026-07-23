@@ -9,6 +9,7 @@ import '../util/tiempo.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fecha = DateFormat('dd/MM/yyyy');
+final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
 class KardexPage extends StatefulWidget {
   final Elemento elemento;
@@ -21,6 +22,7 @@ class _KardexPageState extends State<KardexPage> {
   late Elemento _elemento;
   bool _esAdmin = false;
   bool _puedeEditar = false;
+  final String? _uid = InventarioService.miUid;
   List<ImagenElem> _fotos = [];
   List<ExistenciaBodega> _porBodega = [];
   List<Serie> _series = [];
@@ -128,6 +130,106 @@ class _KardexPageState extends State<KardexPage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  /// Detalle de un movimiento: ver/editar la observación y (a futuro) adjuntar.
+  Future<void> _verDetalle(MovKardex m) async {
+    final canEdit = m.id != null &&
+        (_puedeEditar || (m.usuarioId != null && m.usuarioId == _uid));
+    final ctrl = TextEditingController(text: m.observacion ?? '');
+    bool guardando = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        return Padding(
+          padding: EdgeInsets.only(left: 16, right: 16, top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${m.tipo.toUpperCase()} · ${m.cantidad} ${_elemento.unidad}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text([
+                _fechaHora.format(horaColombia(m.fecha)),
+                if (m.bodega != null) m.bodega!,
+                if (m.costoUnitario != null) _money.format(m.costoUnitario),
+                if (m.centroCosto != null) m.centroCosto!,
+              ].join(' · '), style: const TextStyle(color: Colors.grey)),
+              const Divider(height: 24),
+              TextField(
+                controller: ctrl,
+                enabled: canEdit,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Observación',
+                  border: const OutlineInputBorder(),
+                  helperText: canEdit
+                      ? 'Puedes corregir la observación'
+                      : 'Solo lectura (no eres admin, coordinador ni el autor)',
+                ),
+              ),
+              if (canEdit) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: guardando ? null : () async {
+                      setSheet(() => guardando = true);
+                      try {
+                        await InventarioService.editarObservacion(m.id!, ctrl.text);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _recargar();
+                      } catch (e) {
+                        setSheet(() => guardando = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                    icon: guardando
+                        ? const SizedBox(width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.save),
+                    label: const Text('Guardar observación'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _mensajeCreditos(ctx),
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('Adjuntar archivo (PDF/Excel)'),
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  /// La subida de adjuntos está deshabilitada para no gastar Storage.
+  void _mensajeCreditos(BuildContext ctx) {
+    showDialog<void>(
+      context: ctx,
+      builder: (d) => AlertDialog(
+        icon: const Icon(Icons.savings, color: Colors.orange, size: 40),
+        title: const Text('Función de pago'),
+        content: const Text(
+            'Te hacen falta créditos en SUPABASE para adjuntar archivos. '
+            'Transfiere el billete para darte los permisos 💸'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d),
+              child: const Text('Entendido')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -289,20 +391,30 @@ class _KardexPageState extends State<KardexPage> {
                       ),
                       title: Text('${m.tipo.toUpperCase()} · '
                           '${m.cantidad} ${e.unidad}'),
-                      subtitle: Text([
-                        _fecha.format(horaColombia(m.fecha)),
-                        if (m.bodega != null) m.bodega!,
-                        if (m.costoUnitario != null) _money.format(m.costoUnitario),
-                        if (m.centroCosto != null) m.centroCosto!,
-                        if (m.referencia != null) m.referencia!,
-                      ].join(' · ')),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text([
+                            _fecha.format(horaColombia(m.fecha)),
+                            if (m.bodega != null) m.bodega!,
+                            if (m.costoUnitario != null) _money.format(m.costoUnitario),
+                            if (m.centroCosto != null) m.centroCosto!,
+                            if (m.referencia != null) m.referencia!,
+                          ].join(' · ')),
+                          if (m.observacion != null && m.observacion!.isNotEmpty)
+                            Text('📝 ${m.observacion!}',
+                                style: const TextStyle(
+                                    fontStyle: FontStyle.italic, fontSize: 12)),
+                        ],
+                      ),
                       trailing: (_esAdmin && !m.esAnulacion)
                           ? IconButton(
                               icon: const Icon(Icons.block, size: 20, color: Colors.red),
                               tooltip: 'Anular',
                               onPressed: () => _anular(m),
                             )
-                          : null,
+                          : const Icon(Icons.chevron_right, size: 18),
+                      onTap: () => _verDetalle(m),
                     );
                   },
                 );

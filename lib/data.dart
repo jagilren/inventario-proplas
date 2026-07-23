@@ -443,6 +443,9 @@ class InventarioService {
     return (res as List).map((e) => MovKardex.fromMap(e as Map<String, dynamic>)).toList();
   }
 
+  /// Id del usuario autenticado (para saber si es autor de un movimiento).
+  static String? get miUid => supabase.auth.currentUser?.id;
+
   /// Edita SOLO la observación de un movimiento (el candado de la base impide
   /// cambiar cualquier otra cosa). Permiso: admin, coordinador o autor.
   static Future<void> editarObservacion(String movId, String? obs) async {
