@@ -85,7 +85,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('assets/logo_rpci_10anos.png', height: 36),
+            Image.asset('assets/rpci_letras.png', height: 30),
             const SizedBox(width: 10),
             Expanded(
               child: Text('Inventario · ${secciones[_idx].titulo}',

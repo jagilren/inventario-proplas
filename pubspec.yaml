@@ -92,6 +92,7 @@ flutter:
   assets:
     - assets/logo_rpci_10anos.png
     - assets/rpci_sectores.png
+    - assets/rpci_letras.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
