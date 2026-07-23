@@ -398,6 +398,17 @@ class InventarioService {
     return (res as List).map((e) => Usuario.fromMap(e as Map<String, dynamic>)).toList();
   }
 
+  /// Busca usuarios por correo o nombre (servidor, máx. 30). Para el selector
+  /// de configuración cuando hay muchos usuarios.
+  static Future<List<Usuario>> buscarUsuarios(String q) async {
+    final base = supabase.from('profiles').select('id, email, nombre');
+    final filtrado = q.trim().isEmpty
+        ? base
+        : base.or('email.ilike.%$q%,nombre.ilike.%$q%');
+    final res = await filtrado.order('email').limit(30);
+    return (res as List).map((e) => Usuario.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
   static Future<void> asignarRol(String usuarioId, String rol) async {
     await supabase.from('usuario_roles').insert({'usuario_id': usuarioId, 'rol': rol});
   }

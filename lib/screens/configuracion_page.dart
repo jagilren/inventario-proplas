@@ -16,8 +16,8 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
   bool _esAdmin = false;
   bool _cargando = true;
 
-  List<Usuario> _usuarios = [];
-  String? _usuarioSel; // usuario cuya config se está editando
+  String? _usuarioSel;    // id del usuario cuya config se edita
+  String _usuarioLabel = 'Mi configuración';
 
   static const _seps = {';': 'Punto y coma  ( ; )', ',': 'Coma  ( , )',
     '\t': 'Tabulación'};
@@ -26,16 +26,15 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
   @override
   void initState() {
     super.initState();
-    _usuarioSel = Supabase.instance.client.auth.currentUser?.id;
+    final u = Supabase.instance.client.auth.currentUser;
+    _usuarioSel = u?.id;
+    _usuarioLabel = '${u?.email ?? ''}  (yo)';
     _init();
   }
 
   Future<void> _init() async {
     final roles = await InventarioService.misRoles();
     _esAdmin = roles.contains(Roles.admin);
-    if (_esAdmin) {
-      try { _usuarios = await InventarioService.listarUsuarios(); } catch (_) {}
-    }
     await _cargarConfigDe(_usuarioSel);
     if (mounted) setState(() => _cargando = false);
   }
@@ -44,6 +43,22 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
     if (uid == null) return;
     final (csv, dec) = await Ajustes.configDe(uid);
     if (mounted) setState(() { _csv = csv; _dec = dec; });
+  }
+
+  Future<void> _elegirUsuario() async {
+    final sel = await showModalBottomSheet<Usuario>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _BuscadorUsuario(),
+    );
+    if (sel != null) {
+      final propio = sel.id == Supabase.instance.client.auth.currentUser?.id;
+      setState(() {
+        _usuarioSel = sel.id;
+        _usuarioLabel = (sel.email ?? sel.nombre ?? sel.id) + (propio ? '  (yo)' : '');
+      });
+      await _cargarConfigDe(sel.id);
+    }
   }
 
   bool get _conflicto => _csv == _dec;
@@ -90,23 +105,17 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
                   'Colombia lo normal es «;» y decimales con «,».',
               style: const TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 18),
-          if (_esAdmin && _usuarios.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              initialValue: _usuarioSel,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Usuario', border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person)),
-              items: _usuarios.map((u) => DropdownMenuItem(
-                  value: u.id,
-                  child: Text(u.email ?? u.nombre ?? u.id,
-                      overflow: TextOverflow.ellipsis))).toList(),
-              onChanged: (v) {
-                setState(() => _usuarioSel = v);
-                _cargarConfigDe(v);
-              },
+          if (_esAdmin) ...[
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.person_search),
+                title: Text(_usuarioLabel),
+                subtitle: const Text('Toca para elegir el usuario'),
+                trailing: const Icon(Icons.search),
+                onTap: _elegirUsuario,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
           DropdownButtonFormField<String>(
             initialValue: _csv,
@@ -155,6 +164,65 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Buscador de usuarios (servidor, por correo/nombre).
+class _BuscadorUsuario extends StatefulWidget {
+  const _BuscadorUsuario();
+  @override
+  State<_BuscadorUsuario> createState() => _BuscadorUsuarioState();
+}
+
+class _BuscadorUsuarioState extends State<_BuscadorUsuario> {
+  final _ctrl = TextEditingController();
+  List<Usuario> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _buscar('');
+  }
+
+  Future<void> _buscar(String q) async {
+    final r = await InventarioService.buscarUsuarios(q);
+    if (mounted) setState(() => _items = r);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _ctrl, autofocus: true, onChanged: _buscar,
+              decoration: const InputDecoration(
+                  hintText: 'Buscar usuario por correo o nombre…',
+                  prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _items.length,
+              itemBuilder: (_, i) {
+                final u = _items[i];
+                return ListTile(
+                  leading: const Icon(Icons.person),
+                  title: Text(u.email ?? u.nombre ?? u.id),
+                  subtitle: u.nombre != null && u.email != null
+                      ? Text(u.nombre!) : null,
+                  onTap: () => Navigator.pop(context, u),
+                );
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }

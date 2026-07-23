@@ -30,6 +30,50 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _recuperar() async {
+    final ctrl = TextEditingController(text: _email.text.trim());
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Escribe tu correo y te enviaremos un enlace para poner '
+              'una contraseña nueva.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+                labelText: 'Correo', border: OutlineInputBorder()),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enviar enlace')),
+        ],
+      ),
+    );
+    if (ok != true || ctrl.text.trim().isEmpty) return;
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        ctrl.text.trim(),
+        redirectTo: 'https://inventario-proplas.pages.dev',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✓ Te enviamos un correo con el enlace. Revisa tu '
+                'bandeja (y el spam).')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,6 +127,10 @@ class _LoginPageState extends State<LoginPage> {
                             child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Ingresar'),
                   ),
+                ),
+                TextButton(
+                  onPressed: _cargando ? null : _recuperar,
+                  child: const Text('¿Olvidaste tu contraseña?'),
                 ),
               ],
             ),

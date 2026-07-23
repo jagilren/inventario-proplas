@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
@@ -5,6 +6,7 @@ import 'ajustes.dart';
 import 'sync_service.dart';
 import 'screens/login_page.dart';
 import 'screens/home_page.dart';
+import 'screens/nueva_password_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,19 +38,45 @@ class InventarioApp extends StatelessWidget {
   }
 }
 
-/// Muestra Login o Home según haya sesión activa.
-class AuthGate extends StatelessWidget {
+/// Muestra Login, la pantalla de nueva contraseña (si llegó por el enlace de
+/// recuperación) o Home según haya sesión activa.
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _recuperando = false;
+  StreamSubscription<AuthState>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (!mounted) return;
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        setState(() => _recuperando = true);
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session != null) return const HomePage();
-        return const LoginPage();
-      },
-    );
+    if (_recuperando) {
+      return NuevaPasswordPage(
+          onListo: () => setState(() => _recuperando = false));
+    }
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) return const HomePage();
+    return const LoginPage();
   }
 }
