@@ -126,6 +126,24 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     }
   }
 
+  /// Pre-llena el formulario a partir de otro artículo similar (menos el
+  /// código de barras, que es único).
+  Future<void> _copiarDeOtro() async {
+    final sel = await showModalBottomSheet<Elemento>(
+      context: context, isScrollControlled: true,
+      builder: (_) => const _BuscadorCopia(),
+    );
+    if (sel == null) return;
+    setState(() {
+      _nombre.text = sel.nombre;
+      _material.text = sel.material ?? '';
+      _sch.text = sel.sch ?? '';
+      _stockMin.text = sel.stockMinimo.toString();
+      _unidad = _unidades.contains(sel.unidad) ? sel.unidad : 'UND';
+    });
+    _msg('Copiado de "${sel.nombre}". Ajusta lo que cambie (ej. SCH).');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,6 +152,15 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_esNuevo)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: _copiarDeOtro,
+                icon: const Icon(Icons.copy_all),
+                label: const Text('Copiar de otro artículo'),
+              ),
+            ),
           GaleriaElemento(
             elementoId: widget.elemento?.id,
             onPendientes: (fotos) => _fotosPendientes = fotos,
@@ -226,6 +253,64 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
           hintText: hint,
           border: const OutlineInputBorder(),
         ),
+      ),
+    );
+  }
+}
+
+/// Buscador de artículos para copiar la info al crear uno nuevo.
+class _BuscadorCopia extends StatefulWidget {
+  const _BuscadorCopia();
+  @override
+  State<_BuscadorCopia> createState() => _BuscadorCopiaState();
+}
+
+class _BuscadorCopiaState extends State<_BuscadorCopia> {
+  final _ctrl = TextEditingController();
+  List<Elemento> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _buscar('');
+  }
+
+  Future<void> _buscar(String q) async {
+    final r = await InventarioService.buscar(q);
+    if (mounted) setState(() => _items = r);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _ctrl, autofocus: true, onChanged: _buscar,
+              decoration: const InputDecoration(
+                  hintText: 'Buscar artículo a copiar…',
+                  prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _items.length,
+              itemBuilder: (_, i) {
+                final e = _items[i];
+                return ListTile(
+                  title: Text(e.nombre),
+                  subtitle: Text([e.material, e.sch, e.unidad]
+                      .where((x) => x != null && x.isNotEmpty).join(' · ')),
+                  onTap: () => Navigator.pop(context, e),
+                );
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }

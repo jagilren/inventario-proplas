@@ -128,6 +128,12 @@ class _ElementosPageState extends State<ElementosPage> {
                       onPressed: () => Navigator.push(context, MaterialPageRoute(
                           builder: (_) => const ReconocerPage())),
                     ),
+                    if (_puedeCrear)
+                      IconButton(
+                        icon: const Icon(Icons.add_box, color: Colors.teal),
+                        tooltip: 'Nuevo elemento',
+                        onPressed: _nuevoElemento,
+                      ),
                   ],
                 ),
                 border: const OutlineInputBorder(),
