@@ -165,12 +165,43 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           : _leerXlsx(bytes);
       final filas = _emparejar(crudas);
       if (mounted) setState(() => _filas = filas);
-      if (filas.isEmpty) _msg('El archivo no tiene filas válidas (ELEMENTO y CANTIDAD)');
+    } on FormatException catch (e) {
+      setState(() { _filas = []; _archivo = null; });
+      _archivoInvalido(e.message);
     } catch (e) {
-      _msg('Error leyendo el archivo: $e');
+      setState(() { _filas = []; _archivo = null; });
+      _archivoInvalido('No pude leer el archivo. Verifica que sea un Excel '
+          '(.xlsx) o CSV válido.\n\nDetalle: $e');
     } finally {
       if (mounted) setState(() => _leyendo = false);
     }
+  }
+
+  /// Muestra un aviso claro cuando el archivo no sirve, recordando el formato.
+  Future<void> _archivoInvalido(String motivo) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.error_outline, color: Colors.red, size: 40),
+        title: const Text('Archivo inválido'),
+        content: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(motivo),
+            const SizedBox(height: 12),
+            const Text('Formato esperado:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('• Dos columnas: ELEMENTO y CANTIDAD (con encabezado).\n'
+                '• Si trae columnas de más, no hay problema: se ignoran.\n'
+                '• Excel (.xlsx) o CSV.'),
+          ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido')),
+        ],
+      ),
+    );
   }
 
   /// Devuelve filas crudas [texto, cantidad] ya sin encabezado.
@@ -213,13 +244,25 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     return v.toString().trim();
   }
 
-  /// Detecta el encabezado (columnas ELEMENTO/CANTIDAD) y devuelve solo los
-  /// datos como [textoElemento, cantidadTexto].
+  /// Detecta las columnas ELEMENTO/CANTIDAD y devuelve solo los datos como
+  /// [textoElemento, cantidadTexto]. Si el archivo no tiene esas dos columnas,
+  /// lanza [FormatException] con un mensaje claro (archivo inválido).
+  ///
+  /// - Columnas de MÁS: no importan, se emparejan por el nombre del encabezado
+  ///   y las demás se ignoran.
+  /// - Columnas de MENOS (falta ELEMENTO o CANTIDAD): archivo inválido.
   List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas) {
-    if (filas.isEmpty) return [];
-    int idxHeader = -1, colElem = 0, colCant = 1;
-    for (var r = 0; r < filas.length; r++) {
-      final fila = filas[r];
+    // Quita filas totalmente vacías.
+    final rows = filas
+        .where((f) => f.any((c) => c.toString().trim().isNotEmpty))
+        .toList();
+    if (rows.isEmpty) {
+      throw const FormatException('El archivo está vacío.');
+    }
+
+    int idxHeader = -1, colElem = -1, colCant = -1;
+    for (var r = 0; r < rows.length; r++) {
+      final fila = rows[r];
       int ce = -1, cc = -1;
       for (var c = 0; c < fila.length; c++) {
         final t = _norm(fila[c].toString());
@@ -228,14 +271,37 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       }
       if (ce >= 0 && cc >= 0) { idxHeader = r; colElem = ce; colCant = cc; break; }
     }
+
+    int inicio;
+    if (idxHeader >= 0) {
+      inicio = idxHeader + 1;
+    } else {
+      // Sin encabezado reconocible. Solo se acepta el modo posicional
+      // (col A = ELEMENTO, col B = CANTIDAD) si de verdad se ve así:
+      // todas las filas con ≥2 columnas y la 2ª con números.
+      final conDos = rows.where((f) => f.length >= 2).length;
+      final numericas = rows.where((f) =>
+          f.length >= 2 && _parseCant(f[1].toString()) > 0).length;
+      if (conDos < rows.length || numericas == 0) {
+        throw const FormatException(
+            'No encontré las columnas ELEMENTO y CANTIDAD.\n\n'
+            'El archivo debe tener exactamente esas dos columnas '
+            '(con su encabezado): ELEMENTO y CANTIDAD.');
+      }
+      colElem = 0; colCant = 1; inicio = 0;
+    }
+
     final datos = <List<dynamic>>[];
-    final inicio = idxHeader >= 0 ? idxHeader + 1 : 0;
-    for (var r = inicio; r < filas.length; r++) {
-      final fila = filas[r];
+    for (var r = inicio; r < rows.length; r++) {
+      final fila = rows[r];
       final texto = colElem < fila.length ? fila[colElem].toString().trim() : '';
       final cant = colCant < fila.length ? fila[colCant].toString().trim() : '';
       if (texto.isEmpty && cant.isEmpty) continue;
       datos.add([texto, cant]);
+    }
+    if (datos.isEmpty) {
+      throw const FormatException(
+          'El archivo tiene los encabezados pero ninguna fila con datos.');
     }
     return datos;
   }
