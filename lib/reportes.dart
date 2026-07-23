@@ -5,6 +5,7 @@ import 'package:csv/csv.dart';
 import 'package:file_saver/file_saver.dart';
 import 'ajustes.dart';
 import 'data.dart';
+import 'util/tiempo.dart';
 
 class Reportes {
   /// Convierte las filas a CSV y dispara la descarga (web y móvil).
@@ -27,8 +28,12 @@ class Reportes {
     );
   }
 
-  static String _fecha(dynamic iso) =>
-      iso == null ? '' : iso.toString().substring(0, 10);
+  static String _fecha(dynamic iso) {
+    if (iso == null) return '';
+    final f = horaColombia(DateTime.parse(iso.toString()));
+    return '${f.year}-${f.month.toString().padLeft(2, '0')}-'
+        '${f.day.toString().padLeft(2, '0')}';
+  }
 
   /// 1) Existencias valorizadas (por elemento y bodega).
   static Future<void> existenciasValorizadas() async {

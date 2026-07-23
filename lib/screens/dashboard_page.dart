@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
+import '../util/tiempo.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _int = NumberFormat.decimalPattern('es_CO');
@@ -109,7 +110,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 title: Text(m.elemento, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text('${m.tipo.toUpperCase()} · ${m.cantidad} ${m.unidad}'
                     '${m.centroCosto != null ? ' · ${m.centroCosto}' : ''}'),
-                trailing: Text(_fecha.format(m.fecha),
+                trailing: Text(_fecha.format(horaColombia(m.fecha)),
                     style: const TextStyle(fontSize: 11, color: Colors.grey)),
               ),
             );

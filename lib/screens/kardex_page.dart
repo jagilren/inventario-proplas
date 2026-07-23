@@ -5,6 +5,7 @@ import 'editar_elemento_page.dart';
 import 'serializar_page.dart';
 import 'historial_page.dart';
 import '../widgets/imagen_elemento.dart';
+import '../util/tiempo.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fecha = DateFormat('dd/MM/yyyy');
@@ -289,7 +290,7 @@ class _KardexPageState extends State<KardexPage> {
                       title: Text('${m.tipo.toUpperCase()} · '
                           '${m.cantidad} ${e.unidad}'),
                       subtitle: Text([
-                        _fecha.format(m.fecha),
+                        _fecha.format(horaColombia(m.fecha)),
                         if (m.bodega != null) m.bodega!,
                         if (m.costoUnitario != null) _money.format(m.costoUnitario),
                         if (m.centroCosto != null) m.centroCosto!,

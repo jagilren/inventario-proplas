@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
+import '../util/tiempo.dart';
 
 final _fmt = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -87,7 +88,7 @@ class _HistorialPageState extends State<HistorialPage> {
                 ),
                 title: Text(a.descripcion),
                 subtitle: Text([
-                  _fmt.format(a.fecha),
+                  _fmt.format(horaColombia(a.fecha)),
                   if (a.usuarioEmail != null) a.usuarioEmail!,
                   if (widget.tabla == null && a.tabla != null) a.tabla!,
                 ].join('  ·  ')),

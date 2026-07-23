@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../local_store.dart';
 import '../sync_service.dart';
+import '../util/tiempo.dart';
 
 final _fmt = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -115,7 +116,7 @@ class _SincronizacionPageState extends State<SincronizacionPage> {
                   title: Text('$_elementosGuardados elementos guardados'),
                   subtitle: Text('$_centrosGuardados centros de costo · '
                       'última descarga: '
-                      '${_ultima == null ? 'nunca' : _fmt.format(_ultima!)}'),
+                      '${_ultima == null ? 'nunca' : _fmt.format(horaColombia(_ultima!))}'),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

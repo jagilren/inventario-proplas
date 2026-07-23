@@ -122,6 +122,7 @@ class MovKardex {
   final String? centroCosto;
   final String? referencia;
   final String? observacion;
+  final String? usuarioId;
 
   final String? bodega;
 
@@ -134,9 +135,38 @@ class MovKardex {
         centroCosto = ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo']) as String?,
         bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
         referencia = m['referencia'] as String?,
-        observacion = m['observacion'] as String?;
+        observacion = m['observacion'] as String?,
+        usuarioId = m['usuario_id'] as String?;
 
   bool get esAnulacion => (referencia ?? '').startsWith('ANULACION');
+}
+
+/// Archivo adjunto a un movimiento (PDF, XLSX, imagen…).
+class Adjunto {
+  final String id;
+  final String movimientoId;
+  final String nombre;
+  final String ruta;
+  final String url;
+  final String? tipo;
+  final int? tamano;
+
+  Adjunto.fromMap(Map<String, dynamic> m)
+      : id = m['id'] as String,
+        movimientoId = m['movimiento_id'] as String,
+        nombre = m['nombre'] as String,
+        ruta = m['ruta'] as String,
+        url = m['url'] as String,
+        tipo = m['tipo'] as String?,
+        tamano = (m['tamano'] as num?)?.toInt();
+
+  bool get esPdf => (tipo ?? '').contains('pdf') ||
+      nombre.toLowerCase().endsWith('.pdf');
+  bool get esExcel => (tipo ?? '').contains('sheet') ||
+      (tipo ?? '').contains('excel') ||
+      nombre.toLowerCase().endsWith('.xlsx') ||
+      nombre.toLowerCase().endsWith('.xls');
+  bool get esImagen => (tipo ?? '').startsWith('image/');
 }
 
 class Resumen {
@@ -293,13 +323,13 @@ class InventarioService {
         'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': origenId,
         'cantidad': cantidad, 'costo_unitario': null, 'referencia': 'TRASLADO',
         'observacion': obs, 'usuario_id': uid,
-        'fecha': DateTime.now().toIso8601String(),
+        'fecha': DateTime.now().toUtc().toIso8601String(),
       },
       {
         'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': destinoId,
         'cantidad': cantidad, 'costo_unitario': costo, 'referencia': 'TRASLADO',
         'observacion': obs, 'usuario_id': uid,
-        'fecha': DateTime.now().toIso8601String(),
+        'fecha': DateTime.now().toUtc().toIso8601String(),
       },
     ]);
     revision.value++;
@@ -406,11 +436,60 @@ class InventarioService {
   static Future<List<MovKardex>> kardex(String elementoId) async {
     final res = await supabase.from('movimientos')
         .select('id, fecha, tipo, cantidad, costo_unitario, referencia, '
-            'observacion, bodegas(nombre), centros_costo(codigo)')
+            'observacion, usuario_id, bodegas(nombre), centros_costo(codigo)')
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)
         .order('created_at', ascending: false);
     return (res as List).map((e) => MovKardex.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Edita SOLO la observación de un movimiento (el candado de la base impide
+  /// cambiar cualquier otra cosa). Permiso: admin, coordinador o autor.
+  static Future<void> editarObservacion(String movId, String? obs) async {
+    await supabase.from('movimientos')
+        .update({'observacion': (obs == null || obs.trim().isEmpty) ? null : obs.trim()})
+        .eq('id', movId);
+    revision.value++;
+  }
+
+  static const _baldeAdjuntos = 'adjuntos-mov';
+
+  /// Adjuntos de un movimiento (PDF/XLSX/imagen).
+  static Future<List<Adjunto>> adjuntosMovimiento(String movId) async {
+    final res = await supabase.from('movimiento_adjuntos')
+        .select().eq('movimiento_id', movId).order('creado_en');
+    return (res as List).map((e) => Adjunto.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Sube un archivo y lo asocia al movimiento. Devuelve el adjunto creado.
+  static Future<Adjunto> agregarAdjunto(String movId, String nombre,
+      Uint8List bytes, String tipo) async {
+    final limpio = nombre.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final ruta = '$movId/${DateTime.now().millisecondsSinceEpoch}_$limpio';
+    await supabase.storage.from(_baldeAdjuntos).uploadBinary(
+          ruta, bytes,
+          fileOptions: FileOptions(contentType: tipo, upsert: true),
+        );
+    final url = supabase.storage.from(_baldeAdjuntos).getPublicUrl(ruta);
+    final res = await supabase.from('movimiento_adjuntos').insert({
+      'movimiento_id': movId,
+      'nombre': nombre,
+      'ruta': ruta,
+      'url': url,
+      'tipo': tipo,
+      'tamano': bytes.length,
+      'subido_por': supabase.auth.currentUser?.id,
+    }).select().single();
+    return Adjunto.fromMap(res);
+  }
+
+  static Future<void> borrarAdjunto(Adjunto a) async {
+    await supabase.from('movimiento_adjuntos').delete().eq('id', a.id);
+    try {
+      await supabase.storage.from(_baldeAdjuntos).remove([a.ruta]);
+    } catch (_) {
+      // Si el archivo ya no existe, el registro igual quedó borrado.
+    }
   }
 
   static Future<Resumen> resumen() async {
@@ -587,7 +666,7 @@ class InventarioService {
     String? observacion, String? bodegaDestinoId}) async {
     final uid = supabase.auth.currentUser?.id;
     final n = serials.length;
-    final ahora = DateTime.now().toIso8601String();
+    final ahora = DateTime.now().toUtc().toIso8601String();
     if (tipo == 'entrada') {
       final mov = await supabase.from('movimientos').insert({
         'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': bodegaId,
@@ -691,7 +770,7 @@ class InventarioService {
       'referencia': referencia,
       'observacion': observacion,
       'usuario_id': supabase.auth.currentUser?.id,
-      'fecha': DateTime.now().toIso8601String(),
+      'fecha': DateTime.now().toUtc().toIso8601String(),
       'device_id': deviceId,
       'local_id': localId,
     };

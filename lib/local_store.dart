@@ -45,7 +45,7 @@ class LocalStore {
   static Future<void> guardarElementos(List<Map<String, dynamic>> filas) async {
     final p = await _p;
     await p.setString(_kElementos, jsonEncode(filas));
-    await p.setString(_kUltimaSync, DateTime.now().toIso8601String());
+    await p.setString(_kUltimaSync, DateTime.now().toUtc().toIso8601String());
   }
 
   static Future<List<Map<String, dynamic>>> leerElementos() async {
