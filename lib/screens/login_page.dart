@@ -85,12 +85,19 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.inventory_2, size: 72,
+                // Logo de los 10 años de RPCI
+                Image.asset(
+                  'assets/logo_rpci_10anos.png',
+                  height: 140,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 20),
+                Icon(Icons.inventory_2, size: 56,
                     color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text('Inventario PROPLAS',
                     style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 TextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
