@@ -38,16 +38,16 @@ class Reportes {
     final filas = <List<dynamic>>[
       ['Elemento', 'Bodega', 'Cantidad', 'Unidad', 'Costo promedio', 'Valorización'],
     ];
-    num total = 0;
+    int total = 0;
     for (final r in (res as List)) {
       final el = r['elementos'] as Map?;
       final bo = r['bodegas'] as Map?;
       final exist = (r['existencia'] ?? 0) as num;
       final costo = (r['costo_promedio'] ?? 0) as num;
-      final val = exist * costo;
+      final val = (exist * costo).round(); // dinero como entero (COP)
       total += val;
       filas.add([el?['nombre'] ?? '', bo?['nombre'] ?? '', exist,
-          el?['unidad'] ?? '', costo, val]);
+          el?['unidad'] ?? '', costo.round(), val]);
     }
     filas.add(['', '', '', '', 'TOTAL', total]);
     await _descargar('existencias_valorizadas', filas);
@@ -70,7 +70,8 @@ class Reportes {
         _fecha(r['fecha']), r['tipo'],
         (r['elementos'] as Map?)?['nombre'] ?? '',
         (r['bodegas'] as Map?)?['nombre'] ?? '',
-        r['cantidad'] ?? '', r['costo_unitario'] ?? '',
+        r['cantidad'] ?? '',
+        r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',
         r['referencia'] ?? '', r['observacion'] ?? '',
       ]);
@@ -90,13 +91,13 @@ class Reportes {
     final filas = <List<dynamic>>[
       ['Centro de costo', 'Descripción', 'Elemento', 'Cantidad', 'Valor estimado'],
     ];
-    num total = 0;
+    int total = 0;
     for (final r in (res as List)) {
       final cc = r['centros_costo'] as Map?;
       final el = r['elementos'] as Map?;
       final cant = (r['cantidad'] ?? 0) as num;
       final costo = (el?['costo_promedio'] ?? 0) as num;
-      final val = cant * costo;
+      final val = (cant * costo).round(); // dinero como entero (COP)
       total += val;
       filas.add([cc?['codigo'] ?? '(sin centro)', cc?['descripcion'] ?? '',
           el?['nombre'] ?? '', cant, val]);
