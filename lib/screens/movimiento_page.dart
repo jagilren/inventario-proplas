@@ -197,7 +197,11 @@ class _MovimientoPageState extends State<MovimientoPage> {
               onPressed: () => Navigator.push(context, MaterialPageRoute(
                   builder: (_) => const DevolucionesPage())),
               icon: const Icon(Icons.assignment_return),
-              label: const Text('Devoluciones (cargar Excel)'),
+              label: const Text('Devoluciones (cargar Excel/CSV)'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1565C0), // azul
+                side: const BorderSide(color: Color(0xFF1565C0)),
+              ),
             ),
           ],
           const SizedBox(height: 12),
