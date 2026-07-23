@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 import 'package:csv/csv.dart';
 import '../data.dart';
+import '../util/picker.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -129,18 +131,36 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
   // ---- Lectura del archivo ----
   Future<void> _elegirArchivo() async {
-    final res = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'csv'],
-      withData: true,
-    );
-    if (res == null || res.files.isEmpty) return;
-    final f = res.files.first;
-    final bytes = f.bytes;
-    if (bytes == null) { _msg('No se pudo leer el archivo'); return; }
-    setState(() { _leyendo = true; _archivo = f.name; });
+    String nombre;
+    Uint8List bytes;
     try {
-      final crudas = f.name.toLowerCase().endsWith('.csv')
+      if (kIsWeb) {
+        // Web: input HTML nativo (el diálogo se abre de inmediato).
+        final r = await abrirArchivoWeb('.xlsx,.csv');
+        if (r == null) return; // canceló
+        nombre = r.name;
+        bytes = r.bytes;
+      } else {
+        // Móvil/escritorio: file_picker.
+        final res = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['xlsx', 'csv'],
+          withData: true,
+        );
+        if (res == null || res.files.isEmpty) return;
+        final f = res.files.first;
+        if (f.bytes == null) { _msg('No se pudo leer el archivo'); return; }
+        nombre = f.name;
+        bytes = f.bytes!;
+      }
+    } catch (e) {
+      _msg('No se pudo abrir el archivo: $e');
+      return;
+    }
+
+    setState(() { _leyendo = true; _archivo = nombre; });
+    try {
+      final crudas = nombre.toLowerCase().endsWith('.csv')
           ? _leerCsv(bytes)
           : _leerXlsx(bytes);
       final filas = _emparejar(crudas);
