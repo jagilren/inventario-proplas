@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
 import 'kardex_page.dart';
+import 'reconocer_page.dart';
 import 'editar_elemento_page.dart';
 import 'escaner_page.dart';
 import '../widgets/imagen_elemento.dart';
@@ -120,6 +121,12 @@ class _ElementosPageState extends State<ElementosPage> {
                       icon: const Icon(Icons.qr_code_scanner),
                       tooltip: 'Escanear código',
                       onPressed: _escanear,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.center_focus_strong),
+                      tooltip: 'Reconocer por foto',
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const ReconocerPage())),
                     ),
                   ],
                 ),

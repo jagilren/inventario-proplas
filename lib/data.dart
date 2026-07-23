@@ -2,6 +2,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'phash.dart';
 import 'local_store.dart';
 import 'sync_service.dart';
 
@@ -483,6 +484,29 @@ class InventarioService {
       'ruta': ruta,
       'usuario_id': supabase.auth.currentUser?.id,
     });
+    // Huella visual para reconocer el elemento por foto.
+    final h = PHash.dhash(bytes);
+    if (h != null) {
+      await supabase.from('elementos').update({'phash': h}).eq('id', elementoId);
+    }
+  }
+
+  /// Reconoce un elemento a partir de una foto (compara huellas visuales).
+  /// Devuelve los mejores candidatos (más parecidos primero).
+  static Future<List<Elemento>> reconocerPorFoto(Uint8List bytes) async {
+    final q = PHash.dhash(bytes);
+    if (q == null) return [];
+    final res = await supabase.from('elementos')
+        .select('id,nombre,material,sch,unidad,codigo_barras,imagen_url,'
+            'existencia,costo_promedio,stock_minimo,phash')
+        .eq('activo', true)
+        .not('phash', 'is', null);
+    final lista = (res as List)
+        .map((e) => (Elemento.fromMap(e as Map<String, dynamic>),
+            PHash.hamming(q, e['phash'] as String)))
+        .toList();
+    lista.sort((a, b) => a.$2.compareTo(b.$2));
+    return lista.take(8).map((e) => e.$1).toList();
   }
 
   /// Borra una foto de la galería (archivo + registro).
