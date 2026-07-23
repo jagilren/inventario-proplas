@@ -82,7 +82,18 @@ class _HomePageState extends State<HomePage> {
     final email = Supabase.instance.client.auth.currentUser?.email ?? '';
 
     return Scaffold(
-      appBar: AppBar(title: Text('Inventario · ${secciones[_idx].titulo}')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset('assets/logo_rpci_10anos.png', height: 36),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Inventario · ${secciones[_idx].titulo}',
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
