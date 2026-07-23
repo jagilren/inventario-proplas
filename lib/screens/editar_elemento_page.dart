@@ -24,6 +24,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   final _costoIni = TextEditingController();
   late String _unidad;
   late bool _activo;
+  late bool _serializado;
   bool _guardando = false;
 
   // Fotos elegidas antes de que el elemento exista (solo al crear).
@@ -44,6 +45,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     _codigoBarras = TextEditingController(text: e?.codigoBarras ?? '');
     _unidad = (e != null && _unidades.contains(e.unidad)) ? e.unidad : 'UND';
     _activo = e?.activo ?? true;
+    _serializado = e?.serializado ?? false;
   }
 
   Future<void> _guardar() async {
@@ -62,6 +64,10 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         'codigo_barras':
             _codigoBarras.text.trim().isEmpty ? null : _codigoBarras.text.trim(),
         'activo': _activo,
+        // La bandera de seriales solo se fija al crear. En edición, para pasar
+        // un elemento normal a serializado se usa "Convertir a serializado"
+        // (que registra los seriales de las unidades ya existentes).
+        if (_esNuevo) 'serializado': _serializado,
       };
 
       String? elementoId = widget.elemento?.id;
@@ -76,7 +82,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // Existencia inicial, si la indicó
         final cant = num.tryParse(_cantIni.text.replaceAll(',', '.'));
         final costo = num.tryParse(_costoIni.text.replaceAll(',', '.'));
-        if (cant != null && cant > 0 && elementoId != null) {
+        if (!_serializado && cant != null && cant > 0 && elementoId != null) {
           final bods = await InventarioService.bodegas();
           if (bods.isNotEmpty) {
             await InventarioService.registrarMovimiento(
@@ -212,6 +218,20 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             ),
           ],
           if (_esNuevo) ...[
+            const Divider(height: 20),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Maneja seriales'),
+              subtitle: Text(_serializado
+                  ? 'Cada unidad tiene un serial único (ej. Blowers). '
+                      'Las unidades se registran con su serial en la Entrada.'
+                  : 'Inventario normal por cantidad.'),
+              secondary: const Icon(Icons.tag),
+              value: _serializado,
+              onChanged: (v) => setState(() => _serializado = v),
+            ),
+          ],
+          if (_esNuevo && !_serializado) ...[
             const Divider(height: 28),
             const Text('Existencia inicial (opcional)',
                 style: TextStyle(fontWeight: FontWeight.bold)),
