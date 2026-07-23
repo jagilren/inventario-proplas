@@ -22,6 +22,11 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   // solo en creación: existencia inicial y su costo
   final _cantIni = TextEditingController();
   final _costoIni = TextEditingController();
+  // solo en creación serializada: bodega y seriales de las unidades iniciales
+  List<Bodega> _bodegas = [];
+  Bodega? _bodegaIni;
+  final _serialIniCtrl = TextEditingController();
+  final List<String> _serialesIni = [];
   late String _unidad;
   late bool _activo;
   late bool _serializado;
@@ -46,12 +51,39 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     _unidad = (e != null && _unidades.contains(e.unidad)) ? e.unidad : 'UND';
     _activo = e?.activo ?? true;
     _serializado = e?.serializado ?? false;
+    if (_esNuevo) {
+      InventarioService.bodegas().then((b) {
+        if (mounted) {
+          setState(() { _bodegas = b; if (b.length == 1) _bodegaIni = b.first; });
+        }
+      });
+    }
+  }
+
+  void _agregarSerialIni() {
+    final s = _serialIniCtrl.text.trim();
+    if (s.isEmpty || _serialesIni.contains(s)) return;
+    setState(() { _serialesIni.add(s); _serialIniCtrl.clear(); });
   }
 
   Future<void> _guardar() async {
     if (_nombre.text.trim().isEmpty) {
       _msg('El nombre es obligatorio');
       return;
+    }
+    // Validación de unidades iniciales serializadas: tantos seriales como cantidad.
+    if (_esNuevo && _serializado) {
+      final cantS = int.tryParse(_cantIni.text.trim()) ?? 0;
+      if (cantS > 0) {
+        if (_bodegaIni == null) {
+          _msg('Elige a qué bodega entran las unidades iniciales');
+          return;
+        }
+        if (_serialesIni.length != cantS) {
+          _msg('Debes agregar $cantS seriales (llevas ${_serialesIni.length})');
+          return;
+        }
+      }
     }
     setState(() => _guardando = true);
     try {
@@ -94,6 +126,24 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               observacion: 'Existencia inicial al crear el elemento',
             );
           }
+        }
+
+        // Unidades iniciales serializadas: se registran con su serial en la
+        // bodega elegida (la existencia la deriva el trigger de series).
+        if (_serializado &&
+            _serialesIni.isNotEmpty &&
+            _bodegaIni != null &&
+            elementoId != null) {
+          final costoS = num.tryParse(_costoIni.text.replaceAll(',', '.')) ?? 0;
+          await InventarioService.serializarElemento(
+              elementoId,
+              _serialesIni
+                  .map((s) => {
+                        'bodega_id': _bodegaIni!.id,
+                        'serial': s,
+                        'costo': costoS,
+                      })
+                  .toList());
         }
       } else {
         await InventarioService.actualizarElemento(widget.elemento!.id, datos);
@@ -224,7 +274,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               title: const Text('Maneja seriales'),
               subtitle: Text(_serializado
                   ? 'Cada unidad tiene un serial único (ej. Blowers). '
-                      'Las unidades se registran con su serial en la Entrada.'
+                      'Registra abajo los seriales de las unidades iniciales '
+                      '(o déjalo en 0 y agrégalas luego en la Entrada).'
                   : 'Inventario normal por cantidad.'),
               secondary: const Icon(Icons.tag),
               value: _serializado,
@@ -243,6 +294,90 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
                 teclado: const TextInputType.numberWithOptions(decimal: true)),
             _campo(_costoIni, 'Costo unitario',
                 teclado: const TextInputType.numberWithOptions(decimal: true)),
+          ],
+          if (_esNuevo && _serializado) ...[
+            const Divider(height: 28),
+            const Text('Unidades iniciales (opcional)',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('Si ya tienes unidades, elige la bodega y registra el '
+                'serial de cada una (uno por unidad).',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<Bodega>(
+              initialValue: _bodegaIni,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Bodega de las unidades',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warehouse)),
+              items: _bodegas
+                  .map((b) => DropdownMenuItem(
+                      value: b,
+                      child: Text(b.nombre, overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: (v) => setState(() => _bodegaIni = v),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: TextField(
+                controller: _cantIni,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                    labelText: 'Cantidad inicial',
+                    border: OutlineInputBorder()),
+              ),
+            ),
+            _campo(_costoIni, 'Costo por serial',
+                teclado: const TextInputType.numberWithOptions(decimal: true)),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _serialIniCtrl,
+                  onSubmitted: (_) => _agregarSerialIni(),
+                  decoration: const InputDecoration(
+                      labelText: 'Serial', border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                  iconSize: 28,
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Agregar serial',
+                  onPressed: _agregarSerialIni),
+            ]),
+            const SizedBox(height: 8),
+            Builder(builder: (_) {
+              final meta = int.tryParse(_cantIni.text.trim()) ?? 0;
+              final ok = meta > 0 && _serialesIni.length == meta;
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Seriales: ${_serialesIni.length}${meta > 0 ? ' / $meta' : ''}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: ok
+                          ? Colors.green
+                          : (meta > 0 ? Colors.orange : Colors.grey)),
+                ),
+              );
+            }),
+            if (_serialesIni.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: _serialesIni
+                      .map((s) => Chip(
+                          label: Text(s),
+                          onDeleted: () =>
+                              setState(() => _serialesIni.remove(s))))
+                      .toList(),
+                ),
+              ),
           ],
           const SizedBox(height: 20),
           SizedBox(
