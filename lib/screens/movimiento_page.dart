@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../data.dart';
 import 'escaner_page.dart';
 import 'devoluciones_page.dart';
+import '../util/adjuntos_gate.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
@@ -319,6 +320,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
               labelText: 'Observación (opcional)',
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => mostrarMensajeBillete(context),
+            icon: const Icon(Icons.attach_file),
+            label: const Text('Adjuntar archivo (PDF/Excel)'),
           ),
           const SizedBox(height: 20),
           SizedBox(

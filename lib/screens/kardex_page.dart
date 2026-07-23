@@ -6,6 +6,7 @@ import 'serializar_page.dart';
 import 'historial_page.dart';
 import '../widgets/imagen_elemento.dart';
 import '../util/tiempo.dart';
+import '../util/adjuntos_gate.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fecha = DateFormat('dd/MM/yyyy');
@@ -202,7 +203,7 @@ class _KardexPageState extends State<KardexPage> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => _mensajeCreditos(ctx),
+                  onPressed: () => mostrarMensajeBillete(ctx),
                   icon: const Icon(Icons.attach_file),
                   label: const Text('Adjuntar archivo (PDF/Excel)'),
                 ),
@@ -211,24 +212,6 @@ class _KardexPageState extends State<KardexPage> {
           ),
         );
       }),
-    );
-  }
-
-  /// La subida de adjuntos está deshabilitada para no gastar Storage.
-  void _mensajeCreditos(BuildContext ctx) {
-    showDialog<void>(
-      context: ctx,
-      builder: (d) => AlertDialog(
-        icon: const Icon(Icons.savings, color: Colors.orange, size: 40),
-        title: const Text('Función de pago'),
-        content: const Text(
-            'Te hacen falta créditos en SUPABASE para adjuntar archivos. '
-            'Transfiere el billete para darte los permisos 💸'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(d),
-              child: const Text('Entendido')),
-        ],
-      ),
     );
   }
 
