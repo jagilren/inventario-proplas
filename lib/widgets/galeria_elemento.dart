@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:image_picker/image_picker.dart';
 import '../data.dart';
+import '../util/imagen_picker.dart';
 import 'imagen_elemento.dart';
 
 /// Galería editable de fotos de un elemento (máximo 3).
@@ -50,18 +51,25 @@ class _GaleriaElementoState extends State<GaleriaElemento> {
 
   Future<void> _agregar(ImageSource origen) async {
     try {
-      final foto = await ImagePicker().pickImage(
-        source: origen, maxWidth: 1280, maxHeight: 1280, imageQuality: 80);
-      if (foto == null) return; // el usuario canceló
-      final bytes = await foto.readAsBytes();
+      Uint8List? bytes;
+      if (origen == ImageSource.gallery) {
+        // Archivo / "computador": en web abre el input nativo (sí abre).
+        bytes = await elegirImagenArchivo();
+      } else {
+        final foto = await ImagePicker().pickImage(
+            source: origen, maxWidth: 1280, maxHeight: 1280, imageQuality: 80);
+        bytes = foto == null ? null : await foto.readAsBytes();
+      }
+      if (bytes == null) return; // el usuario canceló
       if (!mounted) return;
+      final Uint8List datos = bytes; // final: se puede usar dentro de closures
 
       if (_esNuevo) {
-        setState(() => _pendientes.add(bytes));
+        setState(() => _pendientes.add(datos));
         widget.onPendientes?.call(_pendientes);
       } else {
         setState(() => _cargando = true);
-        await InventarioService.agregarImagen(widget.elementoId!, bytes);
+        await InventarioService.agregarImagen(widget.elementoId!, datos);
         await _cargar();
       }
     } on MissingPluginException {

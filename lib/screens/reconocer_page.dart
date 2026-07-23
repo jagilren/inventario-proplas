@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data.dart';
+import '../util/imagen_picker.dart';
 import '../widgets/imagen_elemento.dart';
 import 'kardex_page.dart';
 
@@ -19,10 +20,16 @@ class _ReconocerPageState extends State<ReconocerPage> {
   String? _msg;
 
   Future<void> _tomar(ImageSource src) async {
-    final x = await ImagePicker()
-        .pickImage(source: src, maxWidth: 1024, imageQuality: 85);
-    if (x == null) return;
-    final bytes = await x.readAsBytes();
+    Uint8List? bytes;
+    if (src == ImageSource.gallery) {
+      // En web abre el input nativo (el diálogo sí abre).
+      bytes = await elegirImagenArchivo();
+    } else {
+      final x = await ImagePicker()
+          .pickImage(source: src, maxWidth: 1024, imageQuality: 85);
+      bytes = x == null ? null : await x.readAsBytes();
+    }
+    if (bytes == null) return;
     setState(() { _foto = bytes; _buscando = true; _matches = []; _msg = null; });
     try {
       final r = await InventarioService.reconocerPorFoto(bytes);
