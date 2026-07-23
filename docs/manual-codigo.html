@@ -1,0 +1,208 @@
+<title>Manual del código · Inventario PROPLAS</title>
+<style>
+  :root{
+    --teal:#00695c; --teal-600:#00897b; --teal-ink:#004d40;
+    --ink:#132320; --muted:#5c6d69; --line:#e0e7e5;
+    --card:#ffffff; --canvas:#eef2f1; --chip:#eaf1ef;
+    --amber:#c77800; --amber-bg:#fdf3e2;
+    --blue:#1565c0; --blue-bg:#e9f0fb;
+    --violet:#6a3fb0; --violet-bg:#f0eafb;
+    --code:#f4f7f6;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --shadow:0 12px 34px -18px rgba(16,40,36,.4);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ink:#e6efec; --muted:#94a7a2; --line:#233530; --card:#12211d;
+      --canvas:#0b1613; --chip:#182a25; --code:#0e1a17; --teal-600:#26a69a;
+      --amber-bg:#2a1f0c; --blue-bg:#101f31; --violet-bg:#1d1430;
+      --shadow:0 12px 34px -18px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="light"]{--ink:#132320;--muted:#5c6d69;--line:#e0e7e5;--card:#fff;--canvas:#eef2f1;--chip:#eaf1ef;--code:#f4f7f6;--teal-600:#00897b;--amber-bg:#fdf3e2;--blue-bg:#e9f0fb;--violet-bg:#f0eafb;}
+  :root[data-theme="dark"]{--ink:#e6efec;--muted:#94a7a2;--line:#233530;--card:#12211d;--canvas:#0b1613;--chip:#182a25;--code:#0e1a17;--teal-600:#26a69a;--amber-bg:#2a1f0c;--blue-bg:#101f31;--violet-bg:#1d1430;}
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:52px 22px 90px}
+  .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--teal-600);font-weight:700;margin:0 0 12px}
+  h1{font-size:clamp(28px,5vw,42px);line-height:1.06;margin:0 0 14px;
+    letter-spacing:-.02em;font-weight:800;text-wrap:balance}
+  .lede{font-size:18px;color:var(--muted);margin:0;max-width:60ch}
+  h2{font-size:23px;margin:52px 0 6px;letter-spacing:-.01em;display:flex;
+    align-items:center;gap:10px}
+  h2 .em{font-size:24px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:15px}
+
+  /* diagrama de 3 capas */
+  .capas{display:flex;flex-direction:column;gap:10px;margin:26px 0 8px}
+  .capa{border-radius:14px;padding:16px 18px;border:1px solid var(--line);
+    background:var(--card);display:flex;gap:14px;align-items:flex-start}
+  .capa .ic{font-size:26px;line-height:1;flex:0 0 auto}
+  .capa h4{margin:0 0 3px;font-size:16px}
+  .capa p{margin:0;color:var(--muted);font-size:14px}
+  .capa.tu{border-color:var(--teal);box-shadow:var(--shadow)}
+  .capa.tu .badge{display:inline-block;font-size:11px;font-weight:700;color:#fff;
+    background:var(--teal);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:middle}
+  .flecha{text-align:center;color:var(--muted);font-size:14px;margin:-4px 0}
+
+  /* grupos de archivos */
+  .grupo{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:6px 20px 12px;margin:16px 0}
+  .grupo>.gh{display:flex;align-items:center;gap:9px;padding:14px 0 6px;
+    font-weight:700;font-size:16px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .gh .tag{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;padding:3px 9px;border-radius:999px}
+  .t-base{background:var(--chip);color:var(--teal-600)}
+  .t-ui{background:var(--blue-bg);color:var(--blue)}
+  .t-off{background:var(--amber-bg);color:var(--amber)}
+  .t-viz{background:var(--violet-bg);color:var(--violet)}
+  .file{display:flex;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line);align-items:baseline}
+  .file:last-child{border-bottom:0}
+  .file code{font-family:var(--mono);font-size:12.5px;color:var(--teal-ink);
+    background:var(--code);padding:3px 7px;border-radius:6px;white-space:nowrap;flex:0 0 auto}
+  @media (prefers-color-scheme:dark){.file code{color:#5ee0cf}}
+  :root[data-theme="dark"] .file code{color:#5ee0cf}
+  :root[data-theme="light"] .file code{color:var(--teal-ink)}
+  .file .d{font-size:14.5px;color:var(--ink)}
+  .file .d b{color:var(--ink)}
+  .file .d .estrella{color:var(--amber);font-weight:700}
+
+  /* diccionario */
+  .dic{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:18px}
+  .term{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .term h5{margin:0 0 5px;font-size:15px;color:var(--teal-600)}
+  .term p{margin:0;font-size:13.5px;color:var(--muted)}
+
+  .callout{background:var(--chip);border-left:4px solid var(--teal);border-radius:0 12px 12px 0;
+    padding:16px 18px;margin:26px 0;font-size:15px}
+  .callout b{color:var(--ink)}
+  .foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--muted);font-size:13.5px}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+    border-radius:8px;background:var(--teal);color:#fff;font-size:14px;font-weight:800;flex:0 0 auto}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Manual · en cristiano</p>
+  <h1>Cómo está armada tu app por dentro</h1>
+  <p class="lede">Un recorrido por el código de <b>Inventario PROPLAS</b>, sin tecnicismos.
+    No necesitas programar para entenderlo: aquí verás qué hace cada pieza y por qué existe.</p>
+
+  <!-- ============ LA IDEA EN 30 SEGUNDOS ============ -->
+  <h2><span class="em">🗺️</span> La idea en 30 segundos</h2>
+  <p class="sub">Tu app son tres capas trabajando juntas. Tú diriges; el código y la nube hacen el resto.</p>
+  <div class="capas">
+    <div class="capa tu">
+      <span class="ic">📱</span>
+      <div><h4>La App (carpeta <code style="font-family:var(--mono);font-size:12px">lib/</code>) <span class="badge">lo que se ve</span></h4>
+        <p>Todo lo que el usuario toca: pantallas, botones, búsquedas. Escrito en Dart.</p></div>
+    </div>
+    <div class="flecha">▲ le pide datos ▼ le responde</div>
+    <div class="capa">
+      <span class="ic">☁️</span>
+      <div><h4>La Base de datos (Supabase)</h4>
+        <p>La "fuente de verdad" en la nube: guarda los 959 elementos, movimientos, usuarios y roles. Todos los celulares se conectan a la misma.</p></div>
+    </div>
+    <div class="flecha">▲ guarda en el teléfono cuando no hay señal ▼</div>
+    <div class="capa">
+      <span class="ic">💾</span>
+      <div><h4>La memoria local del teléfono</h4>
+        <p>Una copia en el celular para poder trabajar sin internet y sincronizar después.</p></div>
+    </div>
+  </div>
+
+  <!-- ============ CIMIENTOS ============ -->
+  <h2><span class="em">🧱</span> Los cimientos</h2>
+  <p class="sub">Tres archivos que sostienen todo lo demás.</p>
+  <div class="grupo">
+    <div class="gh">Núcleo <span class="tag t-base">base</span></div>
+    <div class="file"><code>main.dart</code><span class="d"><b>El interruptor de encendido.</b> Prende la app, la conecta con Supabase y decide si mostrarte el login o el inicio.</span></div>
+    <div class="file"><code>config.dart</code><span class="d"><b>La libreta de direcciones.</b> Guarda la dirección de tu base en la nube y la llave pública para conectarse.</span></div>
+    <div class="file"><code>data.dart</code><span class="d"><b>El cerebro de datos <span class="estrella">★ el más importante</span>.</b> Aquí están TODAS las órdenes que la app le da a la base: buscar, guardar un movimiento, traer el kardex, roles, usuarios, centros. Si algo falla con los datos, casi siempre es aquí.</span></div>
+  </div>
+
+  <!-- ============ PANTALLAS ============ -->
+  <h2><span class="em">🖼️</span> Las pantallas</h2>
+  <p class="sub">Carpeta <code style="font-family:var(--mono);font-size:12.5px;background:var(--code);padding:2px 6px;border-radius:5px">lib/screens/</code> — cada archivo es una pantalla que ves en la app.</p>
+  <div class="grupo">
+    <div class="gh">Lo que usa el día a día <span class="tag t-ui">pantallas</span></div>
+    <div class="file"><code>login_page.dart</code><span class="d">La puerta de entrada: correo y contraseña.</span></div>
+    <div class="file"><code>home_page.dart</code><span class="d"><b>El tablero principal.</b> El menú de abajo y el menú lateral. Decide qué pestañas ves <b>según tu rol</b> (un operario de salidas solo ve "Salida").</span></div>
+    <div class="file"><code>dashboard_page.dart</code><span class="d">La pantalla de Inicio: valorización total, número de elementos, alertas y últimos movimientos.</span></div>
+    <div class="file"><code>elementos_page.dart</code><span class="d">El buscador de existencias: la lista de elementos con su cantidad y costo.</span></div>
+    <div class="file"><code>movimiento_page.dart</code><span class="d">Registrar una entrada o una salida (con el buscador inteligente adentro).</span></div>
+    <div class="file"><code>kardex_page.dart</code><span class="d">La historia de un elemento: todos sus movimientos, sus fotos, y los botones de editar y anular.</span></div>
+    <div class="file"><code>editar_elemento_page.dart</code><span class="d">Crear o editar un elemento: nombre, unidad, stock mínimo, código de barras, fotos.</span></div>
+    <div class="file"><code>alertas_page.dart</code><span class="d">Los elementos que están por debajo del mínimo (para reponer).</span></div>
+    <div class="file"><code>escaner_page.dart</code><span class="d">El lector de código de barras con la cámara.</span></div>
+  </div>
+  <div class="grupo">
+    <div class="gh">Administración (según permisos) <span class="tag t-ui">pantallas</span></div>
+    <div class="file"><code>gestion_usuarios_page.dart</code><span class="d">Crear usuarios y asignarles roles. Solo el Administrador.</span></div>
+    <div class="file"><code>centros_page.dart</code><span class="d">Crear y editar los centros de costo (admin o coordinador).</span></div>
+    <div class="file"><code>historial_page.dart</code><span class="d">La auditoría: quién cambió qué y cuándo.</span></div>
+    <div class="file"><code>perfil_page.dart</code><span class="d">Tu perfil: tus roles, cambiar contraseña, cerrar sesión.</span></div>
+    <div class="file"><code>sincronizacion_page.dart</code><span class="d">El centro del modo sin conexión: descargar el catálogo y subir lo pendiente.</span></div>
+  </div>
+
+  <!-- ============ SIN CONEXIÓN ============ -->
+  <h2><span class="em">📴</span> El modo sin conexión</h2>
+  <p class="sub">La magia para que funcione en la bodega aunque no haya señal.</p>
+  <div class="grupo">
+    <div class="gh">Trabajo offline <span class="tag t-off">sin señal</span></div>
+    <div class="file"><code>local_store.dart</code><span class="d"><b>La memoria del teléfono.</b> Guarda el catálogo y los movimientos que hagas cuando no hay internet.</span></div>
+    <div class="file"><code>sync_service.dart</code><span class="d"><b>El cartero.</b> Baja el catálogo cuando hay señal y sube lo que quedó pendiente al reconectar.</span></div>
+    <div class="file"><code>widgets/barra_sync.dart</code><span class="d">La barrita de aviso: te dice si estás sin conexión o si hay cosas por sincronizar.</span></div>
+  </div>
+
+  <!-- ============ PIEZAS VISUALES ============ -->
+  <h2><span class="em">🧩</span> Piezas reutilizables</h2>
+  <p class="sub">Carpeta <code style="font-family:var(--mono);font-size:12.5px;background:var(--code);padding:2px 6px;border-radius:5px">lib/widgets/</code> — pedacitos que se usan en varias pantallas.</p>
+  <div class="grupo">
+    <div class="gh">Componentes <span class="tag t-viz">visual</span></div>
+    <div class="file"><code>imagen_elemento.dart</code><span class="d">Muestra la foto de un elemento (miniatura y pantalla completa con zoom).</span></div>
+    <div class="file"><code>galeria_elemento.dart</code><span class="d">La galería de hasta 3 fotos por elemento.</span></div>
+  </div>
+
+  <!-- ============ BASE DE DATOS ============ -->
+  <h2><span class="em">☁️</span> La base de datos</h2>
+  <p class="sub">Carpeta <code style="font-family:var(--mono);font-size:12.5px;background:var(--code);padding:2px 6px;border-radius:5px">supabase/</code> — las instrucciones que construyeron tu base en la nube.</p>
+  <div class="grupo">
+    <div class="gh">Construcción por capas <span class="tag t-base">SQL</span></div>
+    <div class="file"><code>schema.sql → v7</code><span class="d"><b>La base se construyó por capas</b>, cada una corrida una vez: <b>v1</b> tablas base · <b>v2</b> dashboard · <b>v3</b> roles y permisos · <b>v4</b> buscador · <b>v5</b> auditoría · <b>v6</b> fotos · <b>v7</b> galería.</span></div>
+    <div class="file"><code>migrar.py</code><span class="d">El que cargó tu Excel a la nube (959 elementos, 60 salidas).</span></div>
+    <div class="file"><code>crear_admin.py</code><span class="d">Creó tu usuario administrador la primera vez.</span></div>
+    <div class="file"><code>test_*.py</code><span class="d">Pruebas automáticas que verifican que todo funcione (las del "10 de 10").</span></div>
+    <div class="file"><code>functions/crear-usuario</code><span class="d">La función segura en la nube que crea usuarios desde la app (solo admin).</span></div>
+  </div>
+
+  <div class="callout">
+    <b>Lo que tú aportaste, Gordo.</b> El código lo escribimos juntos, pero las decisiones, las reglas de tu negocio,
+    los datos del Excel y las pruebas fueron tuyas. Sin eso, nada de este código tendría sentido. Tú eres el arquitecto;
+    el código es solo el material.
+  </div>
+
+  <!-- ============ DICCIONARIO ============ -->
+  <h2><span class="em">📖</span> Diccionario en cristiano</h2>
+  <p class="sub">Las palabras raras que hemos usado, explicadas fácil.</p>
+  <div class="dic">
+    <div class="term"><h5>Flutter / Dart</h5><p>La herramienta y el idioma con que está hecha la app. Escribes una vez y sirve para Android, iPhone y web.</p></div>
+    <div class="term"><h5>Supabase</h5><p>Tu base de datos en la nube. La "fuente de verdad" que todos los celulares comparten.</p></div>
+    <div class="term"><h5>RLS</h5><p>El guardia que vive dentro de la base y revisa los permisos de cada quien, sin importar por dónde entren.</p></div>
+    <div class="term"><h5>Trigger</h5><p>Un ayudante automático de la base: cada vez que hay un movimiento, recalcula solo la existencia y el costo promedio.</p></div>
+    <div class="term"><h5>RPC / Función</h5><p>Una "orden con nombre" que la app le pide a la base (ej. "búscame elementos" o "dame el kardex").</p></div>
+    <div class="term"><h5>API</h5><p>El idioma con que la app y la base se hablan por internet.</p></div>
+    <div class="term"><h5>Edge Function</h5><p>Un programita que corre en la nube para tareas delicadas (como crear usuarios de forma segura).</p></div>
+    <div class="term"><h5>Git / commit</h5><p>El historial con "fotos" de tu código. Cada commit es una foto guardada; GitHub es donde vive el respaldo.</p></div>
+    <div class="term"><h5>Offline-first</h5><p>Que la app funcione primero en el teléfono y sincronice después, para no depender de la señal.</p></div>
+  </div>
+
+  <p class="foot">
+    Manual generado para el proyecto Inventario PROPLAS · 21 archivos de código (~3.500 líneas) + base de datos en Supabase.
+    Guárdalo: cuando algo no te cuadre, aquí ves qué pieza es la responsable.
+  </p>
+</div>
