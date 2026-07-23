@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../ajustes.dart';
+import '../data.dart';
 
 class ConfiguracionPage extends StatefulWidget {
   const ConfiguracionPage({super.key});
@@ -8,11 +10,15 @@ class ConfiguracionPage extends StatefulWidget {
 }
 
 class _ConfiguracionPageState extends State<ConfiguracionPage> {
-  late String _csv;
-  late String _dec;
+  String _csv = Ajustes.csvSep;
+  String _dec = Ajustes.decSep;
   bool _guardando = false;
+  bool _esAdmin = false;
+  bool _cargando = true;
 
-  // valor -> etiqueta
+  List<Usuario> _usuarios = [];
+  String? _usuarioSel; // usuario cuya config se está editando
+
   static const _seps = {';': 'Punto y coma  ( ; )', ',': 'Coma  ( , )',
     '\t': 'Tabulación'};
   static const _decs = {',': 'Coma  ( , )', '.': 'Punto  ( . )'};
@@ -20,29 +26,55 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
   @override
   void initState() {
     super.initState();
-    _csv = Ajustes.csvSep;
-    _dec = Ajustes.decSep;
-    // Asegura la config del usuario actual.
-    Ajustes.cargar().then((_) {
-      if (mounted) setState(() { _csv = Ajustes.csvSep; _dec = Ajustes.decSep; });
-    });
+    _usuarioSel = Supabase.instance.client.auth.currentUser?.id;
+    _init();
+  }
+
+  Future<void> _init() async {
+    final roles = await InventarioService.misRoles();
+    _esAdmin = roles.contains(Roles.admin);
+    if (_esAdmin) {
+      try { _usuarios = await InventarioService.listarUsuarios(); } catch (_) {}
+    }
+    await _cargarConfigDe(_usuarioSel);
+    if (mounted) setState(() => _cargando = false);
+  }
+
+  Future<void> _cargarConfigDe(String? uid) async {
+    if (uid == null) return;
+    final (csv, dec) = await Ajustes.configDe(uid);
+    if (mounted) setState(() { _csv = csv; _dec = dec; });
   }
 
   bool get _conflicto => _csv == _dec;
 
   Future<void> _guardar() async {
-    if (_conflicto) return;
+    if (_conflicto || _usuarioSel == null) return;
     setState(() => _guardando = true);
-    await Ajustes.guardar(_csv, _dec);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ Configuración guardada')));
-      setState(() => _guardando = false);
+    try {
+      await Ajustes.guardar(_csv, _dec, paraUsuario: _usuarioSel);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✓ Configuración guardada')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _guardando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_cargando) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Configuración')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Configuración')),
       body: ListView(
@@ -51,10 +83,31 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
           const Text('Exportación de informes (CSV)',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 4),
-          const Text('Ajusta esto para que Excel abra bien los archivos según '
-              'tu región. En Colombia lo normal es «;» y decimales con «,».',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 20),
+          Text(_esAdmin
+              ? 'Como administrador, puedes ajustar la configuración de cualquier '
+                  'usuario. Cada quien descarga sus informes con la suya.'
+              : 'Ajusta el formato para que Excel abra bien tus archivos. En '
+                  'Colombia lo normal es «;» y decimales con «,».',
+              style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 18),
+          if (_esAdmin && _usuarios.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _usuarioSel,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                  labelText: 'Usuario', border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person)),
+              items: _usuarios.map((u) => DropdownMenuItem(
+                  value: u.id,
+                  child: Text(u.email ?? u.nombre ?? u.id,
+                      overflow: TextOverflow.ellipsis))).toList(),
+              onChanged: (v) {
+                setState(() => _usuarioSel = v);
+                _cargarConfigDe(v);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           DropdownButtonFormField<String>(
             initialValue: _csv,
             decoration: const InputDecoration(
@@ -84,8 +137,8 @@ class _ConfiguracionPageState extends State<ConfiguracionPage> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Text('Ejemplo de una fila:\n'
-                  'Tornillo${_csv == '\t' ? '⇥' : _csv} 12 UND${_csv == '\t' ? '⇥' : _csv} '
-                  '4500${_dec}50',
+                  'Tornillo${_csv == '\t' ? '⇥' : _csv} 12 UND'
+                  '${_csv == '\t' ? '⇥' : _csv} 4500${_dec}50',
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
             ),
           ),
