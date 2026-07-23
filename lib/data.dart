@@ -20,6 +20,7 @@ class Elemento {
   final num costoPromedio;
   final num stockMinimo;
   final bool activo;
+  final bool serializado;
 
   Elemento.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String,
@@ -32,9 +33,28 @@ class Elemento {
         existencia = (m['existencia'] ?? 0) as num,
         costoPromedio = (m['costo_promedio'] ?? 0) as num,
         stockMinimo = (m['stock_minimo'] ?? 0) as num,
-        activo = (m['activo'] ?? true) as bool;
+        activo = (m['activo'] ?? true) as bool,
+        serializado = (m['serializado'] ?? false) as bool;
 
   bool get bajoMinimo => stockMinimo > 0 && existencia <= stockMinimo;
+}
+
+/// Una unidad serializada (un serial) de un elemento.
+class Serie {
+  final String id;
+  final String serial;
+  final String? bodega;
+  final String? bodegaId;
+  final String estado;
+  final num costo;
+  Serie.fromMap(Map<String, dynamic> m)
+      : id = m['id'] as String,
+        serial = m['serial'] as String,
+        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+        bodegaId = m['bodega_id'] as String?,
+        estado = (m['estado'] as String?) ?? 'disponible',
+        costo = (m['costo'] ?? 0) as num;
+  bool get disponible => estado == 'disponible';
 }
 
 /// Una foto de la galería de un elemento.
@@ -507,6 +527,76 @@ class InventarioService {
         .toList();
     lista.sort((a, b) => a.$2.compareTo(b.$2));
     return lista.take(8).map((e) => e.$1).toList();
+  }
+
+  // ---- Serializados (elementos con serial, ej. Blowers) ----
+  static Future<List<Serie>> seriesDisponibles(String elementoId, String bodegaId) async {
+    final res = await supabase.from('series')
+        .select('id, serial, bodega_id, estado, costo')
+        .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
+        .eq('estado', 'disponible').order('serial');
+    return (res as List).map((e) => Serie.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<Serie>> seriesDeElemento(String elementoId) async {
+    final res = await supabase.from('series')
+        .select('id, serial, bodega_id, estado, costo, bodegas(nombre)')
+        .eq('elemento_id', elementoId).order('estado').order('serial');
+    return (res as List).map((e) => Serie.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Marca un elemento como serializado y carga los seriales de sus unidades
+  /// actuales. items = [{bodega_id, serial, costo}].
+  static Future<void> serializarElemento(
+      String elementoId, List<Map<String, dynamic>> items) async {
+    await supabase.rpc('serializar_elemento',
+        params: {'p_elemento': elementoId, 'p_items': items});
+    revision.value++;
+  }
+
+  /// Movimiento de un elemento serializado (por operaciones directas: el
+  /// trigger de `series` mantiene las existencias).
+  static Future<void> moverSerie({
+    required String tipo, required String elementoId, required String bodegaId,
+    required List<String> serials, num? costo, String? centroCostoId,
+    String? observacion, String? bodegaDestinoId}) async {
+    final uid = supabase.auth.currentUser?.id;
+    final n = serials.length;
+    final ahora = DateTime.now().toIso8601String();
+    if (tipo == 'entrada') {
+      final mov = await supabase.from('movimientos').insert({
+        'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': bodegaId,
+        'cantidad': n, 'costo_unitario': costo ?? 0, 'observacion': observacion,
+        'usuario_id': uid, 'fecha': ahora,
+      }).select('id').single();
+      await supabase.from('series').insert(serials.map((s) => {
+        'elemento_id': elementoId, 'serial': s, 'bodega_id': bodegaId,
+        'costo': costo ?? 0, 'movimiento_ingreso': mov['id'],
+      }).toList());
+    } else if (tipo == 'salida') {
+      final mov = await supabase.from('movimientos').insert({
+        'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': bodegaId,
+        'cantidad': n, 'centro_costo_id': centroCostoId, 'observacion': observacion,
+        'usuario_id': uid, 'fecha': ahora,
+      }).select('id').single();
+      await supabase.from('series')
+          .update({'estado': 'consumido', 'movimiento_salida': mov['id']})
+          .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
+          .eq('estado', 'disponible').inFilter('serial', serials);
+    } else if (tipo == 'traslado') {
+      await supabase.from('movimientos').insert([
+        {'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': bodegaId,
+         'cantidad': n, 'costo_unitario': null, 'referencia': 'TRASLADO',
+         'observacion': observacion, 'usuario_id': uid, 'fecha': ahora},
+        {'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': bodegaDestinoId,
+         'cantidad': n, 'costo_unitario': costo ?? 0, 'referencia': 'TRASLADO',
+         'observacion': observacion, 'usuario_id': uid, 'fecha': ahora},
+      ]);
+      await supabase.from('series').update({'bodega_id': bodegaDestinoId})
+          .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
+          .eq('estado', 'disponible').inFilter('serial', serials);
+    }
+    revision.value++;
   }
 
   /// Borra una foto de la galería (archivo + registro).

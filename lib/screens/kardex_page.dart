@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
 import 'editar_elemento_page.dart';
+import 'serializar_page.dart';
 import 'historial_page.dart';
 import '../widgets/imagen_elemento.dart';
 
@@ -21,6 +22,7 @@ class _KardexPageState extends State<KardexPage> {
   bool _puedeEditar = false;
   List<ImagenElem> _fotos = [];
   List<ExistenciaBodega> _porBodega = [];
+  List<Serie> _series = [];
   late Future<List<MovKardex>> _future;
 
   @override
@@ -30,6 +32,7 @@ class _KardexPageState extends State<KardexPage> {
     _future = InventarioService.kardex(_elemento.id);
     _cargarFotos();
     _cargarBodegas();
+    if (_elemento.serializado) _cargarSeries();
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() {
@@ -58,6 +61,13 @@ class _KardexPageState extends State<KardexPage> {
     }
   }
 
+  Future<void> _cargarSeries() async {
+    try {
+      final s = await InventarioService.seriesDeElemento(_elemento.id);
+      if (mounted) setState(() => _series = s);
+    } catch (_) {}
+  }
+
   Future<void> _recargar() async {
     // vuelve a leer existencia/costo actualizados
     final actualizado = await InventarioService.buscar(_elemento.nombre);
@@ -68,6 +78,7 @@ class _KardexPageState extends State<KardexPage> {
     });
     await _cargarFotos();
     await _cargarBodegas();
+    if (_elemento.serializado) await _cargarSeries();
   }
 
   Color _color(String tipo) => switch (tipo) {
@@ -205,6 +216,41 @@ class _KardexPageState extends State<KardexPage> {
               ),
             ),
           ),
+          if (!_elemento.serializado && _puedeEditar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final ok = await Navigator.push<bool>(context, MaterialPageRoute(
+                      builder: (_) => SerializarPage(elemento: _elemento)));
+                  if (ok == true) _recargar();
+                },
+                icon: const Icon(Icons.tag),
+                label: const Text('Convertir a serializado'),
+              ),
+            ),
+          if (_elemento.serializado) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Align(alignment: Alignment.centerLeft,
+                  child: Text('Seriales', style: TextStyle(fontWeight: FontWeight.bold))),
+            ),
+            SizedBox(
+              height: 130,
+              child: _series.isEmpty
+                  ? const Center(child: Text('Sin seriales'))
+                  : ListView(padding: const EdgeInsets.symmetric(horizontal: 12),
+                      children: _series.map((s) => ListTile(
+                        dense: true,
+                        leading: Icon(Icons.tag,
+                            color: s.disponible ? Colors.green : Colors.grey),
+                        title: Text(s.serial),
+                        subtitle: Text('${s.bodega ?? '—'} · ${s.estado}'),
+                        trailing: Text(_money.format(s.costo)),
+                      )).toList()),
+            ),
+            const Divider(height: 1),
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Align(

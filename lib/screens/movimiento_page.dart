@@ -23,8 +23,27 @@ class _MovimientoPageState extends State<MovimientoPage> {
   final _costo = TextEditingController();
   final _obs = TextEditingController();
   bool _guardando = false;
+  // Serializados
+  final _serialCtrl = TextEditingController();
+  final List<String> _serialesNuevos = []; // entrada
+  List<Serie> _disponibles = [];            // salida
+  final Set<String> _serialSel = {};        // salida seleccionados
 
   bool get _esSalida => widget.tipoInicial == 'salida';
+  bool get _serial => _elemento?.serializado ?? false;
+
+  Future<void> _cargarDisponibles() async {
+    if (_serial && _esSalida && _elemento != null && _bodega != null) {
+      final d = await InventarioService.seriesDisponibles(_elemento!.id, _bodega!.id);
+      if (mounted) setState(() { _disponibles = d; _serialSel.clear(); });
+    }
+  }
+
+  void _agregarSerial() {
+    final s = _serialCtrl.text.trim();
+    if (s.isEmpty || _serialesNuevos.contains(s)) return;
+    setState(() { _serialesNuevos.add(s); _serialCtrl.clear(); });
+  }
 
   @override
   void initState() {
@@ -55,7 +74,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
     setState(() {
       _elemento = sel;
       if (_esSalida) _costo.text = ''; // salida usa costo promedio automático
+      _serialesNuevos.clear(); _serialSel.clear(); _disponibles = [];
     });
+    _cargarDisponibles();
   }
 
   /// Escanea el código del artículo y lo selecciona directo.
@@ -78,6 +99,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
     final cant = num.tryParse(_cantidad.text.replaceAll(',', '.'));
     if (el == null) return _msg('Selecciona un elemento');
     if (_bodega == null) return _msg('Selecciona la bodega');
+    if (_serial) return _guardarSerie(el);
     if (cant == null || cant <= 0) return _msg('Cantidad inválida');
     if (_esSalida && _cc == null) return _msg('Selecciona el centro de costo');
     if (!_esSalida) {
@@ -105,6 +127,37 @@ class _MovimientoPageState extends State<MovimientoPage> {
       setState(() {
         _elemento = null; _cc = null;
         _cantidad.clear(); _costo.clear(); _obs.clear();
+      });
+    } catch (e) {
+      _msg('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _guardarSerie(Elemento el) async {
+    if (_esSalida) {
+      if (_serialSel.isEmpty) return _msg('Selecciona al menos un serial');
+      if (_cc == null) return _msg('Selecciona el centro de costo');
+    } else {
+      if (_serialesNuevos.isEmpty) return _msg('Ingresa al menos un serial');
+      final c = num.tryParse(_costo.text.replaceAll(',', '.'));
+      if (c == null || c < 0) return _msg('Costo unitario inválido');
+    }
+    setState(() => _guardando = true);
+    try {
+      await InventarioService.moverSerie(
+        tipo: widget.tipoInicial, elementoId: el.id, bodegaId: _bodega!.id,
+        serials: _esSalida ? _serialSel.toList() : List.of(_serialesNuevos),
+        costo: _esSalida ? null : num.parse(_costo.text.replaceAll(',', '.')),
+        centroCostoId: _cc?.id,
+        observacion: _obs.text.trim().isEmpty ? null : _obs.text.trim(),
+      );
+      if (!mounted) return;
+      _msg('✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada');
+      setState(() {
+        _elemento = null; _cc = null; _serialesNuevos.clear();
+        _serialSel.clear(); _disponibles = []; _costo.clear(); _obs.clear();
       });
     } catch (e) {
       _msg('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
@@ -174,17 +227,55 @@ class _MovimientoPageState extends State<MovimientoPage> {
                     value: b,
                     child: Text(b.nombre, overflow: TextOverflow.ellipsis)))
                 .toList(),
-            onChanged: (v) => setState(() => _bodega = v),
+            onChanged: (v) { setState(() => _bodega = v); _cargarDisponibles(); },
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _cantidad,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: 'Cantidad${el != null ? ' (${el.unidad})' : ''}',
-              border: const OutlineInputBorder(),
+          if (!_serial)
+            TextField(
+              controller: _cantidad,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Cantidad${el != null ? ' (${el.unidad})' : ''}',
+                border: const OutlineInputBorder(),
+              ),
             ),
-          ),
+          if (_serial && !_esSalida) ...[
+            Row(children: [
+              Expanded(child: TextField(
+                controller: _serialCtrl,
+                onSubmitted: (_) => _agregarSerial(),
+                decoration: const InputDecoration(
+                    labelText: 'Serial', border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.tag)),
+              )),
+              IconButton(iconSize: 32, icon: const Icon(Icons.add_circle),
+                  tooltip: 'Agregar serial', onPressed: _agregarSerial),
+            ]),
+            if (_serialesNuevos.isNotEmpty) Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(spacing: 6, runSpacing: 4, children: _serialesNuevos
+                  .map((s) => Chip(label: Text(s),
+                      onDeleted: () => setState(() => _serialesNuevos.remove(s)))).toList()),
+            ),
+          ],
+          if (_serial && _esSalida) ...[
+            const Align(alignment: Alignment.centerLeft,
+                child: Text('Seriales disponibles en la bodega:',
+                    style: TextStyle(fontWeight: FontWeight.bold))),
+            if (_bodega == null)
+              const Text('Elige la bodega para ver los seriales.',
+                  style: TextStyle(color: Colors.grey)),
+            if (_bodega != null && _disponibles.isEmpty)
+              const Text('No hay seriales disponibles en esta bodega.',
+                  style: TextStyle(color: Colors.grey)),
+            ..._disponibles.map((s) => CheckboxListTile(
+              dense: true, contentPadding: EdgeInsets.zero,
+              title: Text(s.serial),
+              value: _serialSel.contains(s.serial),
+              onChanged: (v) => setState(() => v == true
+                  ? _serialSel.add(s.serial) : _serialSel.remove(s.serial)),
+            )),
+          ],
           const SizedBox(height: 8),
           if (!_esSalida)
             TextField(
