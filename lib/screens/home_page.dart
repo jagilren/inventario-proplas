@@ -51,6 +51,7 @@ class _HomePageState extends State<HomePage> {
   bool get _admin => _roles.contains(Roles.admin);
   bool get _coord => _roles.contains(Roles.coordinador);
   bool get _gestiona => _admin || _coord;
+  bool get _puedeExportar => _admin || _roles.contains(Roles.exportar);
 
   List<_Seccion> get _secciones {
     final puedeSalida = _admin || _roles.contains(Roles.operarioMenos);
@@ -141,18 +142,20 @@ class _HomePageState extends State<HomePage> {
                 onTap: () => _ir(const HistorialPage(titulo: 'Auditoría de cambios')),
               ),
               ListTile(
-                leading: const Icon(Icons.download_for_offline),
-                title: const Text('Informes'),
-                subtitle: const Text('Descargar en Excel/CSV'),
-                onTap: () => _ir(const ReportesPage()),
-              ),
-              ListTile(
                 leading: const Icon(Icons.settings),
                 title: const Text('Configuración'),
                 subtitle: const Text('Formato de exportaciones (por usuario)'),
                 onTap: () => _ir(const ConfiguracionPage()),
               ),
             ],
+            // Informes: visible para quien tenga el permiso de exportar.
+            if (_puedeExportar)
+              ListTile(
+                leading: const Icon(Icons.download_for_offline),
+                title: const Text('Informes'),
+                subtitle: const Text('Descargar en Excel/CSV'),
+                onTap: () => _ir(const ReportesPage()),
+              ),
             if (_admin)
               ListTile(
                 leading: const Icon(Icons.group),

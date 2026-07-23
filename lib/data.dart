@@ -190,14 +190,16 @@ class Roles {
   static const coordinador = 'coordinador';
   static const operarioMas = 'operario_mas';
   static const operarioMenos = 'operario_menos';
+  static const exportar = 'exportar';
 
-  static const todos = [admin, coordinador, operarioMas, operarioMenos];
+  static const todos = [admin, coordinador, operarioMas, operarioMenos, exportar];
 
   static String etiqueta(String rol) => switch (rol) {
         admin => 'Administrador',
         coordinador => 'Coordinador',
         operarioMas => 'Operario + (entradas)',
         operarioMenos => 'Operario − (salidas)',
+        exportar => 'Exportar informes',
         _ => rol,
       };
 }
