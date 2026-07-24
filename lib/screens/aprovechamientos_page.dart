@@ -31,18 +31,28 @@ class AprovechamientosPage extends StatefulWidget {
   State<AprovechamientosPage> createState() => _AprovechamientosPageState();
 }
 
-class _AprovechamientosPageState extends State<AprovechamientosPage> {
+class _AprovechamientosPageState extends State<AprovechamientosPage>
+    with SingleTickerProviderStateMixin {
   final _ctrl = TextEditingController();
+  late final TabController _tab;
   List<TrozoResumen> _resumen = [];
   List<Trozo> _historico = [];
   bool _cargando = false;
   bool _puedeEntrada = false;
   bool _mostrarSaldoCero = false; // en "Por elemento", ocultar saldo 0 por defecto
+  String? _trozoExpandido; // id del trozo desplegado inline en la pestaña Histórico
   _OrdenAprov _orden = _OrdenAprov.reciente;
 
   @override
   void initState() {
     super.initState();
+    _tab = TabController(length: 2, vsync: this);
+    _tab.addListener(() {
+      // Al cambiar de pestaña, limpiar el buscador (cada pestaña arranca fresca).
+      if (_tab.indexIsChanging && _ctrl.text.isNotEmpty) {
+        setState(() => _ctrl.clear());
+      }
+    });
     _cargar();
     InventarioService.revision.addListener(_cargar);
     InventarioService.misRoles().then((r) {
@@ -105,6 +115,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
   @override
   void dispose() {
     InventarioService.revision.removeListener(_cargar);
+    _tab.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -153,8 +164,6 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
   Widget build(BuildContext context) {
     return Container(
       color: _fondoAprov,
-      child: DefaultTabController(
-      length: 2,
       child: Column(
         children: [
           Container(
@@ -171,7 +180,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
               ),
             ]),
           ),
-          const TabBar(tabs: [
+          TabBar(controller: _tab, tabs: const [
             Tab(icon: Icon(Icons.inventory_2), text: 'Por elemento'),
             Tab(icon: Icon(Icons.history), text: 'Histórico'),
           ]),
@@ -216,14 +225,13 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
           ),
           if (_cargando) const LinearProgressIndicator(),
           Expanded(
-            child: TabBarView(children: [
+            child: TabBarView(controller: _tab, children: [
               _porElemento(),
               _historicoLista(),
             ]),
           ),
         ],
       ),
-    ),
     );
   }
 
@@ -287,6 +295,8 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
   }
 
   /// Pestaña "Histórico": TODOS los trozos (incluidos saldo 0), planos.
+  /// Cada trozo se despliega/contrae en el sitio (Expand/Collapse): así se ve
+  /// la trazabilidad sin salir del módulo ni perder la posición en la lista.
   Widget _historicoLista() {
     final items = _historicoFiltrado;
     if (items.isEmpty && !_cargando) {
@@ -297,22 +307,55 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
         final t = items[i];
-        return ListTile(
-          leading: Icon(Icons.content_cut,
-              color: t.disponible ? Colors.blueGrey : Colors.grey),
-          title: Text(t.elementoNombre,
-              style: TextStyle(color: t.disponible ? null : Colors.grey)),
-          subtitle: Text([
-            t.disponible
-                ? 'Disponible: ${_qty.format(t.longitudActual)} ${t.unidad}'
-                    '${t.parcial ? ' (de ${_qty.format(t.longitud)})' : ''}'
-                : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
-            if (t.bodega != null) '📍 ${t.bodega}',
-            if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
-          ].join(' · '), style: const TextStyle(fontSize: 12)),
-          trailing: const Icon(Icons.history),
-          onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => TrozoHistorialPage(trozo: t, unidad: t.unidad))),
+        final abierto = _trozoExpandido == t.id;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: Icon(Icons.content_cut,
+                  color: t.disponible ? Colors.blueGrey : Colors.grey),
+              title: Text(t.elementoNombre,
+                  style: TextStyle(color: t.disponible ? null : Colors.grey)),
+              subtitle: Text([
+                t.disponible
+                    ? 'Disponible: ${_qty.format(t.longitudActual)} ${t.unidad}'
+                        '${t.parcial ? ' (de ${_qty.format(t.longitud)})' : ''}'
+                    : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
+                if (t.bodega != null) '📍 ${t.bodega}',
+                if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
+              ].join(' · '), style: const TextStyle(fontSize: 12)),
+              trailing: Icon(abierto ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.brown.shade400),
+              onTap: () =>
+                  setState(() => _trozoExpandido = abierto ? null : t.id),
+            ),
+            if (abierto)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _barraAprov,
+                  border: Border(
+                      left: BorderSide(color: Colors.brown.shade200, width: 3)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _TrozoTrazaView(trozo: t, unidad: t.unidad),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              setState(() => _trozoExpandido = null),
+                          icon: const Icon(Icons.unfold_less, size: 18),
+                          label: const Text('Contraer'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -547,16 +590,18 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   }
 }
 
-/// Trazabilidad de un trozo: longitud inicial y cómo se ha ido diezmando.
-class TrozoHistorialPage extends StatefulWidget {
+/// Contenido de trazabilidad de un trozo (Card + línea de tiempo con saldo
+/// corriente). Reutilizable: como página propia (TrozoHistorialPage) o
+/// desplegado inline dentro de la lista de Histórico (Expand/Collapse).
+class _TrozoTrazaView extends StatefulWidget {
   final Trozo trozo;
   final String unidad;
-  const TrozoHistorialPage({super.key, required this.trozo, required this.unidad});
+  const _TrozoTrazaView({required this.trozo, required this.unidad});
   @override
-  State<TrozoHistorialPage> createState() => _TrozoHistorialPageState();
+  State<_TrozoTrazaView> createState() => _TrozoTrazaViewState();
 }
 
-class _TrozoHistorialPageState extends State<TrozoHistorialPage> {
+class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
   late Future<List<SalidaTrozo>> _future;
 
   @override
@@ -569,95 +614,116 @@ class _TrozoHistorialPageState extends State<TrozoHistorialPage> {
   Widget build(BuildContext context) {
     final t = widget.trozo;
     final u = widget.unidad;
+    return FutureBuilder<List<SalidaTrozo>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final salidas = snap.data ?? [];
+        // Saldo corriendo: arranca en la longitud inicial y va bajando.
+        num saldo = t.longitud;
+        final pasos = <Widget>[];
+        pasos.add(_eventoTrozo(
+          icono: Icons.add_circle, color: Colors.green,
+          titulo: 'Ingreso · +${_qty.format(t.longitud)} $u',
+          detalle: [
+            if (t.creadoEmail != null) 'por ${t.creadoEmail}',
+            if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
+            if (t.bodega != null) '📍 ${t.bodega}',
+          ].join(' · '),
+          saldo: 'Saldo: ${_qty.format(saldo)} $u',
+        ));
+        for (final s in salidas) {
+          saldo -= s.cantidad;
+          pasos.add(_eventoTrozo(
+            icono: Icons.remove_circle, color: Colors.orange,
+            titulo: 'Salida · −${_qty.format(s.cantidad)} $u',
+            detalle: [
+              if (s.centroCosto != null) s.centroCosto!,
+              if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
+              _fechaHora.format(horaColombia(s.fecha)),
+              if (s.observacion != null && s.observacion!.isNotEmpty) s.observacion!,
+            ].join(' · '),
+            saldo: 'Saldo: ${_qty.format(saldo < 0 ? 0 : saldo)} $u',
+          ));
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.elementoNombre,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 6),
+                    Text('Longitud inicial: ${_qty.format(t.longitud)} $u'),
+                    Text('Disponible ahora: ${_qty.format(t.longitudActual)} $u'
+                        '${t.disponible ? '' : '  ·  CONSUMIDO'}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: t.disponible ? Colors.teal : Colors.grey)),
+                    Text('Salidas registradas: ${salidas.length}'),
+                  ]),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Trazabilidad (más reciente primero)',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            // El saldo de cada línea se calcula en orden cronológico, pero se
+            // muestra invertido: primero lo más reciente, al final el ingreso.
+            ...pasos.reversed,
+          ],
+        );
+      },
+    );
+  }
+}
+
+Widget _eventoTrozo({required IconData icono, required Color color,
+    required String titulo, required String detalle, required String saldo}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icono, color: color, size: 22),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (detalle.isNotEmpty)
+            Text(detalle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(saldo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ])),
+    ]),
+  );
+}
+
+/// Trazabilidad de un trozo como página propia: se abre al entrar desde la
+/// lista de un elemento (TrozosElementoPage). En la pestaña Histórico del
+/// módulo la misma trazabilidad se muestra embebida (Expand/Collapse).
+class TrozoHistorialPage extends StatelessWidget {
+  final Trozo trozo;
+  final String unidad;
+  const TrozoHistorialPage({super.key, required this.trozo, required this.unidad});
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _fondoAprov,
       appBar: AppBar(
           backgroundColor: _barraAprov,
           title: const Text('Historial del trozo')),
-      body: FutureBuilder<List<SalidaTrozo>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final salidas = snap.data ?? [];
-          // Saldo corriendo: arranca en la longitud inicial y va bajando.
-          num saldo = t.longitud;
-          final pasos = <Widget>[];
-          pasos.add(_evento(
-            icono: Icons.add_circle, color: Colors.green,
-            titulo: 'Ingreso · +${_qty.format(t.longitud)} $u',
-            detalle: [
-              if (t.creadoEmail != null) 'por ${t.creadoEmail}',
-              if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
-              if (t.bodega != null) '📍 ${t.bodega}',
-            ].join(' · '),
-            saldo: 'Saldo: ${_qty.format(saldo)} $u',
-          ));
-          for (final s in salidas) {
-            saldo -= s.cantidad;
-            pasos.add(_evento(
-              icono: Icons.remove_circle, color: Colors.orange,
-              titulo: 'Salida · −${_qty.format(s.cantidad)} $u',
-              detalle: [
-                if (s.centroCosto != null) s.centroCosto!,
-                if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
-                _fechaHora.format(horaColombia(s.fecha)),
-                if (s.observacion != null && s.observacion!.isNotEmpty) s.observacion!,
-              ].join(' · '),
-              saldo: 'Saldo: ${_qty.format(saldo < 0 ? 0 : saldo)} $u',
-            ));
-          }
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(t.elementoNombre,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 6),
-                      Text('Longitud inicial: ${_qty.format(t.longitud)} $u'),
-                      Text('Disponible ahora: ${_qty.format(t.longitudActual)} $u'
-                          '${t.disponible ? '' : '  ·  CONSUMIDO'}',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: t.disponible ? Colors.teal : Colors.grey)),
-                      Text('Salidas registradas: ${salidas.length}'),
-                    ]),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text('Trazabilidad (más reciente primero)',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              // El saldo de cada línea se calcula en orden cronológico, pero se
-              // muestra invertido: primero lo más reciente, al final el ingreso.
-              ...pasos.reversed,
-            ],
-          );
-        },
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: _TrozoTrazaView(trozo: trozo, unidad: unidad),
       ),
-    );
-  }
-
-  Widget _evento({required IconData icono, required Color color,
-      required String titulo, required String detalle, required String saldo}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icono, color: color, size: 22),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (detalle.isNotEmpty)
-              Text(detalle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            Text(saldo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          ])),
-      ]),
     );
   }
 }
