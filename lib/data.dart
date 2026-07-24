@@ -583,6 +583,7 @@ class InventarioService {
     await supabase.from('aprovechamiento_trozos').insert({
       'elemento_id': elementoId,
       'longitud': longitud,
+      'longitud_actual': longitud, // al ingresar, el saldo disponible = total
       'bodega_id': bodegaId,
       'observacion':
           (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),

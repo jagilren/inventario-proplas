@@ -42,6 +42,20 @@ create table aprovechamiento_salidas (
 );
 create index idx_aprov_sal_trozo on aprovechamiento_salidas (trozo_id);
 
+-- ---- Trigger: al ingresar, el saldo disponible arranca = longitud ---
+create or replace function public.fn_aprov_ini()
+returns trigger language plpgsql as $$
+begin
+  if new.longitud_actual is null then
+    new.longitud_actual := new.longitud;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_aprov_ini on aprovechamiento_trozos;
+create trigger trg_aprov_ini before insert on aprovechamiento_trozos
+  for each row execute function public.fn_aprov_ini();
+
 -- ---- Trigger: al registrar una sub-salida, descuenta del trozo ------
 create or replace function public.fn_aprov_salida()
 returns trigger language plpgsql security definer set search_path = public as $$
