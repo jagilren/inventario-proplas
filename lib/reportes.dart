@@ -123,4 +123,66 @@ class Reportes {
     }
     await _descargar('bajo_minimo', filas);
   }
+
+  /// 5) Movimientos de APROVECHAMIENTOS por rango de fechas (entradas =
+  /// trozos creados; salidas = segmentos usados). Ordenado del más reciente
+  /// al más antiguo.
+  static Future<void> movimientosAprovechamientos(
+      DateTime desde, DateTime hasta) async {
+    final d = desde.toUtc().toIso8601String();
+    final h = hasta.add(const Duration(days: 1)).toUtc().toIso8601String();
+
+    final ent = await supabase
+        .from('aprovechamiento_trozos')
+        .select('creado_en, longitud, creado_email, observacion, '
+            'elementos(nombre, unidad), bodegas(nombre)')
+        .gte('creado_en', d).lt('creado_en', h);
+
+    final sal = await supabase
+        .from('aprovechamiento_salidas')
+        .select('fecha, cantidad, usuario_email, observacion, '
+            'centros_costo(codigo, descripcion), '
+            'aprovechamiento_trozos(elementos(nombre, unidad), bodegas(nombre))')
+        .gte('fecha', d).lt('fecha', h);
+
+    final filas = <List<dynamic>>[
+      ['Fecha', 'Tipo', 'Elemento', 'Unidad', 'Cantidad', 'Centro de costo',
+        'Bodega', 'Usuario', 'Observación'],
+    ];
+    // Cada mov lleva su fecha ISO al final como clave de orden (se quita luego).
+    final movs = <List<dynamic>>[];
+
+    for (final r in (ent as List)) {
+      final m = r as Map<String, dynamic>;
+      final el = m['elementos'] as Map?;
+      movs.add([
+        _fecha(m['creado_en']), 'ENTRADA', el?['nombre'] ?? '',
+        el?['unidad'] ?? '', (m['longitud'] ?? 0) as num, '',
+        (m['bodegas'] as Map?)?['nombre'] ?? '', m['creado_email'] ?? '',
+        m['observacion'] ?? '', m['creado_en'] ?? '',
+      ]);
+    }
+    for (final r in (sal as List)) {
+      final m = r as Map<String, dynamic>;
+      final tr = m['aprovechamiento_trozos'] as Map?;
+      final el = tr?['elementos'] as Map?;
+      final cc = m['centros_costo'] as Map?;
+      final ccLabel = cc == null
+          ? ''
+          : [cc['codigo'], cc['descripcion']]
+              .where((x) => x != null && (x as String).trim().isNotEmpty)
+              .join(' · ');
+      movs.add([
+        _fecha(m['fecha']), 'SALIDA', el?['nombre'] ?? '', el?['unidad'] ?? '',
+        (m['cantidad'] ?? 0) as num, ccLabel,
+        (tr?['bodegas'] as Map?)?['nombre'] ?? '', m['usuario_email'] ?? '',
+        m['observacion'] ?? '', m['fecha'] ?? '',
+      ]);
+    }
+    // Más reciente primero.
+    movs.sort((a, b) => (b.last as String).compareTo(a.last as String));
+    for (final mv in movs) { mv.removeLast(); filas.add(mv); }
+
+    await _descargar('aprovechamientos_movimientos', filas);
+  }
 }

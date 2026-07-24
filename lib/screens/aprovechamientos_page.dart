@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
+import '../reportes.dart';
 import '../util/tiempo.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -39,6 +40,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   List<Trozo> _historico = [];
   bool _cargando = false;
   bool _puedeEntrada = false;
+  bool _puedeExportar = false;
   bool _mostrarSaldoCero = false; // en "Por elemento", ocultar saldo 0 por defecto
   String? _trozoExpandido; // id del trozo desplegado inline en la pestaña Histórico
   _OrdenAprov _orden = _OrdenAprov.reciente;
@@ -57,8 +59,11 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     InventarioService.revision.addListener(_cargar);
     InventarioService.misRoles().then((r) {
       if (mounted) {
-        setState(() => _puedeEntrada =
-            r.contains(Roles.admin) || r.contains(Roles.operarioMas));
+        setState(() {
+          _puedeEntrada = r.contains(Roles.admin) || r.contains(Roles.operarioMas);
+          _puedeExportar = r.contains(Roles.admin) ||
+              r.contains(Roles.coordinador) || r.contains(Roles.exportar);
+        });
       }
     });
     // Recupera el orden que el usuario dejó guardado.
@@ -147,6 +152,31 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     return _ordenarTrozos(base);
   }
 
+  Future<void> _exportar() async {
+    final ahora = DateTime.now();
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: ahora.add(const Duration(days: 1)),
+      initialDateRange: DateTimeRange(
+          start: ahora.subtract(const Duration(days: 30)), end: ahora),
+      helpText: 'Movimientos de aprovechamientos: rango de fechas',
+    );
+    if (rango == null) return;
+    try {
+      await Reportes.movimientosAprovechamientos(rango.start, rango.end);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✓ Exportado (revisa tus descargas)')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al exportar: $e')));
+      }
+    }
+  }
+
   Future<void> _ingresar([TrozoResumen? pre]) async {
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -178,6 +208,14 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                     'no afectan el inventario oficial',
                     style: TextStyle(fontSize: 12, color: Colors.brown.shade400)),
               ),
+              if (_puedeExportar)
+                IconButton(
+                  icon: Icon(Icons.file_download, size: 20,
+                      color: Colors.brown.shade400),
+                  tooltip: 'Exportar movimientos por fecha',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _exportar,
+                ),
             ]),
           ),
           TabBar(controller: _tab, tabs: const [
@@ -641,9 +679,9 @@ class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
           saldo -= s.cantidad;
           pasos.add(_eventoTrozo(
             icono: Icons.remove_circle, color: Colors.orange,
-            titulo: 'Salida · −${_qty.format(s.cantidad)} $u',
+            titulo: 'Salida · −${_qty.format(s.cantidad)} $u  →  '
+                '${s.centroCosto ?? 'sin centro de costo'}',
             detalle: [
-              if (s.centroCosto != null) s.centroCosto!,
               if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
               _fechaHora.format(horaColombia(s.fecha)),
               if (s.observacion != null && s.observacion!.isNotEmpty) s.observacion!,

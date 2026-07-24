@@ -205,17 +205,25 @@ class Trozo {
 /// Una sub-salida (segmento usado) de un trozo, para el historial.
 class SalidaTrozo {
   final num cantidad;
-  final String? centroCosto;
+  final String? centroCosto; // "código · descripción" del centro de costo
   final String? observacion;
   final String? usuarioEmail;
   final DateTime fecha;
 
   SalidaTrozo.fromMap(Map<String, dynamic> m)
       : cantidad = (m['cantidad'] ?? 0) as num,
-        centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
+        centroCosto = _cc(m['centros_costo'] as Map?),
         observacion = m['observacion'] as String?,
         usuarioEmail = m['usuario_email'] as String?,
         fecha = DateTime.parse(m['fecha'] as String);
+
+  static String? _cc(Map? c) {
+    if (c == null) return null;
+    final parts = [c['codigo'], c['descripcion']]
+        .where((x) => x != null && (x as String).trim().isNotEmpty)
+        .cast<String>();
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 }
 
 /// Resumen por elemento de sus trozos: disponibles (con saldo) y total.
@@ -671,7 +679,8 @@ class InventarioService {
   static Future<List<SalidaTrozo>> salidasDeTrozo(String trozoId) async {
     final res = await supabase
         .from('aprovechamiento_salidas')
-        .select('cantidad, observacion, usuario_email, fecha, centros_costo(codigo)')
+        .select('cantidad, observacion, usuario_email, fecha, '
+            'centros_costo(codigo, descripcion)')
         .eq('trozo_id', trozoId)
         .order('fecha');
     return (res as List)
