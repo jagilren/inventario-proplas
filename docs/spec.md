@@ -220,6 +220,12 @@ Como operario−/admin, quiero usar parte de un trozo y que el resto quede dispo
 Como usuario, quiero ver por elemento cuántos trozos y cuánto queda.
 - AC-14.3.1 · Dado varios trozos, cuando abro la pestaña Aprovechamientos, entonces veo por elemento el conteo y el total disponible, con el sello **"$0 · no valoriza"**.
 
+**US-14.4 — Trazabilidad e histórico del trozo** ✅
+Como usuario, quiero ver la historia de un trozo: su longitud inicial y cómo se ha ido diezmando.
+- AC-14.4.1 · Dado un trozo, cuando abro su historial, entonces veo el ingreso (longitud inicial, quién y cuándo) y cada salida (cantidad, centro de costo, quién, cuándo) con el **saldo corriendo**.
+- AC-14.4.2 · Dado el detalle de un elemento, cuando abro la pestaña **Histórico**, entonces veo también los trozos ya consumidos.
+- AC-14.4.3 · Toda creación y salida guarda **usuario y fecha** en la base (aunque no siempre se muestre).
+
 ---
 
 ## 5. Requisitos no funcionales (como criterios)

@@ -179,6 +179,9 @@ class Trozo {
   final num longitudActual;  // lo que queda disponible
   final String? bodega;
   final String? observacion;
+  final String? creadoEmail;
+  final DateTime? creadoEn;
+  final DateTime? consumidoEn;
 
   Trozo.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String,
@@ -188,10 +191,31 @@ class Trozo {
         longitud = (m['longitud'] ?? 0) as num,
         longitudActual = (m['longitud_actual'] ?? 0) as num,
         bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
-        observacion = m['observacion'] as String?;
+        observacion = m['observacion'] as String?,
+        creadoEmail = m['creado_email'] as String?,
+        creadoEn = m['creado_en'] == null
+            ? null : DateTime.parse(m['creado_en'] as String),
+        consumidoEn = m['consumido_en'] == null
+            ? null : DateTime.parse(m['consumido_en'] as String);
 
   bool get disponible => longitudActual > 0;
   bool get parcial => longitudActual < longitud;
+}
+
+/// Una sub-salida (segmento usado) de un trozo, para el historial.
+class SalidaTrozo {
+  final num cantidad;
+  final String? centroCosto;
+  final String? observacion;
+  final String? usuarioEmail;
+  final DateTime fecha;
+
+  SalidaTrozo.fromMap(Map<String, dynamic> m)
+      : cantidad = (m['cantidad'] ?? 0) as num,
+        centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
+        observacion = m['observacion'] as String?,
+        usuarioEmail = m['usuario_email'] as String?,
+        fecha = DateTime.parse(m['fecha'] as String);
 }
 
 /// Resumen por elemento de los trozos disponibles (conteo + total).
@@ -588,6 +612,7 @@ class InventarioService {
       'observacion':
           (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
       'creado_por': supabase.auth.currentUser?.id,
+      'creado_email': supabase.auth.currentUser?.email,
     });
     revision.value++;
   }
@@ -603,8 +628,22 @@ class InventarioService {
       'observacion':
           (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
       'usuario_id': supabase.auth.currentUser?.id,
+      'usuario_email': supabase.auth.currentUser?.email,
     });
     revision.value++;
+  }
+
+  /// Historial de sub-salidas de un trozo (para la trazabilidad), más reciente
+  /// primero.
+  static Future<List<SalidaTrozo>> salidasDeTrozo(String trozoId) async {
+    final res = await supabase
+        .from('aprovechamiento_salidas')
+        .select('cantidad, observacion, usuario_email, fecha, centros_costo(codigo)')
+        .eq('trozo_id', trozoId)
+        .order('fecha');
+    return (res as List)
+        .map((e) => SalidaTrozo.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Borra un trozo (corrección). Permiso: admin/coordinador.

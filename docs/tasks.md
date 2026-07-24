@@ -81,6 +81,7 @@
 - ✅ T-14.1 Backend: `aprovechamiento_trozos` + `aprovechamiento_salidas` + trigger de descuento parcial, RLS por rol → US-14.1, US-14.2
 - ✅ T-14.2 Data layer: modelos `Trozo`/`TrozoResumen` + métodos (resumen, por elemento, ingresar, sacar parcial) → US-14.1, US-14.2
 - ✅ T-14.3 UI: pestaña Aprovechamientos + detalle por elemento + ingresar + usar (parcial) → US-14.1, US-14.2, US-14.3
+- ✅ T-14.4 Trazabilidad: email de creador/salida en la base; pestañas Disponibles/Histórico; pantalla de historial del trozo (saldo corriendo) → US-14.4
 
 ---
 

@@ -24,6 +24,7 @@ create table aprovechamiento_trozos (
   bodega_id       uuid references bodegas(id),                   -- ubicación
   observacion     text,
   creado_por      uuid,
+  creado_email    text,                                          -- trazabilidad
   creado_en       timestamptz not null default now(),
   consumido_en    timestamptz                                    -- cuando llega a 0
 );
@@ -38,6 +39,7 @@ create table aprovechamiento_salidas (
   centro_costo_id uuid references centros_costo(id),
   observacion     text,
   usuario_id      uuid,
+  usuario_email   text,                                          -- trazabilidad
   fecha           timestamptz not null default now()
 );
 create index idx_aprov_sal_trozo on aprovechamiento_salidas (trozo_id);

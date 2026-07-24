@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
+import '../util/tiempo.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
+final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
 /// Inventario paralelo de TROZOS/RETAZOS aprovechables, valorizados a $0.
 /// No toca el inventario oficial. Reusa catálogo, bodegas y centros de costo.
@@ -156,9 +158,11 @@ class TrozosElementoPage extends StatefulWidget {
 }
 
 class _TrozosElementoPageState extends State<TrozosElementoPage> {
-  List<Trozo> _trozos = [];
+  List<Trozo> _todos = [];
   bool _cargando = false;
   bool _puedeEntrada = false, _puedeSalida = false, _puedeBorrar = false;
+
+  List<Trozo> get _disponibles => _todos.where((t) => t.disponible).toList();
 
   @override
   void initState() {
@@ -178,11 +182,18 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   Future<void> _cargar() async {
     setState(() => _cargando = true);
     try {
-      final t = await InventarioService.trozosDeElemento(widget.elementoId);
-      if (mounted) setState(() => _trozos = t);
+      // Trae TODOS (incluye consumidos) para la pestaña de histórico.
+      final t = await InventarioService.trozosDeElemento(
+          widget.elementoId, soloDisponibles: false);
+      if (mounted) setState(() => _todos = t);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  void _verHistorial(Trozo t) {
+    Navigator.push(context, MaterialPageRoute(
+        builder: (_) => TrozoHistorialPage(trozo: t, unidad: widget.unidad)));
   }
 
   Future<void> _usar(Trozo t) async {
@@ -285,50 +296,187 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.nombre),
+          bottom: const TabBar(tabs: [
+            Tab(icon: Icon(Icons.content_cut), text: 'Disponibles'),
+            Tab(icon: Icon(Icons.history), text: 'Histórico'),
+          ]),
+        ),
+        floatingActionButton: _puedeEntrada
+            ? FloatingActionButton.extended(
+                onPressed: _ingresar,
+                icon: const Icon(Icons.add),
+                label: const Text('Ingresar trozo'))
+            : null,
+        body: _cargando
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(children: [
+                _lista(_disponibles, historico: false),
+                _lista(_todos, historico: true),
+              ]),
+      ),
+    );
+  }
+
+  Widget _lista(List<Trozo> items, {required bool historico}) {
+    if (items.isEmpty) {
+      return Center(child: Text(historico
+          ? 'Aún no hay trozos registrados'
+          : 'No hay trozos disponibles'));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final t = items[i];
+        final consumido = !t.disponible;
+        return ListTile(
+          leading: Icon(Icons.content_cut,
+              color: consumido ? Colors.grey : Colors.blueGrey),
+          title: Text(
+              historico && consumido
+                  ? 'Consumido · era de ${_qty.format(t.longitud)} ${widget.unidad}'
+                  : '${_qty.format(t.longitudActual)} ${widget.unidad}'
+                      '${t.parcial ? '  (de ${_qty.format(t.longitud)})' : ''}',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: consumido ? Colors.grey : null)),
+          subtitle: Text([
+            if (!consumido && t.parcial) 'usado en parte',
+            if (t.bodega != null) '📍 ${t.bodega}',
+            if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
+            'ver historial ⟶',
+          ].join(' · '), style: const TextStyle(fontSize: 12)),
+          trailing: (!historico && (_puedeSalida || _puedeBorrar))
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_puedeSalida)
+                    TextButton(onPressed: () => _usar(t), child: const Text('Usar')),
+                  if (_puedeBorrar)
+                    IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            size: 20, color: Colors.red),
+                        tooltip: 'Borrar',
+                        onPressed: () => _borrar(t)),
+                ])
+              : const Icon(Icons.chevron_right),
+          onTap: () => _verHistorial(t),
+        );
+      },
+    );
+  }
+}
+
+/// Trazabilidad de un trozo: longitud inicial y cómo se ha ido diezmando.
+class TrozoHistorialPage extends StatefulWidget {
+  final Trozo trozo;
+  final String unidad;
+  const TrozoHistorialPage({super.key, required this.trozo, required this.unidad});
+  @override
+  State<TrozoHistorialPage> createState() => _TrozoHistorialPageState();
+}
+
+class _TrozoHistorialPageState extends State<TrozoHistorialPage> {
+  late Future<List<SalidaTrozo>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = InventarioService.salidasDeTrozo(widget.trozo.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.trozo;
+    final u = widget.unidad;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.nombre)),
-      floatingActionButton: _puedeEntrada
-          ? FloatingActionButton.extended(
-              onPressed: _ingresar,
-              icon: const Icon(Icons.add),
-              label: const Text('Ingresar trozo'))
-          : null,
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _trozos.isEmpty
-              ? const Center(child: Text('No hay trozos disponibles'))
-              : ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 80),
-                  itemCount: _trozos.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final t = _trozos[i];
-                    return ListTile(
-                      leading: const Icon(Icons.content_cut, color: Colors.blueGrey),
-                      title: Text(
-                          '${_qty.format(t.longitudActual)} ${widget.unidad}'
-                          '${t.parcial ? '  (de ${_qty.format(t.longitud)})' : ''}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text([
-                        if (t.parcial) 'usado en parte',
-                        if (t.bodega != null) '📍 ${t.bodega}',
-                        if (t.observacion != null && t.observacion!.isNotEmpty)
-                          t.observacion!,
-                      ].join(' · ')),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        if (_puedeSalida)
-                          TextButton(onPressed: () => _usar(t),
-                              child: const Text('Usar')),
-                        if (_puedeBorrar)
-                          IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 20, color: Colors.red),
-                              tooltip: 'Borrar',
-                              onPressed: () => _borrar(t)),
-                      ]),
-                    );
-                  },
+      appBar: AppBar(title: const Text('Historial del trozo')),
+      body: FutureBuilder<List<SalidaTrozo>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final salidas = snap.data ?? [];
+          // Saldo corriendo: arranca en la longitud inicial y va bajando.
+          num saldo = t.longitud;
+          final pasos = <Widget>[];
+          pasos.add(_evento(
+            icono: Icons.add_circle, color: Colors.green,
+            titulo: 'Ingreso · +${_qty.format(t.longitud)} $u',
+            detalle: [
+              if (t.creadoEmail != null) 'por ${t.creadoEmail}',
+              if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
+              if (t.bodega != null) '📍 ${t.bodega}',
+            ].join(' · '),
+            saldo: 'Saldo: ${_qty.format(saldo)} $u',
+          ));
+          for (final s in salidas) {
+            saldo -= s.cantidad;
+            pasos.add(_evento(
+              icono: Icons.remove_circle, color: Colors.orange,
+              titulo: 'Salida · −${_qty.format(s.cantidad)} $u',
+              detalle: [
+                if (s.centroCosto != null) s.centroCosto!,
+                if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
+                _fechaHora.format(horaColombia(s.fecha)),
+                if (s.observacion != null && s.observacion!.isNotEmpty) s.observacion!,
+              ].join(' · '),
+              saldo: 'Saldo: ${_qty.format(saldo < 0 ? 0 : saldo)} $u',
+            ));
+          }
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(t.elementoNombre,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 6),
+                      Text('Longitud inicial: ${_qty.format(t.longitud)} $u'),
+                      Text('Disponible ahora: ${_qty.format(t.longitudActual)} $u'
+                          '${t.disponible ? '' : '  ·  CONSUMIDO'}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: t.disponible ? Colors.teal : Colors.grey)),
+                      Text('Salidas registradas: ${salidas.length}'),
+                    ]),
                 ),
+              ),
+              const SizedBox(height: 8),
+              const Text('Trazabilidad',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              ...pasos,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _evento({required IconData icono, required Color color,
+      required String titulo, required String detalle, required String saldo}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icono, color: color, size: 22),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (detalle.isNotEmpty)
+              Text(detalle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(saldo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ])),
+      ]),
     );
   }
 }
