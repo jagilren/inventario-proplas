@@ -77,6 +77,11 @@
 - ✅ T-13.1 Backend de adjuntos (tabla `movimiento_adjuntos` + bucket `adjuntos-mov`)
 - ✅ T-13.2 Gate "Función de pago" en Entrada/Salida y detalle → US-13.1
 
+### Aprovechamientos (trozos/retazos a $0)
+- ✅ T-14.1 Backend: `aprovechamiento_trozos` + `aprovechamiento_salidas` + trigger de descuento parcial, RLS por rol → US-14.1, US-14.2
+- ✅ T-14.2 Data layer: modelos `Trozo`/`TrozoResumen` + métodos (resumen, por elemento, ingresar, sacar parcial) → US-14.1, US-14.2
+- ✅ T-14.3 UI: pestaña Aprovechamientos + detalle por elemento + ingresar + usar (parcial) → US-14.1, US-14.2, US-14.3
+
 ---
 
 ## Tareas pendientes

@@ -204,6 +204,22 @@ Como usuario, quiero adjuntar PDF/Excel a un movimiento.
 - AC-13.1.1 · Dado que toco "Adjuntar archivo" (en Entrada/Salida o en el detalle), cuando se ejecuta, entonces —a cualquier usuario, incluido admin— aparece el aviso "Función de pago / faltan créditos en Supabase". No se sube nada.
 - *Nota:* backend (tabla + bucket) listo para habilitar.
 
+### EPIC 14 — Aprovechamientos (trozos/retazos a $0)
+
+**US-14.1 — Registrar trozos aprovechables** ✅
+Como operario+/admin, quiero registrar trozos sobrantes de un elemento, a $0, sin afectar el inventario oficial.
+- AC-14.1.1 · Dado un elemento, una longitud y una ubicación, cuando ingreso un trozo, entonces se guarda como disponible y **no cambia ninguna existencia ni valorización oficial**.
+
+**US-14.2 — Consumir trozos por sub-segmentos (parcial)** ✅
+Como operario−/admin, quiero usar parte de un trozo y que el resto quede disponible.
+- AC-14.2.1 · Dado un trozo de 5 m, cuando uso 3 m hacia un centro de costo, entonces quedan 2 m disponibles.
+- AC-14.2.2 · Dado que intento usar más de lo que queda, cuando confirmo, entonces se rechaza.
+- AC-14.2.3 · Dado que uso exactamente lo que queda, cuando confirmo, entonces el trozo queda consumido.
+
+**US-14.3 — Ver los trozos disponibles** ✅
+Como usuario, quiero ver por elemento cuántos trozos y cuánto queda.
+- AC-14.3.1 · Dado varios trozos, cuando abro la pestaña Aprovechamientos, entonces veo por elemento el conteo y el total disponible, con el sello **"$0 · no valoriza"**.
+
 ---
 
 ## 5. Requisitos no funcionales (como criterios)

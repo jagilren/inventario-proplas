@@ -7,6 +7,7 @@ import 'dashboard_page.dart';
 import 'elementos_page.dart';
 import 'movimiento_page.dart';
 import 'alertas_page.dart';
+import 'aprovechamientos_page.dart';
 import 'perfil_page.dart';
 import 'centros_page.dart';
 import 'bodegas_page.dart';
@@ -64,6 +65,7 @@ class _HomePageState extends State<HomePage> {
       if (puedeEntrada)
         const _Seccion('Entrada', Icons.download, MovimientoPage(tipoInicial: 'entrada')),
       const _Seccion('Alertas', Icons.warning_amber, AlertasPage()),
+      const _Seccion('Aprovech.', Icons.content_cut, AprovechamientosPage()),
     ];
   }
 

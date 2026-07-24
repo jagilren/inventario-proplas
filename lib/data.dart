@@ -169,6 +169,42 @@ class Adjunto {
   bool get esImagen => (tipo ?? '').startsWith('image/');
 }
 
+/// Un trozo/retazo aprovechable de un elemento. Inventario paralelo, $0.
+class Trozo {
+  final String id;
+  final String elementoId;
+  final String elementoNombre;
+  final String unidad;
+  final num longitud;        // longitud inicial
+  final num longitudActual;  // lo que queda disponible
+  final String? bodega;
+  final String? observacion;
+
+  Trozo.fromMap(Map<String, dynamic> m)
+      : id = m['id'] as String,
+        elementoId = m['elemento_id'] as String,
+        elementoNombre = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
+        unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
+        longitud = (m['longitud'] ?? 0) as num,
+        longitudActual = (m['longitud_actual'] ?? 0) as num,
+        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+        observacion = m['observacion'] as String?;
+
+  bool get disponible => longitudActual > 0;
+  bool get parcial => longitudActual < longitud;
+}
+
+/// Resumen por elemento de los trozos disponibles (conteo + total).
+class TrozoResumen {
+  final String elementoId;
+  final String nombre;
+  final String unidad;
+  final int cantidad;
+  final num total;
+  TrozoResumen(this.elementoId, this.nombre, this.unidad,
+      this.cantidad, this.total);
+}
+
 class Resumen {
   final int totalElementos;
   final num valorizacionTotal;
@@ -493,6 +529,87 @@ class InventarioService {
     } catch (_) {
       // Si el archivo ya no existe, el registro igual quedó borrado.
     }
+  }
+
+  // ---- APROVECHAMIENTOS (trozos/retazos, inventario paralelo a $0) ----
+
+  /// Resumen: elementos con trozos disponibles (conteo + total que queda).
+  static Future<List<TrozoResumen>> aprovechamientosResumen() async {
+    final res = await supabase
+        .from('aprovechamiento_trozos')
+        .select('elemento_id, longitud_actual, elementos(nombre, unidad)')
+        .gt('longitud_actual', 0);
+    final grupos = <String, List<num>>{};
+    final nombres = <String, String>{};
+    final unidades = <String, String>{};
+    for (final e in (res as List)) {
+      final m = e as Map<String, dynamic>;
+      final id = m['elemento_id'] as String;
+      final el = m['elementos'] as Map?;
+      nombres[id] = (el?['nombre'] ?? '') as String;
+      unidades[id] = (el?['unidad'] ?? 'UND') as String;
+      (grupos[id] ??= []).add((m['longitud_actual'] ?? 0) as num);
+    }
+    final out = grupos.entries
+        .map((e) => TrozoResumen(e.key, nombres[e.key] ?? '',
+            unidades[e.key] ?? 'UND', e.value.length,
+            e.value.fold<num>(0, (a, b) => a + b)))
+        .toList();
+    out.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+    return out;
+  }
+
+  /// Trozos de un elemento (por defecto solo los que tienen saldo disponible).
+  static Future<List<Trozo>> trozosDeElemento(String elementoId,
+      {bool soloDisponibles = true}) async {
+    var q = supabase
+        .from('aprovechamiento_trozos')
+        .select('*, elementos(nombre, unidad), bodegas(nombre)')
+        .eq('elemento_id', elementoId);
+    if (soloDisponibles) q = q.gt('longitud_actual', 0);
+    final res = await q.order('creado_en');
+    return (res as List)
+        .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Ingresa un trozo (entrada). Permiso: operario+ o admin.
+  static Future<void> ingresarTrozo({
+    required String elementoId,
+    required num longitud,
+    String? bodegaId,
+    String? observacion,
+  }) async {
+    await supabase.from('aprovechamiento_trozos').insert({
+      'elemento_id': elementoId,
+      'longitud': longitud,
+      'bodega_id': bodegaId,
+      'observacion':
+          (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
+      'creado_por': supabase.auth.currentUser?.id,
+    });
+    revision.value++;
+  }
+
+  /// Saca un sub-segmento de un trozo (salida parcial). El trigger descuenta
+  /// del saldo y valida que no exceda lo disponible. Permiso: operario- o admin.
+  static Future<void> sacarDeTrozo(String trozoId,
+      {required num cantidad, String? centroCostoId, String? observacion}) async {
+    await supabase.from('aprovechamiento_salidas').insert({
+      'trozo_id': trozoId,
+      'cantidad': cantidad,
+      'centro_costo_id': centroCostoId,
+      'observacion':
+          (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
+      'usuario_id': supabase.auth.currentUser?.id,
+    });
+    revision.value++;
+  }
+
+  /// Borra un trozo (corrección). Permiso: admin/coordinador.
+  static Future<void> borrarTrozo(String trozoId) async {
+    await supabase.from('aprovechamiento_trozos').delete().eq('id', trozoId);
+    revision.value++;
   }
 
   static Future<Resumen> resumen() async {
