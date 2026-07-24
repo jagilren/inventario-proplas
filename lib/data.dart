@@ -218,15 +218,16 @@ class SalidaTrozo {
         fecha = DateTime.parse(m['fecha'] as String);
 }
 
-/// Resumen por elemento de los trozos disponibles (conteo + total).
+/// Resumen por elemento de sus trozos: disponibles (con saldo) y total.
 class TrozoResumen {
   final String elementoId;
   final String nombre;
   final String unidad;
-  final int cantidad;
-  final num total;
+  final int disponibles;   // # de trozos con saldo
+  final num totalDisp;     // suma de los saldos disponibles
+  final int totalTrozos;   // # de trozos en total (incluye consumidos)
   TrozoResumen(this.elementoId, this.nombre, this.unidad,
-      this.cantidad, this.total);
+      this.disponibles, this.totalDisp, this.totalTrozos);
 }
 
 class Resumen {
@@ -557,30 +558,54 @@ class InventarioService {
 
   // ---- APROVECHAMIENTOS (trozos/retazos, inventario paralelo a $0) ----
 
-  /// Resumen: elementos con trozos disponibles (conteo + total que queda).
+  /// Resumen por elemento de TODOS sus trozos (incluye los ya consumidos, para
+  /// que se pueda ver su histórico). Trae disponibles + total.
   static Future<List<TrozoResumen>> aprovechamientosResumen() async {
     final res = await supabase
         .from('aprovechamiento_trozos')
-        .select('elemento_id, longitud_actual, elementos(nombre, unidad)')
-        .gt('longitud_actual', 0);
-    final grupos = <String, List<num>>{};
+        .select('elemento_id, longitud_actual, elementos(nombre, unidad)');
     final nombres = <String, String>{};
     final unidades = <String, String>{};
+    final disp = <String, int>{};       // # con saldo
+    final totalDisp = <String, num>{};  // suma de saldos
+    final total = <String, int>{};      // # de trozos en total
     for (final e in (res as List)) {
       final m = e as Map<String, dynamic>;
       final id = m['elemento_id'] as String;
       final el = m['elementos'] as Map?;
       nombres[id] = (el?['nombre'] ?? '') as String;
       unidades[id] = (el?['unidad'] ?? 'UND') as String;
-      (grupos[id] ??= []).add((m['longitud_actual'] ?? 0) as num);
+      final saldo = (m['longitud_actual'] ?? 0) as num;
+      total[id] = (total[id] ?? 0) + 1;
+      if (saldo > 0) {
+        disp[id] = (disp[id] ?? 0) + 1;
+        totalDisp[id] = (totalDisp[id] ?? 0) + saldo;
+      }
     }
-    final out = grupos.entries
-        .map((e) => TrozoResumen(e.key, nombres[e.key] ?? '',
-            unidades[e.key] ?? 'UND', e.value.length,
-            e.value.fold<num>(0, (a, b) => a + b)))
+    final out = total.keys
+        .map((id) => TrozoResumen(id, nombres[id] ?? '', unidades[id] ?? 'UND',
+            disp[id] ?? 0, totalDisp[id] ?? 0, total[id] ?? 0))
         .toList();
-    out.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+    // Primero los que tienen saldo, luego alfabético.
+    out.sort((a, b) {
+      if ((a.disponibles > 0) != (b.disponibles > 0)) {
+        return a.disponibles > 0 ? -1 : 1;
+      }
+      return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
+    });
     return out;
+  }
+
+  /// Todos los trozos (de todos los elementos, incluidos los consumidos) para
+  /// el histórico global del módulo. Más reciente primero.
+  static Future<List<Trozo>> todosLosTrozos() async {
+    final res = await supabase
+        .from('aprovechamiento_trozos')
+        .select('*, elementos(nombre, unidad), bodegas(nombre)')
+        .order('creado_en', ascending: false);
+    return (res as List)
+        .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Trozos de un elemento (por defecto solo los que tienen saldo disponible).

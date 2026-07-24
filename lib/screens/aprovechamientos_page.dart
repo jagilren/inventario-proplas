@@ -16,7 +16,8 @@ class AprovechamientosPage extends StatefulWidget {
 
 class _AprovechamientosPageState extends State<AprovechamientosPage> {
   final _ctrl = TextEditingController();
-  List<TrozoResumen> _todos = [];
+  List<TrozoResumen> _resumen = [];
+  List<Trozo> _historico = [];
   bool _cargando = false;
   bool _puedeEntrada = false;
 
@@ -44,16 +45,25 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
     setState(() => _cargando = true);
     try {
       final r = await InventarioService.aprovechamientosResumen();
-      if (mounted) setState(() => _todos = r);
+      final h = await InventarioService.todosLosTrozos();
+      if (mounted) setState(() { _resumen = r; _historico = h; });
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  List<TrozoResumen> get _filtrados {
+  List<TrozoResumen> get _resumenFiltrado {
     final q = _ctrl.text.trim().toLowerCase();
-    if (q.isEmpty) return _todos;
-    return _todos.where((t) => t.nombre.toLowerCase().contains(q)).toList();
+    if (q.isEmpty) return _resumen;
+    return _resumen.where((t) => t.nombre.toLowerCase().contains(q)).toList();
+  }
+
+  List<Trozo> get _historicoFiltrado {
+    final q = _ctrl.text.trim().toLowerCase();
+    if (q.isEmpty) return _historico;
+    return _historico
+        .where((t) => t.elementoNombre.toLowerCase().contains(q))
+        .toList();
   }
 
   Future<void> _ingresar([TrozoResumen? pre]) async {
@@ -71,76 +81,129 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _filtrados;
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          color: Colors.blueGrey.shade50,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(children: const [
-            Icon(Icons.content_cut, size: 18, color: Colors.blueGrey),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text('Trozos aprovechables · valorizados a \$0 · '
-                  'no afectan el inventario oficial',
-                  style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
-            ),
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.blueGrey.shade50,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(children: const [
+              Icon(Icons.content_cut, size: 18, color: Colors.blueGrey),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Trozos aprovechables · valorizados a \$0 · '
+                    'no afectan el inventario oficial',
+                    style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+              ),
+            ]),
+          ),
+          const TabBar(tabs: [
+            Tab(icon: Icon(Icons.inventory_2), text: 'Por elemento'),
+            Tab(icon: Icon(Icons.history), text: 'Histórico'),
           ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: TextField(
-            controller: _ctrl,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Buscar elemento con trozos…',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _puedeEntrada
-                  ? IconButton(
-                      icon: const Icon(Icons.add_box, color: Colors.teal),
-                      tooltip: 'Ingresar trozo',
-                      onPressed: () => _ingresar(),
-                    )
-                  : null,
-              border: const OutlineInputBorder(),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _ctrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Buscar elemento…',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _puedeEntrada
+                    ? IconButton(
+                        icon: const Icon(Icons.add_box, color: Colors.teal),
+                        tooltip: 'Ingresar trozo',
+                        onPressed: () => _ingresar(),
+                      )
+                    : null,
+                border: const OutlineInputBorder(),
+              ),
             ),
           ),
-        ),
-        if (_cargando) const LinearProgressIndicator(),
-        Expanded(
-          child: items.isEmpty && !_cargando
-              ? const Center(child: Text('Sin trozos registrados'))
-              : ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final t = items[i];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blueGrey.shade100,
-                        child: Text('${t.cantidad}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14)),
-                      ),
-                      title: Text(t.nombre),
-                      subtitle: Text('${t.cantidad} '
-                          'trozo${t.cantidad == 1 ? '' : 's'} · '
-                          '${_qty.format(t.total)} ${t.unidad} en total'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => TrozosElementoPage(
-                                elementoId: t.elementoId,
-                                nombre: t.nombre,
-                                unidad: t.unidad)));
-                        _cargar();
-                      },
-                    );
-                  },
-                ),
-        ),
-      ],
+          if (_cargando) const LinearProgressIndicator(),
+          Expanded(
+            child: TabBarView(children: [
+              _porElemento(),
+              _historicoLista(),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pestaña "Por elemento": elementos con sus trozos disponibles.
+  Widget _porElemento() {
+    final items = _resumenFiltrado;
+    if (items.isEmpty && !_cargando) {
+      return const Center(child: Text('Sin trozos registrados'));
+    }
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final t = items[i];
+        final hayDisp = t.disponibles > 0;
+        final consumidos = t.totalTrozos - t.disponibles;
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor:
+                hayDisp ? Colors.blueGrey.shade100 : Colors.grey.shade300,
+            child: Text('${t.disponibles}',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
+                    color: hayDisp ? Colors.black : Colors.grey)),
+          ),
+          title: Text(t.nombre,
+              style: TextStyle(color: hayDisp ? null : Colors.grey)),
+          subtitle: Text(hayDisp
+              ? '${t.disponibles} trozo${t.disponibles == 1 ? '' : 's'} · '
+                  '${_qty.format(t.totalDisp)} ${t.unidad} disponibles'
+                  '${consumidos > 0 ? '  ·  $consumidos en histórico' : ''}'
+              : 'Sin saldo · ${t.totalTrozos} en histórico'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(
+                builder: (_) => TrozosElementoPage(
+                    elementoId: t.elementoId, nombre: t.nombre,
+                    unidad: t.unidad)));
+            _cargar();
+          },
+        );
+      },
+    );
+  }
+
+  /// Pestaña "Histórico": TODOS los trozos (incluidos saldo 0), planos.
+  Widget _historicoLista() {
+    final items = _historicoFiltrado;
+    if (items.isEmpty && !_cargando) {
+      return const Center(child: Text('Aún no hay trozos registrados'));
+    }
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final t = items[i];
+        return ListTile(
+          leading: Icon(Icons.content_cut,
+              color: t.disponible ? Colors.blueGrey : Colors.grey),
+          title: Text(t.elementoNombre,
+              style: TextStyle(color: t.disponible ? null : Colors.grey)),
+          subtitle: Text([
+            t.disponible
+                ? 'Disponible: ${_qty.format(t.longitudActual)} ${t.unidad}'
+                    '${t.parcial ? ' (de ${_qty.format(t.longitud)})' : ''}'
+                : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
+            if (t.bodega != null) '📍 ${t.bodega}',
+            if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
+          ].join(' · '), style: const TextStyle(fontSize: 12)),
+          trailing: const Icon(Icons.history),
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => TrozoHistorialPage(trozo: t, unidad: t.unidad))),
+        );
+      },
     );
   }
 }
