@@ -226,8 +226,10 @@ class TrozoResumen {
   final int disponibles;   // # de trozos con saldo
   final num totalDisp;     // suma de los saldos disponibles
   final int totalTrozos;   // # de trozos en total (incluye consumidos)
+  final DateTime? ultimaCreacion; // creación del trozo más reciente del elemento
   TrozoResumen(this.elementoId, this.nombre, this.unidad,
-      this.disponibles, this.totalDisp, this.totalTrozos);
+      this.disponibles, this.totalDisp, this.totalTrozos,
+      [this.ultimaCreacion]);
 }
 
 class Resumen {
@@ -563,12 +565,13 @@ class InventarioService {
   static Future<List<TrozoResumen>> aprovechamientosResumen() async {
     final res = await supabase
         .from('aprovechamiento_trozos')
-        .select('elemento_id, longitud_actual, elementos(nombre, unidad)');
+        .select('elemento_id, longitud_actual, creado_en, elementos(nombre, unidad)');
     final nombres = <String, String>{};
     final unidades = <String, String>{};
     final disp = <String, int>{};       // # con saldo
     final totalDisp = <String, num>{};  // suma de saldos
     final total = <String, int>{};      // # de trozos en total
+    final ultima = <String, DateTime>{}; // creación más reciente por elemento
     for (final e in (res as List)) {
       final m = e as Map<String, dynamic>;
       final id = m['elemento_id'] as String;
@@ -581,10 +584,14 @@ class InventarioService {
         disp[id] = (disp[id] ?? 0) + 1;
         totalDisp[id] = (totalDisp[id] ?? 0) + saldo;
       }
+      if (m['creado_en'] != null) {
+        final f = DateTime.parse(m['creado_en'] as String);
+        if (ultima[id] == null || f.isAfter(ultima[id]!)) ultima[id] = f;
+      }
     }
     final out = total.keys
         .map((id) => TrozoResumen(id, nombres[id] ?? '', unidades[id] ?? 'UND',
-            disp[id] ?? 0, totalDisp[id] ?? 0, total[id] ?? 0))
+            disp[id] ?? 0, totalDisp[id] ?? 0, total[id] ?? 0, ultima[id]))
         .toList();
     // Primero los que tienen saldo, luego alfabético.
     out.sort((a, b) {

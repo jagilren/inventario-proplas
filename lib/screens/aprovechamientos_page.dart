@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
 import '../util/tiempo.dart';
 
@@ -10,6 +11,17 @@ final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 /// Aprovechamientos del inventario oficial. Un toque más fuerte para barras.
 const _fondoAprov = Color(0xFFFFFDF2);
 final _barraAprov = Colors.amber.shade50;
+
+/// Orden paramétrico de las listas de aprovechamientos (se recuerda por usuario).
+enum _OrdenAprov { reciente, antiguo, nombre, saldo }
+
+const _ordenLabels = {
+  _OrdenAprov.reciente: 'Más reciente',
+  _OrdenAprov.antiguo: 'Más antiguo',
+  _OrdenAprov.nombre: 'Nombre (A–Z)',
+  _OrdenAprov.saldo: 'Mayor saldo',
+};
+const _ordenPrefKey = 'aprov_orden';
 
 /// Inventario paralelo de TROZOS/RETAZOS aprovechables, valorizados a $0.
 /// No toca el inventario oficial. Reusa catálogo, bodegas y centros de costo.
@@ -26,6 +38,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
   bool _cargando = false;
   bool _puedeEntrada = false;
   bool _mostrarSaldoCero = false; // en "Por elemento", ocultar saldo 0 por defecto
+  _OrdenAprov _orden = _OrdenAprov.reciente;
 
   @override
   void initState() {
@@ -38,6 +51,55 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
             r.contains(Roles.admin) || r.contains(Roles.operarioMas));
       }
     });
+    // Recupera el orden que el usuario dejó guardado.
+    SharedPreferences.getInstance().then((p) {
+      final s = p.getString(_ordenPrefKey);
+      if (s != null && mounted) {
+        setState(() => _orden = _OrdenAprov.values
+            .firstWhere((e) => e.name == s, orElse: () => _OrdenAprov.reciente));
+      }
+    });
+  }
+
+  Future<void> _setOrden(_OrdenAprov o) async {
+    setState(() => _orden = o);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_ordenPrefKey, o.name);
+  }
+
+  List<TrozoResumen> _ordenarResumen(List<TrozoResumen> l) {
+    final out = [...l];
+    final cero = DateTime.fromMillisecondsSinceEpoch(0);
+    switch (_orden) {
+      case _OrdenAprov.reciente:
+        out.sort((a, b) =>
+            (b.ultimaCreacion ?? cero).compareTo(a.ultimaCreacion ?? cero));
+      case _OrdenAprov.antiguo:
+        out.sort((a, b) =>
+            (a.ultimaCreacion ?? cero).compareTo(b.ultimaCreacion ?? cero));
+      case _OrdenAprov.nombre:
+        out.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+      case _OrdenAprov.saldo:
+        out.sort((a, b) => b.totalDisp.compareTo(a.totalDisp));
+    }
+    return out;
+  }
+
+  List<Trozo> _ordenarTrozos(List<Trozo> l) {
+    final out = [...l];
+    final cero = DateTime.fromMillisecondsSinceEpoch(0);
+    switch (_orden) {
+      case _OrdenAprov.reciente:
+        out.sort((a, b) => (b.creadoEn ?? cero).compareTo(a.creadoEn ?? cero));
+      case _OrdenAprov.antiguo:
+        out.sort((a, b) => (a.creadoEn ?? cero).compareTo(b.creadoEn ?? cero));
+      case _OrdenAprov.nombre:
+        out.sort((a, b) =>
+            a.elementoNombre.toLowerCase().compareTo(b.elementoNombre.toLowerCase()));
+      case _OrdenAprov.saldo:
+        out.sort((a, b) => b.longitudActual.compareTo(a.longitudActual));
+    }
+    return out;
   }
 
   @override
@@ -60,16 +122,18 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
 
   List<TrozoResumen> get _resumenFiltrado {
     final q = _ctrl.text.trim().toLowerCase();
-    if (q.isEmpty) return _resumen;
-    return _resumen.where((t) => t.nombre.toLowerCase().contains(q)).toList();
+    final base = q.isEmpty
+        ? _resumen
+        : _resumen.where((t) => t.nombre.toLowerCase().contains(q)).toList();
+    return _ordenarResumen(base);
   }
 
   List<Trozo> get _historicoFiltrado {
     final q = _ctrl.text.trim().toLowerCase();
-    if (q.isEmpty) return _historico;
-    return _historico
-        .where((t) => t.elementoNombre.toLowerCase().contains(q))
-        .toList();
+    final base = q.isEmpty
+        ? _historico
+        : _historico.where((t) => t.elementoNombre.toLowerCase().contains(q)).toList();
+    return _ordenarTrozos(base);
   }
 
   Future<void> _ingresar([TrozoResumen? pre]) async {
@@ -129,6 +193,26 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
                 border: const OutlineInputBorder(),
               ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 6),
+            child: Row(children: [
+              Icon(Icons.sort, size: 18, color: Colors.brown.shade400),
+              const SizedBox(width: 6),
+              const Text('Ordenar por:', style: TextStyle(fontSize: 13)),
+              const SizedBox(width: 8),
+              DropdownButton<_OrdenAprov>(
+                value: _orden,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: _OrdenAprov.values
+                    .map((o) => DropdownMenuItem(value: o,
+                        child: Text(_ordenLabels[o]!,
+                            style: const TextStyle(fontSize: 13))))
+                    .toList(),
+                onChanged: (o) { if (o != null) _setOrden(o); },
+              ),
+            ]),
           ),
           if (_cargando) const LinearProgressIndicator(),
           Expanded(
