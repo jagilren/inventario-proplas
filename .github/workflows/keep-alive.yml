@@ -1,0 +1,29 @@
+name: Mantener Supabase despierta
+
+# Evita que el proyecto de Supabase (plan gratis) se pause por inactividad
+# (~7 días sin actividad). Hace un ping diario a la API REST, que cuenta como
+# actividad. La publishable key es pública por diseño (protegida por RLS).
+
+on:
+  schedule:
+    # Todos los días a las 12:00 UTC (7:00 a.m. hora Colombia)
+    - cron: '0 12 * * *'
+  workflow_dispatch: {}   # permite ejecutarlo manualmente desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping a Supabase (REST)
+        run: |
+          echo "Ping a Supabase para evitar la pausa por inactividad…"
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://nyvaswimcxbqxnlcnxij.supabase.co/rest/v1/bodegas?select=id&limit=1" \
+            -H "apikey: sb_publishable_8t8Fq2d2AmnVARN8bGgP9g_itlBCgJV")
+          echo "Respuesta HTTP: $code"
+          if [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+            echo "OK — Supabase respondió ($code). Proyecto activo."
+          else
+            echo "El ping falló ($code)."
+            exit 1
+          fi
