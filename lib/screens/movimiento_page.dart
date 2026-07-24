@@ -189,21 +189,18 @@ class _MovimientoPageState extends State<MovimientoPage> {
               leading: Icon(_esSalida ? Icons.upload : Icons.download),
               title: Text(_esSalida ? 'Registrar SALIDA' : 'Registrar ENTRADA',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
+              // Acceso discreto a Devoluciones (carga masiva) solo en Entrada.
+              trailing: _esSalida
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.assignment_return,
+                          color: Color(0xFF1565C0)),
+                      tooltip: 'Devoluciones (cargar Excel/CSV)',
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const DevolucionesPage())),
+                    ),
             ),
           ),
-          if (!_esSalida) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => const DevolucionesPage())),
-              icon: const Icon(Icons.assignment_return),
-              label: const Text('Devoluciones (cargar Excel/CSV)'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF1565C0), // azul
-                side: const BorderSide(color: Color(0xFF1565C0)),
-              ),
-            ),
-          ],
           const SizedBox(height: 12),
           // Selector de elemento
           Card(
