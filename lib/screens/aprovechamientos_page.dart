@@ -6,6 +6,11 @@ import '../util/tiempo.dart';
 final _qty = NumberFormat.decimalPattern('es_CO');
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
+/// Fondo amarillo MUY tenue: distingue visualmente el módulo de
+/// Aprovechamientos del inventario oficial. Un toque más fuerte para barras.
+const _fondoAprov = Color(0xFFFFFDF2);
+final _barraAprov = Colors.amber.shade50;
+
 /// Inventario paralelo de TROZOS/RETAZOS aprovechables, valorizados a $0.
 /// No toca el inventario oficial. Reusa catálogo, bodegas y centros de costo.
 class AprovechamientosPage extends StatefulWidget {
@@ -20,6 +25,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
   List<Trozo> _historico = [];
   bool _cargando = false;
   bool _puedeEntrada = false;
+  bool _mostrarSaldoCero = false; // en "Por elemento", ocultar saldo 0 por defecto
 
   @override
   void initState() {
@@ -81,21 +87,23 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
+    return Container(
+      color: _fondoAprov,
+      child: DefaultTabController(
       length: 2,
       child: Column(
         children: [
           Container(
             width: double.infinity,
-            color: Colors.blueGrey.shade50,
+            color: _barraAprov,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(children: const [
-              Icon(Icons.content_cut, size: 18, color: Colors.blueGrey),
-              SizedBox(width: 8),
+            child: Row(children: [
+              Icon(Icons.content_cut, size: 18, color: Colors.brown.shade400),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text('Trozos aprovechables · valorizados a \$0 · '
                     'no afectan el inventario oficial',
-                    style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                    style: TextStyle(fontSize: 12, color: Colors.brown.shade400)),
               ),
             ]),
           ),
@@ -131,20 +139,37 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
           ),
         ],
       ),
+    ),
     );
   }
 
   /// Pestaña "Por elemento": elementos con sus trozos disponibles.
   Widget _porElemento() {
-    final items = _resumenFiltrado;
-    if (items.isEmpty && !_cargando) {
-      return const Center(child: Text('Sin trozos registrados'));
-    }
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (_, i) {
-        final t = items[i];
+    // Por defecto solo con saldo; el check muestra también los de saldo 0.
+    final items = _resumenFiltrado
+        .where((t) => _mostrarSaldoCero || t.disponibles > 0)
+        .toList();
+    return Column(children: [
+      CheckboxListTile(
+        dense: true,
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        value: _mostrarSaldoCero,
+        onChanged: (v) => setState(() => _mostrarSaldoCero = v ?? false),
+        title: const Text('Mostrar los que tienen saldo 0',
+            style: TextStyle(fontSize: 13)),
+      ),
+      const Divider(height: 1),
+      Expanded(
+        child: items.isEmpty && !_cargando
+            ? Center(child: Text(_mostrarSaldoCero
+                ? 'Sin trozos registrados'
+                : 'Sin trozos con saldo disponible'))
+            : ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final t = items[i];
         final hayDisp = t.disponibles > 0;
         final consumidos = t.totalTrozos - t.disponibles;
         return ListTile(
@@ -171,8 +196,10 @@ class _AprovechamientosPageState extends State<AprovechamientosPage> {
             _cargar();
           },
         );
-      },
-    );
+                },
+              ),
+      ),
+    ]);
   }
 
   /// Pestaña "Histórico": TODOS los trozos (incluidos saldo 0), planos.
@@ -362,7 +389,9 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        backgroundColor: _fondoAprov,
         appBar: AppBar(
+          backgroundColor: _barraAprov,
           title: Text(widget.nombre),
           bottom: const TabBar(tabs: [
             Tab(icon: Icon(Icons.content_cut), text: 'Disponibles'),
@@ -457,7 +486,10 @@ class _TrozoHistorialPageState extends State<TrozoHistorialPage> {
     final t = widget.trozo;
     final u = widget.unidad;
     return Scaffold(
-      appBar: AppBar(title: const Text('Historial del trozo')),
+      backgroundColor: _fondoAprov,
+      appBar: AppBar(
+          backgroundColor: _barraAprov,
+          title: const Text('Historial del trozo')),
       body: FutureBuilder<List<SalidaTrozo>>(
         future: _future,
         builder: (context, snap) {
@@ -514,10 +546,12 @@ class _TrozoHistorialPageState extends State<TrozoHistorialPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text('Trazabilidad',
+              const Text('Trazabilidad (más reciente primero)',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              ...pasos,
+              // El saldo de cada línea se calcula en orden cronológico, pero se
+              // muestra invertido: primero lo más reciente, al final el ingreso.
+              ...pasos.reversed,
             ],
           );
         },

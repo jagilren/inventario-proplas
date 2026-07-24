@@ -616,7 +616,8 @@ class InventarioService {
         .select('*, elementos(nombre, unidad), bodegas(nombre)')
         .eq('elemento_id', elementoId);
     if (soloDisponibles) q = q.gt('longitud_actual', 0);
-    final res = await q.order('creado_en');
+    // Regla general de históricos: más reciente primero.
+    final res = await q.order('creado_en', ascending: false);
     return (res as List)
         .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
         .toList();
