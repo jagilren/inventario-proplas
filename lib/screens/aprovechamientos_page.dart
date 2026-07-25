@@ -204,7 +204,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
               Icon(Icons.content_cut, size: 18, color: Colors.brown.shade400),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('Trozos aprovechables · valorizados a \$0 · '
+                child: Text('Tramos aprovechables · valorizados a \$0 · '
                     'no afectan el inventario oficial',
                     style: TextStyle(fontSize: 12, color: Colors.brown.shade400)),
               ),
@@ -233,7 +233,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                 suffixIcon: _puedeEntrada
                     ? IconButton(
                         icon: const Icon(Icons.add_box, color: Colors.teal),
-                        tooltip: 'Ingresar trozo',
+                        tooltip: 'Ingresar tramo',
                         onPressed: () => _ingresar(),
                       )
                     : null,
@@ -293,8 +293,8 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
       Expanded(
         child: items.isEmpty && !_cargando
             ? Center(child: Text(_mostrarSaldoCero
-                ? 'Sin trozos registrados'
-                : 'Sin trozos con saldo disponible'))
+                ? 'Sin tramos registrados'
+                : 'Sin tramos con saldo disponible'))
             : ListView.separated(
                 itemCount: items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
@@ -313,7 +313,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
           title: Text(t.nombre,
               style: TextStyle(color: hayDisp ? null : Colors.grey)),
           subtitle: Text(hayDisp
-              ? '${t.disponibles} trozo${t.disponibles == 1 ? '' : 's'} · '
+              ? '${t.disponibles} tramo${t.disponibles == 1 ? '' : 's'} · '
                   '${_qty.format(t.totalDisp)} ${t.unidad} disponibles'
                   '${consumidos > 0 ? '  ·  $consumidos en histórico' : ''}'
               : 'Sin saldo · ${t.totalTrozos} en histórico'),
@@ -338,7 +338,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   Widget _historicoLista() {
     final items = _historicoFiltrado;
     if (items.isEmpty && !_cargando) {
-      return const Center(child: Text('Aún no hay trozos registrados'));
+      return const Center(child: Text('Aún no hay tramos registrados'));
     }
     return ListView.separated(
       itemCount: items.length,
@@ -460,7 +460,7 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        title: Text('Usar del trozo · quedan '
+        title: Text('Usar del tramo · quedan '
             '${_qty.format(t.longitudActual)} ${widget.unidad}'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
@@ -511,7 +511,7 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
       _snack(resto > 0
           ? '✓ Usaste ${_qty.format(c)} ${widget.unidad}; '
               'quedan ${_qty.format(resto)}'
-          : '✓ Trozo consumido por completo');
+          : '✓ Tramo consumido por completo');
       _cargar();
     } catch (e) {
       _snack('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
@@ -526,8 +526,8 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
 
   Future<void> _borrar(Trozo t) async {
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Borrar trozo'),
-      content: Text('¿Borrar este trozo de ${_qty.format(t.longitud)} '
+      title: const Text('Borrar tramo'),
+      content: Text('¿Borrar este tramo de ${_qty.format(t.longitud)} '
           '${widget.unidad}? (corrección, no queda historial)'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
@@ -567,7 +567,7 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
             ? FloatingActionButton.extended(
                 onPressed: _ingresar,
                 icon: const Icon(Icons.add),
-                label: const Text('Ingresar trozo'))
+                label: const Text('Ingresar tramo'))
             : null,
         body: _cargando
             ? const Center(child: CircularProgressIndicator())
@@ -582,8 +582,8 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   Widget _lista(List<Trozo> items, {required bool historico}) {
     if (items.isEmpty) {
       return Center(child: Text(historico
-          ? 'Aún no hay trozos registrados'
-          : 'No hay trozos disponibles'));
+          ? 'Aún no hay tramos registrados'
+          : 'No hay tramos disponibles'));
     }
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 80),
@@ -757,7 +757,7 @@ class TrozoHistorialPage extends StatelessWidget {
       backgroundColor: _fondoAprov,
       appBar: AppBar(
           backgroundColor: _barraAprov,
-          title: const Text('Historial del trozo')),
+          title: const Text('Historial del tramo')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: _TrozoTrazaView(trozo: trozo, unidad: unidad),
@@ -836,7 +836,7 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom + 16),
       child: Column(mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Ingresar trozo',
+          const Text('Ingresar tramo', // sheet title
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
           Card(
@@ -853,7 +853,7 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
             controller: _longitud,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-                labelText: 'Longitud del trozo ($_unidad)',
+                labelText: 'Longitud del tramo ($_unidad)',
                 border: const OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
@@ -877,7 +877,7 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.save),
-            label: const Text('Guardar trozo'),
+            label: const Text('Guardar tramo'),
           )),
         ]),
     );
