@@ -6,6 +6,7 @@ import 'devoluciones_page.dart';
 import 'remision_devolucion_page.dart';
 import '../util/adjuntos_gate.dart';
 import '../util/tiempo.dart';
+import '../util/movimiento_fmt.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -456,12 +457,19 @@ class _MovimientoPageState extends State<MovimientoPage> {
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
       ),
       title: Text(m.elemento, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text([
-        _fechaHora.format(horaColombia(m.fecha)),
-        if (m.bodega != null) m.bodega!,
-        if (m.centroCosto != null) m.centroCosto!,
-        if (m.usuario != null) m.usuario!,
-      ].join(' · '), style: const TextStyle(fontSize: 11)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(flujoMovimiento(tipo: m.tipo, referencia: m.referencia,
+              bodega: m.bodega, centroCosto: m.centroCosto),
+              style: const TextStyle(fontSize: 11)),
+          Text([
+            _fechaHora.format(horaColombia(m.fecha)),
+            if (m.usuario != null) m.usuario!,
+          ].join(' · '),
+              style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
       trailing: Text('${m.cantidad} ${m.unidad}',
           style: const TextStyle(fontWeight: FontWeight.w600)),
     );

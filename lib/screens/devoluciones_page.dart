@@ -402,9 +402,6 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     if (ok != true) return;
 
     // Observación con el origen: "código C.Costo ➜ Bodega de ingreso".
-    final obs = _centroOrigen != null
-        ? '${_centroOrigen!.codigo} ➜ ${_bodega!.nombre}'
-        : 'Devolución ➜ ${_bodega!.nombre}';
     setState(() => _cargando = true);
     int cargados = 0, aCostoCero = 0, errores = 0;
     for (final f in validas) {
@@ -415,8 +412,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
+          // Centro de costo de ORIGEN (de dónde vuelve). El flujo se arma solo:
+          // 🎯 C.Costo ➡️ 🏬 Bodega.
+          centroCostoId: _centroOrigen?.id,
           referencia: 'DEVOLUCION',
-          observacion: obs,
         );
         cargados++;
         if (f.match!.costoPromedio == 0) aCostoCero++;

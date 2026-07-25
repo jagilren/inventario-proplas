@@ -273,6 +273,8 @@ class MovReciente {
 /// Movimiento para las listas paginadas de Entradas/Salidas (parte inferior).
 class MovLista {
   final DateTime fecha;
+  final String tipo;
+  final String? referencia;
   final num cantidad;
   final String elemento;
   final String unidad;
@@ -281,6 +283,8 @@ class MovLista {
   final String? usuario;
   MovLista.fromMap(Map<String, dynamic> m)
       : fecha = DateTime.parse(m['fecha'] as String),
+        tipo = (m['tipo'] as String?) ?? 'entrada',
+        referencia = m['referencia'] as String?,
         cantidad = (m['cantidad'] ?? 0) as num,
         elemento = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
         unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
@@ -796,7 +800,8 @@ class InventarioService {
   static Future<List<MovLista>> movimientosPorTipo(String tipo,
       {int offset = 0, int limit = 10}) async {
     final res = await supabase.from('movimientos')
-        .select('fecha, cantidad, elementos!inner(nombre, unidad), '
+        .select('fecha, tipo, referencia, cantidad, '
+            'elementos!inner(nombre, unidad), '
             'bodegas(nombre), centros_costo(codigo), profiles(email)')
         .eq('tipo', tipo)
         .eq('elementos.es_aprovechamiento', false)

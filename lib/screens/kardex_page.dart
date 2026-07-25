@@ -6,6 +6,7 @@ import 'serializar_page.dart';
 import 'historial_page.dart';
 import '../widgets/imagen_elemento.dart';
 import '../util/tiempo.dart';
+import '../util/movimiento_fmt.dart';
 import '../util/adjuntos_gate.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -377,17 +378,21 @@ class _KardexPageState extends State<KardexPage> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text(
+                            flujoMovimiento(tipo: m.tipo, referencia: m.referencia,
+                                bodega: m.bodega, centroCosto: m.centroCosto),
+                            style: const TextStyle(fontSize: 12),
+                          ),
                           Text([
                             _fecha.format(horaColombia(m.fecha)),
-                            if (m.bodega != null) m.bodega!,
                             if (m.costoUnitario != null) _money.format(m.costoUnitario),
-                            if (m.centroCosto != null) m.centroCosto!,
-                            if (m.referencia != null) m.referencia!,
-                          ].join(' · ')),
+                            if (m.esAnulacion) m.referencia!,
+                          ].join(' · '),
+                              style: const TextStyle(fontSize: 11, color: Colors.grey)),
                           if (m.observacion != null && m.observacion!.isNotEmpty)
                             Text('📝 ${m.observacion!}',
                                 style: const TextStyle(
-                                    fontStyle: FontStyle.italic, fontSize: 12)),
+                                    fontStyle: FontStyle.italic, fontSize: 11)),
                         ],
                       ),
                       trailing: (_esAdmin && !m.esAnulacion)
