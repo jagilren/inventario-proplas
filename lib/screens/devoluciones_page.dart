@@ -15,7 +15,7 @@ final _qty = NumberFormat.decimalPattern('es_CO');
 /// Una fila leída del archivo de devoluciones.
 class _FilaDev {
   final String textoOriginal; // lo que traía la columna ELEMENTO del archivo
-  final num cantidad;
+  num cantidad;               // editable antes de cargar
   Elemento? match; // EMPAREJAMIENTO con la BD
   double score; // qué tan seguro es el emparejamiento (0..1)
   _FilaDev(this.textoOriginal, this.cantidad, {this.match, this.score = 0});
@@ -324,6 +324,45 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   }
 
   // ---- Corrección manual del emparejamiento ----
+  /// Edita la cantidad de una fila antes de cargar.
+  Future<void> _editarCantidad(_FilaDev fila) async {
+    final ctrl = TextEditingController(text: fila.cantidad.toString());
+    final cant = await showDialog<num>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(fila.match?.nombre ?? fila.textoOriginal),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+              labelText: 'Cantidad', border: OutlineInputBorder()),
+          onSubmitted: (_) {
+            final c = num.tryParse(ctrl.text.replaceAll(',', '.'));
+            if (c != null && c > 0) Navigator.pop(ctx, c);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () {
+              final c = num.tryParse(ctrl.text.replaceAll(',', '.'));
+              if (c == null || c <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Cantidad inválida')));
+                return;
+              }
+              Navigator.pop(ctx, c);
+            },
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+    if (cant != null && mounted) setState(() => fila.cantidad = cant);
+  }
+
   Future<void> _corregir(_FilaDev fila) async {
     final sel = await showModalBottomSheet<Elemento>(
       context: context,
@@ -503,14 +542,25 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         : (f.match!.serializado ? Colors.purple
             : (f.score >= 0.82 ? Colors.green : Colors.orange));
     return ListTile(
-      leading: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(_qty.format(f.cantidad),
-              style: TextStyle(fontWeight: FontWeight.bold,
-                  color: f.cantidad > 0 ? null : Colors.red)),
-          const Text('cant.', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        ],
+      leading: InkWell(
+        onTap: () => _editarCantidad(f),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_qty.format(f.cantidad),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16,
+                      color: f.cantidad > 0 ? const Color(0xFF1565C0) : Colors.red)),
+              const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.edit, size: 10, color: Colors.grey),
+                SizedBox(width: 2),
+                Text('cant.', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ]),
+            ],
+          ),
+        ),
       ),
       title: Text(f.textoOriginal),
       subtitle: Column(
