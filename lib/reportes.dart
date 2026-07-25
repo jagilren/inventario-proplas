@@ -28,6 +28,12 @@ class Reportes {
     );
   }
 
+  /// Descarga un CSV genérico (reusa el mismo mecanismo: separadores
+  /// regionales + BOM). Útil para la remisión de devolución.
+  static Future<void> descargarCsv(
+          String nombre, List<List<dynamic>> filas) =>
+      _descargar(nombre, filas);
+
   static String _fecha(dynamic iso) {
     if (iso == null) return '';
     final f = horaColombia(DateTime.parse(iso.toString()));

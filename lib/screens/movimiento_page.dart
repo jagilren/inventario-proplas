@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../data.dart';
 import 'escaner_page.dart';
 import 'devoluciones_page.dart';
+import 'remision_devolucion_page.dart';
 import '../util/adjuntos_gate.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -189,15 +190,34 @@ class _MovimientoPageState extends State<MovimientoPage> {
               leading: Icon(_esSalida ? Icons.upload : Icons.download),
               title: Text(_esSalida ? 'Registrar SALIDA' : 'Registrar ENTRADA',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              // Acceso discreto a Devoluciones (carga masiva) solo en Entrada.
+              // Acceso discreto a utilidades de Devoluciones, solo en Entrada.
               trailing: _esSalida
                   ? null
-                  : IconButton(
+                  : PopupMenuButton<String>(
                       icon: const Icon(Icons.assignment_return,
                           color: Color(0xFF1565C0)),
-                      tooltip: 'Devoluciones (cargar Excel/CSV)',
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => const DevolucionesPage())),
+                      tooltip: 'Devoluciones',
+                      onSelected: (v) {
+                        if (v == 'crear') {
+                          Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => const RemisionDevolucionPage()));
+                        } else if (v == 'cargar') {
+                          Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => const DevolucionesPage()));
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'crear',
+                            child: ListTile(
+                                leading: Icon(Icons.playlist_add),
+                                title: Text('Crear remisión de devolución'),
+                                dense: true)),
+                        PopupMenuItem(value: 'cargar',
+                            child: ListTile(
+                                leading: Icon(Icons.upload_file),
+                                title: Text('Cargar devolución (Excel/CSV)'),
+                                dense: true)),
+                      ],
                     ),
             ),
           ),
