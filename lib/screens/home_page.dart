@@ -16,6 +16,7 @@ import 'reportes_page.dart';
 import 'configuracion_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'catalogo_admin_page.dart';
+import 'remision_devolucion_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
 import '../widgets/barra_sync.dart';
@@ -54,6 +55,7 @@ class _HomePageState extends State<HomePage> {
   bool get _coord => _roles.contains(Roles.coordinador);
   bool get _gestiona => _admin || _coord;
   bool get _puedeExportar => _admin || _roles.contains(Roles.exportar);
+  bool get _puedeRemisiones => _admin || _roles.contains(Roles.remisiones);
 
   List<_Seccion> get _secciones {
     final puedeSalida = _admin || _roles.contains(Roles.operarioMenos);
@@ -176,6 +178,14 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Informes'),
                 subtitle: const Text('Descargar en Excel/CSV'),
                 onTap: () => _ir(const ReportesPage()),
+              ),
+            // Remisión de devolución: visible para quien tenga el rol Remisiones.
+            if (_puedeRemisiones)
+              ListTile(
+                leading: const Icon(Icons.playlist_add),
+                title: const Text('Remisión de devolución'),
+                subtitle: const Text('Armar lista y generar CSV'),
+                onTap: () => _ir(const RemisionDevolucionPage()),
               ),
             if (_admin)
               ListTile(

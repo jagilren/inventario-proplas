@@ -315,8 +315,10 @@ class Roles {
   static const operarioMas = 'operario_mas';
   static const operarioMenos = 'operario_menos';
   static const exportar = 'exportar';
+  static const remisiones = 'remisiones';
 
-  static const todos = [admin, coordinador, operarioMas, operarioMenos, exportar];
+  static const todos = [admin, coordinador, operarioMas, operarioMenos,
+    exportar, remisiones];
 
   static String etiqueta(String rol) => switch (rol) {
         admin => 'Administrador',
@@ -324,6 +326,7 @@ class Roles {
         operarioMas => 'Operario + (entradas)',
         operarioMenos => 'Operario − (salidas)',
         exportar => 'Exportar informes',
+        remisiones => 'Remisiones de devolución',
         _ => rol,
       };
 }

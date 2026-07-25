@@ -29,6 +29,18 @@ class RemisionDevolucionPage extends StatefulWidget {
 class _RemisionDevolucionPageState extends State<RemisionDevolucionPage> {
   final List<_ItemRemision> _items = [];
   bool _generando = false;
+  bool _puedeGenerar = false; // rol admin o remisiones
+
+  @override
+  void initState() {
+    super.initState();
+    InventarioService.misRoles().then((r) {
+      if (mounted) {
+        setState(() => _puedeGenerar =
+            r.contains(Roles.admin) || r.contains(Roles.remisiones));
+      }
+    });
+  }
 
   Future<void> _buscar() async {
     final sel = await showModalBottomSheet<Elemento>(
@@ -238,17 +250,30 @@ class _RemisionDevolucionPageState extends State<RemisionDevolucionPage> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: SizedBox(
-            height: 50,
-            child: FilledButton.icon(
-              onPressed: (_generando || _items.isEmpty) ? null : _generarCsv,
-              icon: _generando
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.file_download),
-              label: Text('Generar CSV (${_items.length})'),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (!_puedeGenerar)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                    'No tienes el permiso "Remisiones de devolución" para '
+                    'generar el CSV. Pídeselo a un administrador.',
+                    style: TextStyle(fontSize: 12, color: Colors.orange),
+                    textAlign: TextAlign.center),
+              ),
+            SizedBox(
+              height: 50,
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: (_generando || _items.isEmpty || !_puedeGenerar)
+                    ? null : _generarCsv,
+                icon: _generando
+                    ? const SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.file_download),
+                label: Text('Generar CSV (${_items.length})'),
+              ),
             ),
-          ),
+          ]),
         ),
       ),
     );
