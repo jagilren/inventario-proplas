@@ -313,6 +313,7 @@ class Auditoria {
   final String? valorAnterior;
   final String? valorNuevo;
   final String? usuarioEmail;
+  final String? afectado; // nombre del elemento/bodega/usuario/etc. afectado
 
   Auditoria.fromMap(Map<String, dynamic> m)
       : fecha = DateTime.parse(m['fecha'] as String),
@@ -321,7 +322,8 @@ class Auditoria {
         campo = m['campo'] as String?,
         valorAnterior = m['valor_anterior'] as String?,
         valorNuevo = m['valor_nuevo'] as String?,
-        usuarioEmail = m['usuario_email'] as String?;
+        usuarioEmail = m['usuario_email'] as String?,
+        afectado = m['afectado'] as String?;
 
   /// Descripción legible del cambio.
   String get descripcion => switch (accion) {
@@ -1043,6 +1045,22 @@ class InventarioService {
   static Future<List<Auditoria>> auditoriaReciente({int limite = 100}) async {
     final res = await supabase.rpc('auditoria_reciente', params: {'p_limit': limite});
     return (res as List).map((e) => Auditoria.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Auditoría clasificada por categoría, con nombre del afectado, búsqueda y
+  /// paginación. categoría: null/'recientes' | entradas | salidas | bodegas |
+  /// centros | usuarios | aprovechamientos.
+  static Future<List<Auditoria>> auditoriaClasificada(String? categoria,
+      {String? q, int offset = 0, int limit = 10}) async {
+    final res = await supabase.rpc('auditoria_clasificada', params: {
+      'p_categoria': categoria,
+      'p_q': (q == null || q.trim().isEmpty) ? null : q.trim(),
+      'p_limit': limit,
+      'p_offset': offset,
+    });
+    return (res as List)
+        .map((e) => Auditoria.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<void> cambiarPassword(String nueva) async {
