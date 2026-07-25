@@ -30,6 +30,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   late String _unidad;
   late bool _activo;
   late bool _serializado;
+  bool _esAprovechamiento = false; // solo al crear; false por defecto
   bool _guardando = false;
 
   // Fotos elegidas antes de que el elemento exista (solo al crear).
@@ -100,6 +101,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // un elemento normal a serializado se usa "Convertir a serializado"
         // (que registra los seriales de las unidades ya existentes).
         if (_esNuevo) 'serializado': _serializado,
+        // Marca de aprovechamiento (por metro). Solo se fija al crear.
+        if (_esNuevo) 'es_aprovechamiento': _esAprovechamiento,
       };
 
       String? elementoId = widget.elemento?.id;
@@ -268,6 +271,18 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             ),
           ],
           if (_esNuevo) ...[
+            const Divider(height: 20),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Es de aprovechamiento'),
+              subtitle: Text(_esAprovechamiento
+                  ? 'Se maneja por metro; NO aparece en el inventario oficial, '
+                      'solo en el módulo de Aprovechamientos.'
+                  : 'Elemento normal del inventario oficial.'),
+              secondary: const Icon(Icons.content_cut),
+              value: _esAprovechamiento,
+              onChanged: (v) => setState(() => _esAprovechamiento = v),
+            ),
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
