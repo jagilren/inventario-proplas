@@ -270,6 +270,25 @@ class MovReciente {
         centroCosto = m['centro_costo'] as String?;
 }
 
+/// Movimiento para las listas paginadas de Entradas/Salidas (parte inferior).
+class MovLista {
+  final DateTime fecha;
+  final num cantidad;
+  final String elemento;
+  final String unidad;
+  final String? bodega;
+  final String? centroCosto;
+  final String? usuario;
+  MovLista.fromMap(Map<String, dynamic> m)
+      : fecha = DateTime.parse(m['fecha'] as String),
+        cantidad = (m['cantidad'] ?? 0) as num,
+        elemento = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
+        unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
+        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+        centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
+        usuario = (m['profiles'] as Map?)?['email'] as String?;
+}
+
 class Usuario {
   final String id;
   final String? email;
@@ -770,6 +789,23 @@ class InventarioService {
   static Future<List<MovReciente>> ultimosMovimientos() async {
     final res = await supabase.rpc('ultimos_movimientos', params: {'p_limit': 15});
     return (res as List).map((e) => MovReciente.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Movimientos de un TIPO (entrada/salida) paginados, del más reciente al más
+  /// antiguo. Excluye elementos de aprovechamiento. Para la lista "cargar más".
+  static Future<List<MovLista>> movimientosPorTipo(String tipo,
+      {int offset = 0, int limit = 10}) async {
+    final res = await supabase.from('movimientos')
+        .select('fecha, cantidad, elementos!inner(nombre, unidad), '
+            'bodegas(nombre), centros_costo(codigo), profiles(email)')
+        .eq('tipo', tipo)
+        .eq('elementos.es_aprovechamiento', false)
+        .order('fecha', ascending: false)
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
+    return (res as List)
+        .map((e) => MovLista.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<void> anularMovimiento(String movId, String? motivo) async {

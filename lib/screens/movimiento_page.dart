@@ -5,8 +5,10 @@ import 'escaner_page.dart';
 import 'devoluciones_page.dart';
 import 'remision_devolucion_page.dart';
 import '../util/adjuntos_gate.dart';
+import '../util/tiempo.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
+final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
 /// Pantalla para registrar una ENTRADA o SALIDA.
 class MovimientoPage extends StatefulWidget {
@@ -35,6 +37,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
   bool get _esSalida => widget.tipoInicial == 'salida';
   bool get _serial => _elemento?.serializado ?? false;
 
+  // Lista paginada de últimos movimientos del tipo (parte inferior).
+  final List<MovLista> _recientes = [];
+  int _offset = 0;
+  bool _hayMas = true;
+  bool _cargandoMas = false;
+
   Future<void> _cargarDisponibles() async {
     if (_serial && _esSalida && _elemento != null && _bodega != null) {
       final d = await InventarioService.seriesDisponibles(_elemento!.id, _bodega!.id);
@@ -62,6 +70,39 @@ class _MovimientoPageState extends State<MovimientoPage> {
         });
       }
     });
+    _cargarRecientes(reset: true);
+    // Si ocurre un movimiento (aquí o en otra parte), refrescar la lista.
+    InventarioService.revision.addListener(_onRevision);
+  }
+
+  void _onRevision() {
+    if (mounted) _cargarRecientes(reset: true);
+  }
+
+  @override
+  void dispose() {
+    InventarioService.revision.removeListener(_onRevision);
+    super.dispose();
+  }
+
+  Future<void> _cargarRecientes({bool reset = false}) async {
+    if (_cargandoMas) return;
+    setState(() => _cargandoMas = true);
+    try {
+      if (reset) { _offset = 0; _hayMas = true; _recientes.clear(); }
+      final r = await InventarioService.movimientosPorTipo(
+          widget.tipoInicial, offset: _offset, limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _recientes.addAll(r);
+        _offset += r.length;
+        if (r.length < 10) _hayMas = false;
+      });
+    } catch (_) {
+      // sin red: la lista simplemente no se actualiza
+    } finally {
+      if (mounted) setState(() => _cargandoMas = false);
+    }
   }
 
   Future<void> _elegirElemento() async {
@@ -360,8 +401,69 @@ class _MovimientoPageState extends State<MovimientoPage> {
               label: Text(_esSalida ? 'Guardar salida' : 'Guardar entrada'),
             ),
           ),
+          const SizedBox(height: 28),
+          const Divider(),
+          Row(children: [
+            Icon(_esSalida ? Icons.upload : Icons.download, size: 18,
+                color: _esSalida ? Colors.orange : Colors.green),
+            const SizedBox(width: 6),
+            Text('Últimas ${_esSalida ? 'salidas' : 'entradas'}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 4),
+          ..._recientes.map(_filaReciente),
+          if (_recientes.isEmpty && !_cargandoMas)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('Sin movimientos aún',
+                  style: TextStyle(color: Colors.grey)),
+            ),
+          if (_cargandoMas)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          if (_hayMas && _recientes.isNotEmpty && !_cargandoMas)
+            Center(
+              child: TextButton.icon(
+                onPressed: () => _cargarRecientes(),
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: const Text('Cargar más'),
+              ),
+            ),
+          if (!_hayMas && _recientes.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 8, bottom: 4),
+              child: Center(
+                child: Text('— No hay más —',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _filaReciente(MovLista m) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        radius: 16,
+        backgroundColor: (_esSalida ? Colors.orange : Colors.green)
+            .withValues(alpha: 0.15),
+        child: Text('${m.cantidad}',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      ),
+      title: Text(m.elemento, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text([
+        _fechaHora.format(horaColombia(m.fecha)),
+        if (m.bodega != null) m.bodega!,
+        if (m.centroCosto != null) m.centroCosto!,
+        if (m.usuario != null) m.usuario!,
+      ].join(' · '), style: const TextStyle(fontSize: 11)),
+      trailing: Text('${m.cantidad} ${m.unidad}',
+          style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }
