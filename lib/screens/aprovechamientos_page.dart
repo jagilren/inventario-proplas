@@ -902,7 +902,8 @@ class _BuscadorElementoState extends State<_BuscadorElemento> {
   }
 
   Future<void> _buscar(String q) async {
-    final r = await InventarioService.buscar(q);
+    // Solo artículos marcados como aprovechamiento (es_aprovechamiento = true).
+    final r = await InventarioService.buscarAprovechamiento(q);
     if (mounted) setState(() => _items = r);
   }
 
@@ -918,7 +919,7 @@ class _BuscadorElementoState extends State<_BuscadorElemento> {
             child: TextField(
               controller: _ctrl, autofocus: true, onChanged: _buscar,
               decoration: const InputDecoration(
-                  hintText: 'Buscar elemento…',
+                  hintText: 'Buscar artículo de aprovechamiento…',
                   prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
             ),
           ),

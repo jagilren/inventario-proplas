@@ -611,6 +611,26 @@ class InventarioService {
     return out;
   }
 
+  /// Busca SOLO elementos marcados como es_aprovechamiento (activos), para el
+  /// buscador del módulo de Aprovechamientos. Filtro de texto por palabras.
+  static Future<List<Elemento>> buscarAprovechamiento(String q) async {
+    final res = await supabase
+        .from('elementos')
+        .select()
+        .eq('es_aprovechamiento', true)
+        .eq('activo', true)
+        .order('nombre');
+    final todos = (res as List)
+        .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
+        .toList();
+    final t = q.trim().toLowerCase();
+    if (t.isEmpty) return todos;
+    final palabras = t.split(RegExp(r'\s+'));
+    return todos
+        .where((e) => palabras.every((w) => e.nombre.toLowerCase().contains(w)))
+        .toList();
+  }
+
   /// Todos los trozos (de todos los elementos, incluidos los consumidos) para
   /// el histórico global del módulo. Más reciente primero.
   static Future<List<Trozo>> todosLosTrozos() async {
