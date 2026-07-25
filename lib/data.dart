@@ -21,6 +21,7 @@ class Elemento {
   final num stockMinimo;
   final bool activo;
   final bool serializado;
+  final bool esAprovechamiento;
 
   Elemento.fromMap(Map<String, dynamic> m)
       : id = m['id'] as String,
@@ -34,7 +35,8 @@ class Elemento {
         costoPromedio = (m['costo_promedio'] ?? 0) as num,
         stockMinimo = (m['stock_minimo'] ?? 0) as num,
         activo = (m['activo'] ?? true) as bool,
-        serializado = (m['serializado'] ?? false) as bool;
+        serializado = (m['serializado'] ?? false) as bool,
+        esAprovechamiento = (m['es_aprovechamiento'] ?? false) as bool;
 
   bool get bajoMinimo => stockMinimo > 0 && existencia <= stockMinimo;
 }
@@ -492,6 +494,44 @@ class InventarioService {
     return (res as List)
         .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// CATÁLOGO COMPLETO (solo admin): TODOS los elementos sin filtros
+  /// (activos, inactivos, aprovechamiento, serializados). Búsqueda por palabras.
+  static Future<List<Elemento>> catalogoCompleto(String q) async {
+    final res = await supabase.from('elementos').select().order('nombre');
+    final todos = (res as List)
+        .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
+        .toList();
+    final t = q.trim().toLowerCase();
+    if (t.isEmpty) return todos;
+    final palabras = t.split(RegExp(r'\s+'));
+    return todos.where((e) {
+      final s = '${e.nombre} ${e.material ?? ''} ${e.sch ?? ''} '
+          '${e.codigoBarras ?? ''}'.toLowerCase();
+      return palabras.every((w) => s.contains(w));
+    }).toList();
+  }
+
+  /// ¿El elemento tiene historial (movimientos, tramos o seriales)?
+  /// Si lo tiene, no se puede borrar de verdad (solo desactivar).
+  static Future<bool> elementoTieneHistorial(String id) async {
+    final m = await supabase.from('movimientos').select('id')
+        .eq('elemento_id', id).limit(1);
+    if ((m as List).isNotEmpty) return true;
+    final tr = await supabase.from('aprovechamiento_trozos').select('id')
+        .eq('elemento_id', id).limit(1);
+    if ((tr as List).isNotEmpty) return true;
+    final se = await supabase.from('series').select('id')
+        .eq('elemento_id', id).limit(1);
+    return (se as List).isNotEmpty;
+  }
+
+  /// Borra un elemento DEFINITIVAMENTE (solo admin, solo si no tiene historial).
+  /// La validación real la hace la RPC en la base.
+  static Future<void> borrarElementoDefinitivo(String id) async {
+    await supabase.rpc('borrar_elemento', params: {'p_id': id});
+    revision.value++;
   }
 
   /// Elementos con existencia pero costo promedio en 0 (no valorizados).

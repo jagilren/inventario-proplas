@@ -8,7 +8,10 @@ import 'escaner_page.dart';
 /// Si [elemento] es null, es creación. Devuelve true si guardó.
 class EditarElementoPage extends StatefulWidget {
   final Elemento? elemento;
-  const EditarElementoPage({super.key, this.elemento});
+  /// En modo admin (Catálogo completo) se puede editar 'es_aprovechamiento'
+  /// también al editar un elemento existente.
+  final bool modoAdmin;
+  const EditarElementoPage({super.key, this.elemento, this.modoAdmin = false});
   @override
   State<EditarElementoPage> createState() => _EditarElementoPageState();
 }
@@ -52,6 +55,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     _unidad = (e != null && _unidades.contains(e.unidad)) ? e.unidad : 'UND';
     _activo = e?.activo ?? true;
     _serializado = e?.serializado ?? false;
+    _esAprovechamiento = e?.esAprovechamiento ?? false;
     if (_esNuevo) {
       InventarioService.bodegas().then((b) {
         if (mounted) {
@@ -101,8 +105,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // un elemento normal a serializado se usa "Convertir a serializado"
         // (que registra los seriales de las unidades ya existentes).
         if (_esNuevo) 'serializado': _serializado,
-        // Marca de aprovechamiento (por metro). Solo se fija al crear.
-        if (_esNuevo) 'es_aprovechamiento': _esAprovechamiento,
+        // Marca de aprovechamiento: al crear, o al editar en modo admin.
+        if (_esNuevo || widget.modoAdmin) 'es_aprovechamiento': _esAprovechamiento,
       };
 
       String? elementoId = widget.elemento?.id;
@@ -270,7 +274,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               onChanged: (v) => setState(() => _activo = v),
             ),
           ],
-          if (_esNuevo) ...[
+          if (_esNuevo || widget.modoAdmin) ...[
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -283,6 +287,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               value: _esAprovechamiento,
               onChanged: (v) => setState(() => _esAprovechamiento = v),
             ),
+          ],
+          if (_esNuevo) ...[
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

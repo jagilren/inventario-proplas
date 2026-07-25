@@ -15,6 +15,7 @@ import 'traslados_page.dart';
 import 'reportes_page.dart';
 import 'configuracion_page.dart';
 import 'gestion_usuarios_page.dart';
+import 'catalogo_admin_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
 import '../widgets/barra_sync.dart';
@@ -148,6 +149,13 @@ class _HomePageState extends State<HomePage> {
                 subtitle: const Text('Crear y editar'),
                 onTap: () => _ir(const CentrosPage()),
               ),
+              if (_admin)
+                ListTile(
+                  leading: const Icon(Icons.inventory),
+                  title: const Text('Catálogo completo'),
+                  subtitle: const Text('CRUD total de elementos (sin filtros)'),
+                  onTap: () => _ir(const CatalogoAdminPage()),
+                ),
               ListTile(
                 leading: const Icon(Icons.history),
                 title: const Text('Auditoría de cambios'),
