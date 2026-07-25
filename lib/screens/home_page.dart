@@ -204,7 +204,13 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _idx,
-        onDestinationSelected: (i) => setState(() => _idx = i),
+        onDestinationSelected: (i) {
+          // Al entrar a Existencias desde otra pestaña, limpiar su buscador.
+          if (secciones[i].titulo == 'Existencias' && _idx != i) {
+            ElementosPage.limpiarBusqueda.value++;
+          }
+          setState(() => _idx = i);
+        },
         destinations: secciones
             .map((s) => NavigationDestination(icon: Icon(s.icono), label: s.titulo))
             .toList(),

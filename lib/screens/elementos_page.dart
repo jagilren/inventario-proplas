@@ -12,6 +12,11 @@ final _qty = NumberFormat.decimalPattern('es_CO');
 
 class ElementosPage extends StatefulWidget {
   const ElementosPage({super.key});
+
+  /// Señal para limpiar el buscador cuando se vuelve a esta vista desde otra
+  /// pestaña (el home la incrementa al seleccionar Existencias).
+  static final ValueNotifier<int> limpiarBusqueda = ValueNotifier(0);
+
   @override
   State<ElementosPage> createState() => _ElementosPageState();
 }
@@ -30,6 +35,8 @@ class _ElementosPageState extends State<ElementosPage> {
     // Recargar la lista cuando haya un movimiento (salida/entrada/anulación),
     // aunque esta pantalla quede viva en segundo plano (IndexedStack).
     InventarioService.revision.addListener(_onCambioInventario);
+    // Al volver a Existencias desde otra pestaña, limpiar el buscador.
+    ElementosPage.limpiarBusqueda.addListener(_limpiarBusqueda);
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() => _puedeCrear =
@@ -42,9 +49,17 @@ class _ElementosPageState extends State<ElementosPage> {
     if (mounted) _buscar(_ctrl.text);
   }
 
+  void _limpiarBusqueda() {
+    if (mounted && _ctrl.text.isNotEmpty) {
+      _ctrl.clear();
+      _buscar('');
+    }
+  }
+
   @override
   void dispose() {
     InventarioService.revision.removeListener(_onCambioInventario);
+    ElementosPage.limpiarBusqueda.removeListener(_limpiarBusqueda);
     _ctrl.dispose();
     super.dispose();
   }
