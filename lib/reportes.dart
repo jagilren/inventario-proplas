@@ -38,8 +38,10 @@ class Reportes {
   /// 1) Existencias valorizadas (por elemento y bodega).
   static Future<void> existenciasValorizadas() async {
     final res = await supabase.from('existencias')
-        .select('existencia, costo_promedio, elementos(nombre, unidad), bodegas(nombre)')
-        .neq('existencia', 0);
+        .select('existencia, costo_promedio, '
+            'elementos!inner(nombre, unidad), bodegas(nombre)')
+        .neq('existencia', 0)
+        .eq('elementos.es_aprovechamiento', false);
     final filas = <List<dynamic>>[
       ['Elemento', 'Bodega', 'Cantidad', 'Unidad', 'Costo promedio', 'Valorización'],
     ];
@@ -62,7 +64,8 @@ class Reportes {
   static Future<void> movimientos(DateTime desde, DateTime hasta) async {
     final res = await supabase.from('movimientos')
         .select('fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
-            'elementos(nombre), bodegas(nombre), centros_costo(codigo)')
+            'elementos!inner(nombre), bodegas(nombre), centros_costo(codigo)')
+        .eq('elementos.es_aprovechamiento', false)
         .gte('fecha', desde.toIso8601String())
         .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String())
         .order('fecha');
@@ -88,8 +91,9 @@ class Reportes {
   /// El valor se estima al costo promedio ACTUAL del elemento.
   static Future<void> consumoPorCentro(DateTime desde, DateTime hasta) async {
     final res = await supabase.from('movimientos')
-        .select('cantidad, elementos(nombre, costo_promedio), '
+        .select('cantidad, elementos!inner(nombre, costo_promedio), '
             'centros_costo(codigo, descripcion)')
+        .eq('elementos.es_aprovechamiento', false)
         .eq('tipo', 'salida')
         .gte('fecha', desde.toIso8601String())
         .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());

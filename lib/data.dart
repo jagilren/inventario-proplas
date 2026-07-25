@@ -472,6 +472,7 @@ class InventarioService {
         .from('elementos')
         .select()
         .filter('stock_minimo', 'gt', 0)
+        .eq('es_aprovechamiento', false)
         .order('nombre');
     return (res as List)
         .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
@@ -480,11 +481,13 @@ class InventarioService {
   }
 
   /// Todos los elementos activos (para emparejar la carga de devoluciones).
+  /// Excluye los de aprovechamiento (no pertenecen al inventario oficial).
   static Future<List<Elemento>> todosElementos() async {
     final res = await supabase
         .from('elementos')
         .select()
         .eq('activo', true)
+        .eq('es_aprovechamiento', false)
         .order('nombre');
     return (res as List)
         .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
@@ -498,6 +501,7 @@ class InventarioService {
         .select()
         .gt('existencia', 0)
         .eq('costo_promedio', 0)
+        .eq('es_aprovechamiento', false)
         .order('nombre');
     return (res as List)
         .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
@@ -846,6 +850,7 @@ class InventarioService {
         .select('id,nombre,material,sch,unidad,codigo_barras,imagen_url,'
             'existencia,costo_promedio,stock_minimo,phash')
         .eq('activo', true)
+        .eq('es_aprovechamiento', false)
         .not('phash', 'is', null);
     final lista = (res as List)
         .map((e) => (Elemento.fromMap(e as Map<String, dynamic>),
