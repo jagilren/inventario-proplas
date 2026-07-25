@@ -76,6 +76,11 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
       _msg('El nombre es obligatorio');
       return;
     }
+    // Regla: un elemento NO puede ser serializado y de aprovechamiento a la vez.
+    if (_serializado && _esAprovechamiento) {
+      await _advertirInconsistencia();
+      return;
+    }
     // Validación de unidades iniciales serializadas: tantos seriales como cantidad.
     if (_esNuevo && _serializado) {
       final cantS = int.tryParse(_cantIni.text.trim()) ?? 0;
@@ -187,6 +192,25 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
     }
+  }
+
+  /// Avisa que serializado y aprovechamiento no pueden ir juntos (no guarda).
+  Future<void> _advertirInconsistencia() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber, color: Colors.orange, size: 40),
+        title: const Text('Configuración inconsistente'),
+        content: const Text(
+            'Un elemento no puede ser "Maneja seriales" y "Es de aprovechamiento" '
+            'al mismo tiempo. Deja activo solo uno de los dos y vuelve a guardar.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido')),
+        ],
+      ),
+    );
   }
 
   /// Pre-llena el formulario a partir de otro artículo similar (menos el
