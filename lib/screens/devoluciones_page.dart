@@ -538,10 +538,20 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           ]),
         ],
       ),
-      trailing: IconButton(
-        icon: Icon(m == null ? Icons.search : Icons.edit, size: 20),
-        tooltip: 'Elegir emparejamiento',
-        onPressed: () => _corregir(f),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(m == null ? Icons.search : Icons.edit, size: 20),
+            tooltip: 'Elegir emparejamiento',
+            onPressed: () => _corregir(f),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+            tooltip: 'Quitar de la carga',
+            onPressed: () => setState(() => _filas.remove(f)),
+          ),
+        ],
       ),
       onTap: () => _corregir(f),
     );
