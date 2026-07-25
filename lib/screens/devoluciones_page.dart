@@ -34,6 +34,8 @@ class DevolucionesPage extends StatefulWidget {
 class _DevolucionesPageState extends State<DevolucionesPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
+  List<CentroCosto> _centros = [];
+  CentroCosto? _centroOrigen; // centro de costo de origen de la devolución
   List<Elemento> _catalogo = [];
   List<String> _catNorm = []; // nombres normalizados (paralelo a _catalogo)
   List<_FilaDev> _filas = [];
@@ -48,6 +50,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       if (mounted) {
         setState(() { _bodegas = b; if (b.length == 1) _bodega = b.first; });
       }
+    });
+    InventarioService.centrosCosto().then((c) {
+      if (mounted) setState(() => _centros = c);
     });
     InventarioService.todosElementos().then((e) {
       if (mounted) {
@@ -396,6 +401,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     );
     if (ok != true) return;
 
+    // Observación con el origen: "código C.Costo ➜ Bodega de ingreso".
+    final obs = _centroOrigen != null
+        ? '${_centroOrigen!.codigo} ➜ ${_bodega!.nombre}'
+        : 'Devolución ➜ ${_bodega!.nombre}';
     setState(() => _cargando = true);
     int cargados = 0, aCostoCero = 0, errores = 0;
     for (final f in validas) {
@@ -407,7 +416,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
           referencia: 'DEVOLUCION',
-          observacion: 'Devolución (carga masiva) · archivo ${_archivo ?? ''}',
+          observacion: obs,
         );
         cargados++;
         if (f.match!.costoPromedio == 0) aCostoCero++;
@@ -464,6 +473,22 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               items: _bodegas.map((b) => DropdownMenuItem(value: b,
                   child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
               onChanged: (v) => setState(() => _bodega = v),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: DropdownButtonFormField<CentroCosto>(
+              initialValue: _centroOrigen,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Centro de costo de origen (de dónde vuelve)',
+                helperText: 'Queda en la observación: "código ➜ bodega"',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.account_tree),
+              ),
+              items: _centros.map((c) => DropdownMenuItem(value: c,
+                  child: Text(c.etiqueta, overflow: TextOverflow.ellipsis))).toList(),
+              onChanged: (v) => setState(() => _centroOrigen = v),
             ),
           ),
           Padding(

@@ -70,14 +70,15 @@ class Reportes {
   static Future<void> movimientos(DateTime desde, DateTime hasta) async {
     final res = await supabase.from('movimientos')
         .select('fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
-            'elementos!inner(nombre), bodegas(nombre), centros_costo(codigo)')
+            'elementos!inner(nombre), bodegas(nombre), centros_costo(codigo), '
+            'profiles(email)')
         .eq('elementos.es_aprovechamiento', false)
         .gte('fecha', desde.toIso8601String())
         .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String())
         .order('fecha');
     final filas = <List<dynamic>>[
       ['Fecha', 'Tipo', 'Elemento', 'Bodega', 'Cantidad', 'Costo unitario',
-        'Centro de costo', 'Referencia', 'Observación'],
+        'Centro de costo', 'Usuario', 'Referencia', 'Observación'],
     ];
     for (final r in (res as List)) {
       filas.add([
@@ -87,6 +88,7 @@ class Reportes {
         r['cantidad'] ?? '',
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',
+        (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '', r['observacion'] ?? '',
       ]);
     }
