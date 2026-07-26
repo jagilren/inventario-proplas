@@ -197,4 +197,38 @@ class Reportes {
 
     await _descargar('aprovechamientos_movimientos', filas);
   }
+
+  /// 6) Existencias ACTUALES de aprovechamientos: trozos/tramos con saldo
+  /// disponible (longitud_actual > 0). Inventario paralelo a $0, sin
+  /// valorización. Ordenado alfabéticamente (es una foto del stock, no un
+  /// histórico).
+  static Future<void> existenciasAprovechamientos() async {
+    final res = await supabase
+        .from('aprovechamiento_trozos')
+        .select('longitud, longitud_actual, creado_en, creado_email, '
+            'observacion, elementos(nombre, unidad), bodegas(nombre)')
+        .gt('longitud_actual', 0);
+    final filas = <List<dynamic>>[
+      ['Elemento', 'Unidad', 'Bodega', 'Saldo disponible', 'Longitud inicial',
+        'Ingresado', 'Usuario', 'Observación'],
+    ];
+    final rows = <List<dynamic>>[];
+    for (final r in (res as List)) {
+      final m = r as Map<String, dynamic>;
+      final el = m['elementos'] as Map?;
+      rows.add([
+        el?['nombre'] ?? '', el?['unidad'] ?? '',
+        (m['bodegas'] as Map?)?['nombre'] ?? '',
+        (m['longitud_actual'] ?? 0) as num,
+        (m['longitud'] ?? 0) as num,
+        _fecha(m['creado_en']),
+        m['creado_email'] ?? '',
+        m['observacion'] ?? '',
+      ]);
+    }
+    rows.sort((a, b) => (a[0] as String)
+        .toLowerCase().compareTo((b[0] as String).toLowerCase()));
+    filas.addAll(rows);
+    await _descargar('aprovechamientos_existencias', filas);
+  }
 }

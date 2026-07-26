@@ -53,33 +53,62 @@ class _ReportesPageState extends State<ReportesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Informes')),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          // Rango de fechas (para los informes que lo usan)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Informes'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.inventory_2), text: 'Inventario'),
+              Tab(icon: Icon(Icons.recycling), text: 'Aprovechamientos'),
+            ],
+          ),
+        ),
+        body: Column(
+          children: [
+            _rangoFechas(),
+            Expanded(
+              child: TabBarView(
                 children: [
-                  const Icon(Icons.date_range, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(child: OutlinedButton(
-                      onPressed: () => _pick(true),
-                      child: Text('Desde\n${_f.format(_desde)}',
-                          textAlign: TextAlign.center))),
-                  const SizedBox(width: 8),
-                  Expanded(child: OutlinedButton(
-                      onPressed: () => _pick(false),
-                      child: Text('Hasta\n${_f.format(_hasta)}',
-                          textAlign: TextAlign.center))),
+                  _tabInventario(),
+                  _tabAprovechamientos(),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Selector de rango de fechas (compartido; aplica a los informes por fecha).
+  Widget _rangoFechas() => Card(
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.date_range, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: OutlinedButton(
+                  onPressed: () => _pick(true),
+                  child: Text('Desde\n${_f.format(_desde)}',
+                      textAlign: TextAlign.center))),
+              const SizedBox(width: 8),
+              Expanded(child: OutlinedButton(
+                  onPressed: () => _pick(false),
+                  child: Text('Hasta\n${_f.format(_hasta)}',
+                      textAlign: TextAlign.center))),
+            ],
           ),
-          const SizedBox(height: 4),
+        ),
+      );
+
+  /// Pestaña 1: informes del inventario oficial.
+  Widget _tabInventario() => ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
           _reporte('existencias', 'Existencias valorizadas',
               'Inventario actual por elemento y bodega, con valorización.',
               Icons.inventory_2, () => Reportes.existenciasValorizadas()),
@@ -93,9 +122,22 @@ class _ReportesPageState extends State<ReportesPage> {
               'Lo que hay que reponer (existencia bajo el mínimo).',
               Icons.warning_amber, () => Reportes.bajoMinimo()),
         ],
-      ),
-    );
-  }
+      );
+
+  /// Pestaña 2: informes de aprovechamientos (trozos/tramos a $0).
+  Widget _tabAprovechamientos() => ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _reporte('aprov_existencias', 'Existencias actuales',
+              'Tramos disponibles ahora (con saldo), por elemento y bodega. '
+              'No usa fechas.',
+              Icons.inventory_2, () => Reportes.existenciasAprovechamientos()),
+          _reporte('aprov_movimientos', 'Movimientos por fecha',
+              'Entradas (tramos creados) y salidas (consumo) del rango elegido.',
+              Icons.swap_vert,
+              () => Reportes.movimientosAprovechamientos(_desde, _hasta)),
+        ],
+      );
 
   Widget _reporte(String id, String titulo, String desc, IconData icono,
       Future<void> Function() fn) {
