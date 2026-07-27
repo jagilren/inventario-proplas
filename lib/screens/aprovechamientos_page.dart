@@ -381,6 +381,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                     : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
                 if (t.bodega != null) '📍 ${t.bodega}',
                 if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
+                if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
               ].join(' · '), style: const TextStyle(fontSize: 12)),
               trailing: Icon(abierto ? Icons.expand_less : Icons.expand_more,
                   color: Colors.brown.shade400),
