@@ -33,6 +33,8 @@ class InventarioApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00695C)),
         useMaterial3: true,
       ),
+      // Permite seleccionar y copiar cualquier texto de la app (web y móvil).
+      builder: (context, child) => SelectionArea(child: child!),
       home: const AuthGate(),
     );
   }
