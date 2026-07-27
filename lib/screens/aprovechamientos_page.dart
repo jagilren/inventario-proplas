@@ -262,16 +262,44 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                     color: Colors.brown.shade400,
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Tramos aprovechables · valorizados a \$0 · '
-                      'no afectan el inventario oficial',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.brown.shade400,
+                  Text(
+                    'Aprovechamientos',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.brown.shade400,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Colors.brown.shade400,
+                    ),
+                    tooltip: 'Qué es esto',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        icon: Icon(
+                          Icons.content_cut,
+                          color: Colors.brown.shade400,
+                        ),
+                        title: const Text('Tramos aprovechables'),
+                        content: const Text(
+                          'Retazos/tramos sobrantes valorizados a \$0. '
+                          'No afectan el inventario oficial.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Entendido'),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  const Spacer(),
                   if (_puedeExportar)
                     IconButton(
                       icon: Icon(
