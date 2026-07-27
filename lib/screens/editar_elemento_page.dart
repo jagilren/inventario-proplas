@@ -11,7 +11,12 @@ class EditarElementoPage extends StatefulWidget {
   /// En modo admin (Catálogo completo) se puede editar 'es_aprovechamiento'
   /// también al editar un elemento existente.
   final bool modoAdmin;
-  const EditarElementoPage({super.key, this.elemento, this.modoAdmin = false});
+  /// Al crear desde el módulo de Aprovechamientos: 'es_aprovechamiento' queda
+  /// fijo en true, sin posibilidad de cambiarlo (y sin seriales/existencia
+  /// inicial, que no aplican ahí).
+  final bool forzarAprovechamiento;
+  const EditarElementoPage({super.key, this.elemento, this.modoAdmin = false,
+      this.forzarAprovechamiento = false});
   @override
   State<EditarElementoPage> createState() => _EditarElementoPageState();
 }
@@ -55,7 +60,9 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     _unidad = (e != null && _unidades.contains(e.unidad)) ? e.unidad : 'UND';
     _activo = e?.activo ?? true;
     _serializado = e?.serializado ?? false;
-    _esAprovechamiento = e?.esAprovechamiento ?? false;
+    _esAprovechamiento = widget.forzarAprovechamiento
+        ? true
+        : (e?.esAprovechamiento ?? false);
     if (_esNuevo) {
       InventarioService.bodegas().then((b) {
         if (mounted) {
@@ -303,16 +310,21 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Es de aprovechamiento'),
-              subtitle: Text(_esAprovechamiento
-                  ? 'Se maneja por metro; NO aparece en el inventario oficial, '
-                      'solo en el módulo de Aprovechamientos.'
-                  : 'Elemento normal del inventario oficial.'),
+              subtitle: Text(widget.forzarAprovechamiento
+                  ? 'Fijo: se creó desde el módulo de Aprovechamientos, '
+                      'no se puede desmarcar aquí.'
+                  : (_esAprovechamiento
+                      ? 'Se maneja por metro; NO aparece en el inventario oficial, '
+                          'solo en el módulo de Aprovechamientos.'
+                      : 'Elemento normal del inventario oficial.')),
               secondary: const Icon(Icons.content_cut),
               value: _esAprovechamiento,
-              onChanged: (v) => setState(() => _esAprovechamiento = v),
+              onChanged: widget.forzarAprovechamiento
+                  ? null
+                  : (v) => setState(() => _esAprovechamiento = v),
             ),
           ],
-          if (_esNuevo) ...[
+          if (_esNuevo && !widget.forzarAprovechamiento) ...[
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -327,7 +339,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               onChanged: (v) => setState(() => _serializado = v),
             ),
           ],
-          if (_esNuevo && !_serializado) ...[
+          if (_esNuevo && !_serializado && !widget.forzarAprovechamiento) ...[
             const Divider(height: 28),
             const Text('Existencia inicial (opcional)',
                 style: TextStyle(fontWeight: FontWeight.bold)),

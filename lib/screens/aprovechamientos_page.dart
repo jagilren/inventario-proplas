@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
 import '../reportes.dart';
 import '../util/tiempo.dart';
+import 'editar_elemento_page.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -190,6 +191,14 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     if (ok == true) _cargar();
   }
 
+  /// Crea un elemento NUEVO ya marcado como aprovechamiento (fijo, sin
+  /// posibilidad de desmarcarlo desde aquí).
+  Future<void> _nuevoElemento() async {
+    final ok = await Navigator.push<bool>(context, MaterialPageRoute(
+        builder: (_) => const EditarElementoPage(forzarAprovechamiento: true)));
+    if (ok == true) _cargar();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -231,10 +240,21 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                 hintText: 'Buscar elemento…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _puedeEntrada
-                    ? IconButton(
-                        icon: const Icon(Icons.add_box, color: Colors.teal),
-                        tooltip: 'Ingresar tramo',
-                        onPressed: () => _ingresar(),
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.playlist_add,
+                                color: Colors.amber.shade800),
+                            tooltip: 'Nuevo elemento',
+                            onPressed: _nuevoElemento,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_box, color: Colors.teal),
+                            tooltip: 'Ingresar tramo',
+                            onPressed: () => _ingresar(),
+                          ),
+                        ],
                       )
                     : null,
                 border: const OutlineInputBorder(),
