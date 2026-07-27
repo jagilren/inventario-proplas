@@ -693,6 +693,7 @@ class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
             if (t.creadoEmail != null) 'por ${t.creadoEmail}',
             if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
             if (t.bodega != null) '📍 ${t.bodega}',
+            if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
           ].join(' · '),
           saldo: 'Saldo: ${_qty.format(saldo)} $u',
         ));
