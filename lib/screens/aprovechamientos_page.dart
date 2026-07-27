@@ -42,8 +42,10 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   bool _cargando = false;
   bool _puedeEntrada = false;
   bool _puedeExportar = false;
-  bool _mostrarSaldoCero = false; // en "Por elemento", ocultar saldo 0 por defecto
-  String? _trozoExpandido; // id del trozo desplegado inline en la pestaña Histórico
+  bool _mostrarSaldoCero =
+      false; // en "Por elemento", ocultar saldo 0 por defecto
+  String?
+  _trozoExpandido; // id del trozo desplegado inline en la pestaña Histórico
   _OrdenAprov _orden = _OrdenAprov.reciente;
 
   @override
@@ -61,9 +63,12 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() {
-          _puedeEntrada = r.contains(Roles.admin) || r.contains(Roles.operarioMas);
-          _puedeExportar = r.contains(Roles.admin) ||
-              r.contains(Roles.coordinador) || r.contains(Roles.exportar);
+          _puedeEntrada =
+              r.contains(Roles.admin) || r.contains(Roles.operarioMas);
+          _puedeExportar =
+              r.contains(Roles.admin) ||
+              r.contains(Roles.coordinador) ||
+              r.contains(Roles.exportar);
         });
       }
     });
@@ -71,8 +76,12 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     SharedPreferences.getInstance().then((p) {
       final s = p.getString(_ordenPrefKey);
       if (s != null && mounted) {
-        setState(() => _orden = _OrdenAprov.values
-            .firstWhere((e) => e.name == s, orElse: () => _OrdenAprov.reciente));
+        setState(
+          () => _orden = _OrdenAprov.values.firstWhere(
+            (e) => e.name == s,
+            orElse: () => _OrdenAprov.reciente,
+          ),
+        );
       }
     });
   }
@@ -88,13 +97,19 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     final cero = DateTime.fromMillisecondsSinceEpoch(0);
     switch (_orden) {
       case _OrdenAprov.reciente:
-        out.sort((a, b) =>
-            (b.ultimaCreacion ?? cero).compareTo(a.ultimaCreacion ?? cero));
+        out.sort(
+          (a, b) =>
+              (b.ultimaCreacion ?? cero).compareTo(a.ultimaCreacion ?? cero),
+        );
       case _OrdenAprov.antiguo:
-        out.sort((a, b) =>
-            (a.ultimaCreacion ?? cero).compareTo(b.ultimaCreacion ?? cero));
+        out.sort(
+          (a, b) =>
+              (a.ultimaCreacion ?? cero).compareTo(b.ultimaCreacion ?? cero),
+        );
       case _OrdenAprov.nombre:
-        out.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+        out.sort(
+          (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
+        );
       case _OrdenAprov.saldo:
         out.sort((a, b) => b.totalDisp.compareTo(a.totalDisp));
     }
@@ -110,8 +125,11 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
       case _OrdenAprov.antiguo:
         out.sort((a, b) => (a.creadoEn ?? cero).compareTo(b.creadoEn ?? cero));
       case _OrdenAprov.nombre:
-        out.sort((a, b) =>
-            a.elementoNombre.toLowerCase().compareTo(b.elementoNombre.toLowerCase()));
+        out.sort(
+          (a, b) => a.elementoNombre.toLowerCase().compareTo(
+            b.elementoNombre.toLowerCase(),
+          ),
+        );
       case _OrdenAprov.saldo:
         out.sort((a, b) => b.longitudActual.compareTo(a.longitudActual));
     }
@@ -131,7 +149,11 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     try {
       final r = await InventarioService.aprovechamientosResumen();
       final h = await InventarioService.todosLosTrozos();
-      if (mounted) setState(() { _resumen = r; _historico = h; });
+      if (mounted)
+        setState(() {
+          _resumen = r;
+          _historico = h;
+        });
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -149,7 +171,9 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     final q = _ctrl.text.trim().toLowerCase();
     final base = q.isEmpty
         ? _historico
-        : _historico.where((t) => t.elementoNombre.toLowerCase().contains(q)).toList();
+        : _historico
+              .where((t) => t.elementoNombre.toLowerCase().contains(q))
+              .toList();
     return _ordenarTrozos(base);
   }
 
@@ -160,20 +184,24 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
       firstDate: DateTime(2020),
       lastDate: ahora.add(const Duration(days: 1)),
       initialDateRange: DateTimeRange(
-          start: ahora.subtract(const Duration(days: 30)), end: ahora),
+        start: ahora.subtract(const Duration(days: 30)),
+        end: ahora,
+      ),
       helpText: 'Movimientos de aprovechamientos: rango de fechas',
     );
     if (rango == null) return;
     try {
       await Reportes.movimientosAprovechamientos(rango.start, rango.end);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✓ Exportado (revisa tus descargas)')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Exportado (revisa tus descargas)')),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al exportar: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al exportar: $e')));
       }
     }
   }
@@ -194,101 +222,135 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   /// Crea un elemento NUEVO ya marcado como aprovechamiento (fijo, sin
   /// posibilidad de desmarcarlo desde aquí).
   Future<void> _nuevoElemento() async {
-    final ok = await Navigator.push<bool>(context, MaterialPageRoute(
-        builder: (_) => const EditarElementoPage(forzarAprovechamiento: true)));
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const EditarElementoPage(forzarAprovechamiento: true),
+      ),
+    );
     if (ok == true) _cargar();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: _fondoAprov,
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: _barraAprov,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(children: [
-              Icon(Icons.content_cut, size: 18, color: Colors.brown.shade400),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Tramos aprovechables · valorizados a \$0 · '
-                    'no afectan el inventario oficial',
-                    style: TextStyle(fontSize: 12, color: Colors.brown.shade400)),
-              ),
-              if (_puedeExportar)
-                IconButton(
-                  icon: Icon(Icons.file_download, size: 20,
-                      color: Colors.brown.shade400),
-                  tooltip: 'Exportar movimientos por fecha',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _exportar,
-                ),
-            ]),
-          ),
-          TabBar(controller: _tab, tabs: const [
-            Tab(icon: Icon(Icons.inventory_2), text: 'Por elemento'),
-            Tab(icon: Icon(Icons.history), text: 'Histórico'),
-          ]),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _ctrl,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Buscar elemento…',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _puedeEntrada
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.playlist_add,
-                                color: Colors.amber.shade800),
-                            tooltip: 'Nuevo elemento',
-                            onPressed: _nuevoElemento,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_box, color: Colors.teal),
-                            tooltip: 'Ingresar tramo',
-                            onPressed: () => _ingresar(),
-                          ),
-                        ],
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
+    return Scaffold(
+      floatingActionButton: AnimatedBuilder(
+        animation: _tab,
+        builder: (context, _) => (_puedeEntrada && _tab.index == 0)
+            ? FloatingActionButton.extended(
+                onPressed: _nuevoElemento,
+                backgroundColor: Colors.amber.shade700,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.playlist_add),
+                label: const Text('Nuevo elemento'),
+              )
+            : const SizedBox.shrink(),
+      ),
+      body: Container(
+        color: _fondoAprov,
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              color: _barraAprov,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.content_cut,
+                    size: 18,
+                    color: Colors.brown.shade400,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tramos aprovechables · valorizados a \$0 · '
+                      'no afectan el inventario oficial',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.brown.shade400,
+                      ),
+                    ),
+                  ),
+                  if (_puedeExportar)
+                    IconButton(
+                      icon: Icon(
+                        Icons.file_download,
+                        size: 20,
+                        color: Colors.brown.shade400,
+                      ),
+                      tooltip: 'Exportar movimientos por fecha',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _exportar,
+                    ),
+                ],
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 6),
-            child: Row(children: [
-              Icon(Icons.sort, size: 18, color: Colors.brown.shade400),
-              const SizedBox(width: 6),
-              const Text('Ordenar por:', style: TextStyle(fontSize: 13)),
-              const SizedBox(width: 8),
-              DropdownButton<_OrdenAprov>(
-                value: _orden,
-                isDense: true,
-                underline: const SizedBox.shrink(),
-                items: _OrdenAprov.values
-                    .map((o) => DropdownMenuItem(value: o,
-                        child: Text(_ordenLabels[o]!,
-                            style: const TextStyle(fontSize: 13))))
-                    .toList(),
-                onChanged: (o) { if (o != null) _setOrden(o); },
+            TabBar(
+              controller: _tab,
+              tabs: const [
+                Tab(icon: Icon(Icons.inventory_2), text: 'Por elemento'),
+                Tab(icon: Icon(Icons.history), text: 'Histórico'),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _ctrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Buscar elemento…',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _puedeEntrada
+                      ? IconButton(
+                          icon: const Icon(Icons.add_box, color: Colors.teal),
+                          tooltip: 'Ingresar tramo',
+                          onPressed: () => _ingresar(),
+                        )
+                      : null,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ]),
-          ),
-          if (_cargando) const LinearProgressIndicator(),
-          Expanded(
-            child: TabBarView(controller: _tab, children: [
-              _porElemento(),
-              _historicoLista(),
-            ]),
-          ),
-        ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 12, bottom: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.sort, size: 18, color: Colors.brown.shade400),
+                  const SizedBox(width: 6),
+                  const Text('Ordenar por:', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                  DropdownButton<_OrdenAprov>(
+                    value: _orden,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    items: _OrdenAprov.values
+                        .map(
+                          (o) => DropdownMenuItem(
+                            value: o,
+                            child: Text(
+                              _ordenLabels[o]!,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (o) {
+                      if (o != null) _setOrden(o);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            if (_cargando) const LinearProgressIndicator(),
+            Expanded(
+              child: TabBarView(
+                controller: _tab,
+                children: [_porElemento(), _historicoLista()],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -299,57 +361,81 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     final items = _resumenFiltrado
         .where((t) => _mostrarSaldoCero || t.disponibles > 0)
         .toList();
-    return Column(children: [
-      CheckboxListTile(
-        dense: true,
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        value: _mostrarSaldoCero,
-        onChanged: (v) => setState(() => _mostrarSaldoCero = v ?? false),
-        title: const Text('Mostrar los que tienen saldo 0',
-            style: TextStyle(fontSize: 13)),
-      ),
-      const Divider(height: 1),
-      Expanded(
-        child: items.isEmpty && !_cargando
-            ? Center(child: Text(_mostrarSaldoCero
-                ? 'Sin tramos registrados'
-                : 'Sin tramos con saldo disponible'))
-            : ListView.separated(
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final t = items[i];
-        final hayDisp = t.disponibles > 0;
-        final consumidos = t.totalTrozos - t.disponibles;
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor:
-                hayDisp ? Colors.blueGrey.shade100 : Colors.grey.shade300,
-            child: Text('${t.disponibles}',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
-                    color: hayDisp ? Colors.black : Colors.grey)),
+    return Column(
+      children: [
+        CheckboxListTile(
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          value: _mostrarSaldoCero,
+          onChanged: (v) => setState(() => _mostrarSaldoCero = v ?? false),
+          title: const Text(
+            'Mostrar los que tienen saldo 0',
+            style: TextStyle(fontSize: 13),
           ),
-          title: Text(t.nombre,
-              style: TextStyle(color: hayDisp ? null : Colors.grey)),
-          subtitle: Text(hayDisp
-              ? '${t.disponibles} tramo${t.disponibles == 1 ? '' : 's'} · '
-                  '${_qty.format(t.totalDisp)} ${t.unidad} disponibles'
-                  '${consumidos > 0 ? '  ·  $consumidos en histórico' : ''}'
-              : 'Sin saldo · ${t.totalTrozos} en histórico'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () async {
-            await Navigator.push(context, MaterialPageRoute(
-                builder: (_) => TrozosElementoPage(
-                    elementoId: t.elementoId, nombre: t.nombre,
-                    unidad: t.unidad)));
-            _cargar();
-          },
-        );
-                },
-              ),
-      ),
-    ]);
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: items.isEmpty && !_cargando
+              ? Center(
+                  child: Text(
+                    _mostrarSaldoCero
+                        ? 'Sin tramos registrados'
+                        : 'Sin tramos con saldo disponible',
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final t = items[i];
+                    final hayDisp = t.disponibles > 0;
+                    final consumidos = t.totalTrozos - t.disponibles;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: hayDisp
+                            ? Colors.blueGrey.shade100
+                            : Colors.grey.shade300,
+                        child: Text(
+                          '${t.disponibles}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: hayDisp ? Colors.black : Colors.grey,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        t.nombre,
+                        style: TextStyle(color: hayDisp ? null : Colors.grey),
+                      ),
+                      subtitle: Text(
+                        hayDisp
+                            ? '${t.disponibles} tramo${t.disponibles == 1 ? '' : 's'} · '
+                                  '${_qty.format(t.totalDisp)} ${t.unidad} disponibles'
+                                  '${consumidos > 0 ? '  ·  $consumidos en histórico' : ''}'
+                            : 'Sin saldo · ${t.totalTrozos} en histórico',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TrozosElementoPage(
+                              elementoId: t.elementoId,
+                              nombre: t.nombre,
+                              unidad: t.unidad,
+                            ),
+                          ),
+                        );
+                        _cargar();
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 
   /// Pestaña "Histórico": TODOS los trozos (incluidos saldo 0), planos.
@@ -370,21 +456,32 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ListTile(
-              leading: Icon(Icons.content_cut,
-                  color: t.disponible ? Colors.blueGrey : Colors.grey),
-              title: Text(t.elementoNombre,
-                  style: TextStyle(color: t.disponible ? null : Colors.grey)),
-              subtitle: Text([
-                t.disponible
-                    ? 'Disponible: ${_qty.format(t.longitudActual)} ${t.unidad}'
-                        '${t.parcial ? ' (de ${_qty.format(t.longitud)})' : ''}'
-                    : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
-                if (t.bodega != null) '📍 ${t.bodega}',
-                if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
-                if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
-              ].join(' · '), style: const TextStyle(fontSize: 12)),
-              trailing: Icon(abierto ? Icons.expand_less : Icons.expand_more,
-                  color: Colors.brown.shade400),
+              leading: Icon(
+                Icons.content_cut,
+                color: t.disponible ? Colors.blueGrey : Colors.grey,
+              ),
+              title: Text(
+                t.elementoNombre,
+                style: TextStyle(color: t.disponible ? null : Colors.grey),
+              ),
+              subtitle: Text(
+                [
+                  t.disponible
+                      ? 'Disponible: ${_qty.format(t.longitudActual)} ${t.unidad}'
+                            '${t.parcial ? ' (de ${_qty.format(t.longitud)})' : ''}'
+                      : 'Consumido · era de ${_qty.format(t.longitud)} ${t.unidad}',
+                  if (t.bodega != null) '📍 ${t.bodega}',
+                  if (t.creadoEn != null)
+                    _fechaHora.format(horaColombia(t.creadoEn!)),
+                  if (t.observacion != null && t.observacion!.isNotEmpty)
+                    t.observacion!,
+                ].join(' · '),
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: Icon(
+                abierto ? Icons.expand_less : Icons.expand_more,
+                color: Colors.brown.shade400,
+              ),
               onTap: () =>
                   setState(() => _trozoExpandido = abierto ? null : t.id),
             ),
@@ -393,7 +490,8 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                 decoration: BoxDecoration(
                   color: _barraAprov,
                   border: Border(
-                      left: BorderSide(color: Colors.brown.shade200, width: 3)),
+                    left: BorderSide(color: Colors.brown.shade200, width: 3),
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
@@ -426,9 +524,12 @@ class TrozosElementoPage extends StatefulWidget {
   final String elementoId;
   final String nombre;
   final String unidad;
-  const TrozosElementoPage(
-      {super.key, required this.elementoId, required this.nombre,
-      required this.unidad});
+  const TrozosElementoPage({
+    super.key,
+    required this.elementoId,
+    required this.nombre,
+    required this.unidad,
+  });
   @override
   State<TrozosElementoPage> createState() => _TrozosElementoPageState();
 }
@@ -447,9 +548,12 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     InventarioService.misRoles().then((r) {
       if (mounted) {
         setState(() {
-          _puedeEntrada = r.contains(Roles.admin) || r.contains(Roles.operarioMas);
-          _puedeSalida = r.contains(Roles.admin) || r.contains(Roles.operarioMenos);
-          _puedeBorrar = r.contains(Roles.admin) || r.contains(Roles.coordinador);
+          _puedeEntrada =
+              r.contains(Roles.admin) || r.contains(Roles.operarioMas);
+          _puedeSalida =
+              r.contains(Roles.admin) || r.contains(Roles.operarioMenos);
+          _puedeBorrar =
+              r.contains(Roles.admin) || r.contains(Roles.coordinador);
         });
       }
     });
@@ -460,7 +564,9 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     try {
       // Trae TODOS (incluye consumidos) para la pestaña de histórico.
       final t = await InventarioService.trozosDeElemento(
-          widget.elementoId, soloDisponibles: false);
+        widget.elementoId,
+        soloDisponibles: false,
+      );
       if (mounted) setState(() => _todos = t);
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -468,8 +574,12 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   }
 
   void _verHistorial(Trozo t) {
-    Navigator.push(context, MaterialPageRoute(
-        builder: (_) => TrozoHistorialPage(trozo: t, unidad: widget.unidad)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TrozoHistorialPage(trozo: t, unidad: widget.unidad),
+      ),
+    );
   }
 
   Future<void> _usar(Trozo t) async {
@@ -480,39 +590,69 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     final cant = TextEditingController(text: t.longitudActual.toString());
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        title: Text('Usar del tramo · quedan '
-            '${_qty.format(t.longitudActual)} ${widget.unidad}'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: cant,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-                labelText: 'Cantidad a usar (${widget.unidad})',
-                helperText: 'Puede ser parcial; el resto queda disponible',
-                border: const OutlineInputBorder()),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(
+            'Usar del tramo · quedan '
+            '${_qty.format(t.longitudActual)} ${widget.unidad}',
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<CentroCosto>(
-            initialValue: cc,
-            isExpanded: true,
-            decoration: const InputDecoration(
-                labelText: 'Centro de costo', border: OutlineInputBorder()),
-            items: centros.map((c) => DropdownMenuItem(value: c,
-                child: Text(c.etiqueta, overflow: TextOverflow.ellipsis))).toList(),
-            onChanged: (v) => setD(() => cc = v),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: cant,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Cantidad a usar (${widget.unidad})',
+                  helperText: 'Puede ser parcial; el resto queda disponible',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<CentroCosto>(
+                initialValue: cc,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Centro de costo',
+                  border: OutlineInputBorder(),
+                ),
+                items: centros
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(
+                          c.etiqueta,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setD(() => cc = v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: obs,
+                decoration: const InputDecoration(
+                  labelText: 'Observación (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          TextField(controller: obs, decoration: const InputDecoration(
-              labelText: 'Observación (opcional)', border: OutlineInputBorder())),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Usar')),
-        ],
-      )),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Usar'),
+            ),
+          ],
+        ),
+      ),
     );
     if (ok != true) return;
     final c = num.tryParse(cant.text.replaceAll(',', '.'));
@@ -521,21 +661,31 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
       return;
     }
     if (c > t.longitudActual) {
-      _snack('No puedes usar más de lo que queda '
-          '(${_qty.format(t.longitudActual)} ${widget.unidad})');
+      _snack(
+        'No puedes usar más de lo que queda '
+        '(${_qty.format(t.longitudActual)} ${widget.unidad})',
+      );
       return;
     }
     try {
-      await InventarioService.sacarDeTrozo(t.id,
-          cantidad: c, centroCostoId: cc?.id, observacion: obs.text);
+      await InventarioService.sacarDeTrozo(
+        t.id,
+        cantidad: c,
+        centroCostoId: cc?.id,
+        observacion: obs.text,
+      );
       final resto = t.longitudActual - c;
-      _snack(resto > 0
-          ? '✓ Usaste ${_qty.format(c)} ${widget.unidad}; '
-              'quedan ${_qty.format(resto)}'
-          : '✓ Tramo consumido por completo');
+      _snack(
+        resto > 0
+            ? '✓ Usaste ${_qty.format(c)} ${widget.unidad}; '
+                  'quedan ${_qty.format(resto)}'
+            : '✓ Tramo consumido por completo',
+      );
       _cargar();
     } catch (e) {
-      _snack('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
+      _snack(
+        'Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}',
+      );
     }
   }
 
@@ -546,15 +696,26 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   }
 
   Future<void> _borrar(Trozo t) async {
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Borrar tramo'),
-      content: Text('¿Borrar este tramo de ${_qty.format(t.longitud)} '
-          '${widget.unidad}? (corrección, no queda historial)'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Borrar')),
-      ],
-    ));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Borrar tramo'),
+        content: Text(
+          '¿Borrar este tramo de ${_qty.format(t.longitud)} '
+          '${widget.unidad}? (corrección, no queda historial)',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Borrar'),
+          ),
+        ],
+      ),
+    );
     if (ok != true) return;
     await InventarioService.borrarTrozo(t.id);
     _cargar();
@@ -562,10 +723,13 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
 
   Future<void> _ingresar() async {
     final ok = await showModalBottomSheet<bool>(
-      context: context, isScrollControlled: true,
+      context: context,
+      isScrollControlled: true,
       builder: (_) => _IngresarTrozoSheet(
-          elementoId: widget.elementoId, nombre: widget.nombre,
-          unidad: widget.unidad),
+        elementoId: widget.elementoId,
+        nombre: widget.nombre,
+        unidad: widget.unidad,
+      ),
     );
     if (ok == true) _cargar();
   }
@@ -579,32 +743,41 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
         appBar: AppBar(
           backgroundColor: _barraAprov,
           title: Text(widget.nombre),
-          bottom: const TabBar(tabs: [
-            Tab(icon: Icon(Icons.content_cut), text: 'Disponibles'),
-            Tab(icon: Icon(Icons.history), text: 'Histórico'),
-          ]),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.content_cut), text: 'Disponibles'),
+              Tab(icon: Icon(Icons.history), text: 'Histórico'),
+            ],
+          ),
         ),
         floatingActionButton: _puedeEntrada
             ? FloatingActionButton.extended(
                 onPressed: _ingresar,
                 icon: const Icon(Icons.add),
-                label: const Text('Ingresar tramo'))
+                label: const Text('Ingresar tramo'),
+              )
             : null,
         body: _cargando
             ? const Center(child: CircularProgressIndicator())
-            : TabBarView(children: [
-                _lista(_disponibles, historico: false),
-                _lista(_todos, historico: true),
-              ]),
+            : TabBarView(
+                children: [
+                  _lista(_disponibles, historico: false),
+                  _lista(_todos, historico: true),
+                ],
+              ),
       ),
     );
   }
 
   Widget _lista(List<Trozo> items, {required bool historico}) {
     if (items.isEmpty) {
-      return Center(child: Text(historico
-          ? 'Aún no hay tramos registrados'
-          : 'No hay tramos disponibles'));
+      return Center(
+        child: Text(
+          historico
+              ? 'Aún no hay tramos registrados'
+              : 'No hay tramos disponibles',
+        ),
+      );
     }
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 80),
@@ -614,33 +787,51 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
         final t = items[i];
         final consumido = !t.disponible;
         return ListTile(
-          leading: Icon(Icons.content_cut,
-              color: consumido ? Colors.grey : Colors.blueGrey),
+          leading: Icon(
+            Icons.content_cut,
+            color: consumido ? Colors.grey : Colors.blueGrey,
+          ),
           title: Text(
-              historico && consumido
-                  ? 'Consumido · era de ${_qty.format(t.longitud)} ${widget.unidad}'
-                  : '${_qty.format(t.longitudActual)} ${widget.unidad}'
+            historico && consumido
+                ? 'Consumido · era de ${_qty.format(t.longitud)} ${widget.unidad}'
+                : '${_qty.format(t.longitudActual)} ${widget.unidad}'
                       '${t.parcial ? '  (de ${_qty.format(t.longitud)})' : ''}',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: consumido ? Colors.grey : null)),
-          subtitle: Text([
-            if (!consumido && t.parcial) 'usado en parte',
-            if (t.bodega != null) '📍 ${t.bodega}',
-            if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
-            'ver historial ⟶',
-          ].join(' · '), style: const TextStyle(fontSize: 12)),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: consumido ? Colors.grey : null,
+            ),
+          ),
+          subtitle: Text(
+            [
+              if (!consumido && t.parcial) 'usado en parte',
+              if (t.bodega != null) '📍 ${t.bodega}',
+              if (t.observacion != null && t.observacion!.isNotEmpty)
+                t.observacion!,
+              'ver historial ⟶',
+            ].join(' · '),
+            style: const TextStyle(fontSize: 12),
+          ),
           trailing: (!historico && (_puedeSalida || _puedeBorrar))
-              ? Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (_puedeSalida)
-                    TextButton(onPressed: () => _usar(t), child: const Text('Usar')),
-                  if (_puedeBorrar)
-                    IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            size: 20, color: Colors.red),
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_puedeSalida)
+                      TextButton(
+                        onPressed: () => _usar(t),
+                        child: const Text('Usar'),
+                      ),
+                    if (_puedeBorrar)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Colors.red,
+                        ),
                         tooltip: 'Borrar',
-                        onPressed: () => _borrar(t)),
-                ])
+                        onPressed: () => _borrar(t),
+                      ),
+                  ],
+                )
               : const Icon(Icons.chevron_right),
           onTap: () => _verHistorial(t),
         );
@@ -686,30 +877,40 @@ class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
         // Saldo corriendo: arranca en la longitud inicial y va bajando.
         num saldo = t.longitud;
         final pasos = <Widget>[];
-        pasos.add(_eventoTrozo(
-          icono: Icons.add_circle, color: Colors.green,
-          titulo: 'Ingreso · +${_qty.format(t.longitud)} $u',
-          detalle: [
-            if (t.creadoEmail != null) 'por ${t.creadoEmail}',
-            if (t.creadoEn != null) _fechaHora.format(horaColombia(t.creadoEn!)),
-            if (t.bodega != null) '📍 ${t.bodega}',
-            if (t.observacion != null && t.observacion!.isNotEmpty) t.observacion!,
-          ].join(' · '),
-          saldo: 'Saldo: ${_qty.format(saldo)} $u',
-        ));
+        pasos.add(
+          _eventoTrozo(
+            icono: Icons.add_circle,
+            color: Colors.green,
+            titulo: 'Ingreso · +${_qty.format(t.longitud)} $u',
+            detalle: [
+              if (t.creadoEmail != null) 'por ${t.creadoEmail}',
+              if (t.creadoEn != null)
+                _fechaHora.format(horaColombia(t.creadoEn!)),
+              if (t.bodega != null) '📍 ${t.bodega}',
+              if (t.observacion != null && t.observacion!.isNotEmpty)
+                t.observacion!,
+            ].join(' · '),
+            saldo: 'Saldo: ${_qty.format(saldo)} $u',
+          ),
+        );
         for (final s in salidas) {
           saldo -= s.cantidad;
-          pasos.add(_eventoTrozo(
-            icono: Icons.remove_circle, color: Colors.orange,
-            titulo: 'Salida · −${_qty.format(s.cantidad)} $u  →  '
-                '${s.centroCosto ?? 'sin centro de costo'}',
-            detalle: [
-              if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
-              _fechaHora.format(horaColombia(s.fecha)),
-              if (s.observacion != null && s.observacion!.isNotEmpty) s.observacion!,
-            ].join(' · '),
-            saldo: 'Saldo: ${_qty.format(saldo < 0 ? 0 : saldo)} $u',
-          ));
+          pasos.add(
+            _eventoTrozo(
+              icono: Icons.remove_circle,
+              color: Colors.orange,
+              titulo:
+                  'Salida · −${_qty.format(s.cantidad)} $u  →  '
+                  '${s.centroCosto ?? 'sin centro de costo'}',
+              detalle: [
+                if (s.usuarioEmail != null) 'por ${s.usuarioEmail}',
+                _fechaHora.format(horaColombia(s.fecha)),
+                if (s.observacion != null && s.observacion!.isNotEmpty)
+                  s.observacion!,
+              ].join(' · '),
+              saldo: 'Saldo: ${_qty.format(saldo < 0 ? 0 : saldo)} $u',
+            ),
+          );
         }
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -718,24 +919,36 @@ class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(t.elementoNombre,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(
+                      t.elementoNombre,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Text('Longitud inicial: ${_qty.format(t.longitud)} $u'),
-                    Text('Disponible ahora: ${_qty.format(t.longitudActual)} $u'
-                        '${t.disponible ? '' : '  ·  CONSUMIDO'}',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: t.disponible ? Colors.teal : Colors.grey)),
+                    Text(
+                      'Disponible ahora: ${_qty.format(t.longitudActual)} $u'
+                      '${t.disponible ? '' : '  ·  CONSUMIDO'}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: t.disponible ? Colors.teal : Colors.grey,
+                      ),
+                    ),
                     Text('Salidas registradas: ${salidas.length}'),
-                  ]),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Trazabilidad (más reciente primero)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Trazabilidad (más reciente primero)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
             // El saldo de cada línea se calcula en orden cronológico, pero se
             // muestra invertido: primero lo más reciente, al final el ingreso.
@@ -747,21 +960,42 @@ class _TrozoTrazaViewState extends State<_TrozoTrazaView> {
   }
 }
 
-Widget _eventoTrozo({required IconData icono, required Color color,
-    required String titulo, required String detalle, required String saldo}) {
+Widget _eventoTrozo({
+  required IconData icono,
+  required Color color,
+  required String titulo,
+  required String detalle,
+  required String saldo,
+}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icono, color: color, size: 22),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
-          if (detalle.isNotEmpty)
-            Text(detalle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          Text(saldo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-        ])),
-    ]),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, color: color, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
+              if (detalle.isNotEmpty)
+                Text(
+                  detalle,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              Text(
+                saldo,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -771,15 +1005,20 @@ Widget _eventoTrozo({required IconData icono, required Color color,
 class TrozoHistorialPage extends StatelessWidget {
   final Trozo trozo;
   final String unidad;
-  const TrozoHistorialPage({super.key, required this.trozo, required this.unidad});
+  const TrozoHistorialPage({
+    super.key,
+    required this.trozo,
+    required this.unidad,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _fondoAprov,
       appBar: AppBar(
-          backgroundColor: _barraAprov,
-          title: const Text('Historial del tramo')),
+        backgroundColor: _barraAprov,
+        title: const Text('Historial del tramo'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: _TrozoTrazaView(trozo: trozo, unidad: unidad),
@@ -815,17 +1054,26 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
     _nombre = widget.nombre;
     _unidad = widget.unidad ?? 'UND';
     InventarioService.bodegas().then((b) {
-      if (mounted) setState(() { _bodegas = b; if (b.length == 1) _bodega = b.first; });
+      if (mounted)
+        setState(() {
+          _bodegas = b;
+          if (b.length == 1) _bodega = b.first;
+        });
     });
   }
 
   Future<void> _elegirElemento() async {
     final sel = await showModalBottomSheet<Elemento>(
-      context: context, isScrollControlled: true,
+      context: context,
+      isScrollControlled: true,
       builder: (_) => const _BuscadorElemento(),
     );
     if (sel != null) {
-      setState(() { _elementoId = sel.id; _nombre = sel.nombre; _unidad = sel.unidad; });
+      setState(() {
+        _elementoId = sel.id;
+        _nombre = sel.nombre;
+        _unidad = sel.unidad;
+      });
     }
   }
 
@@ -848,18 +1096,26 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
     }
   }
 
-  void _msg(String m) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(m)));
+  void _msg(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16),
-      child: Column(mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Ingresar tramo', // sheet title
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Ingresar tramo', // sheet title
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           const SizedBox(height: 12),
           Card(
             child: ListTile(
@@ -875,33 +1131,54 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
             controller: _longitud,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-                labelText: 'Longitud del tramo ($_unidad)',
-                border: const OutlineInputBorder()),
+              labelText: 'Longitud del tramo ($_unidad)',
+              border: const OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<Bodega>(
             initialValue: _bodega,
             isExpanded: true,
             decoration: const InputDecoration(
-                labelText: 'Ubicación (rack/bodega)',
-                border: OutlineInputBorder(), prefixIcon: Icon(Icons.warehouse)),
-            items: _bodegas.map((b) => DropdownMenuItem(value: b,
-                child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
+              labelText: 'Ubicación (rack/bodega)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.warehouse),
+            ),
+            items: _bodegas
+                .map(
+                  (b) => DropdownMenuItem(
+                    value: b,
+                    child: Text(b.nombre, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
             onChanged: (v) => setState(() => _bodega = v),
           ),
           const SizedBox(height: 10),
-          TextField(controller: _obs, decoration: const InputDecoration(
-              labelText: 'Observación (opcional)', border: OutlineInputBorder())),
+          TextField(
+            controller: _obs,
+            decoration: const InputDecoration(
+              labelText: 'Observación (opcional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 16),
-          SizedBox(height: 48, child: FilledButton.icon(
-            onPressed: _guardando ? null : _guardar,
-            icon: _guardando
-                ? const SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.save),
-            label: const Text('Guardar tramo'),
-          )),
-        ]),
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: _guardando ? null : _guardar,
+              icon: _guardando
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save),
+              label: const Text('Guardar tramo'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -932,33 +1209,41 @@ class _BuscadorElementoState extends State<_BuscadorElemento> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.75,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _ctrl, autofocus: true, onChanged: _buscar,
-              decoration: const InputDecoration(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                onChanged: _buscar,
+                decoration: const InputDecoration(
                   hintText: 'Buscar artículo de aprovechamiento…',
-                  prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _items.length,
-              itemBuilder: (_, i) {
-                final e = _items[i];
-                return ListTile(
-                  title: Text(e.nombre),
-                  subtitle: Text('Unidad: ${e.unidad}'),
-                  onTap: () => Navigator.pop(context, e),
-                );
-              },
+            Expanded(
+              child: ListView.builder(
+                itemCount: _items.length,
+                itemBuilder: (_, i) {
+                  final e = _items[i];
+                  return ListTile(
+                    title: Text(e.nombre),
+                    subtitle: Text('Unidad: ${e.unidad}'),
+                    onTap: () => Navigator.pop(context, e),
+                  );
+                },
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
