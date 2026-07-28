@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
 import '../reportes.dart';
 import '../util/tiempo.dart';
+import '../util/dialogos.dart';
 import 'editar_elemento_page.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -37,6 +38,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     with SingleTickerProviderStateMixin {
   final _ctrl = TextEditingController();
   late final TabController _tab;
+  int _ultimoIndiceTab = 0;
   List<TrozoResumen> _resumen = [];
   List<Trozo> _historico = [];
   bool _cargando = false;
@@ -56,6 +58,12 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
       // Al cambiar de pestaña, limpiar el buscador (cada pestaña arranca fresca).
       if (_tab.indexIsChanging && _ctrl.text.isNotEmpty) {
         setState(() => _ctrl.clear());
+      }
+      // Refresca el FAB (solo visible en "Por elemento") sin redibujar en
+      // cada frame de la animación: solo cuando el índice realmente cambió.
+      if (_tab.index != _ultimoIndiceTab) {
+        _ultimoIndiceTab = _tab.index;
+        setState(() {});
       }
     });
     _cargar();
@@ -269,18 +277,15 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: AnimatedBuilder(
-        animation: _tab,
-        builder: (context, _) => (_puedeEntrada && _tab.index == 0)
-            ? FloatingActionButton.extended(
-                onPressed: _nuevoElemento,
-                backgroundColor: Colors.amber.shade700,
-                foregroundColor: Colors.white,
-                icon: const Icon(Icons.playlist_add),
-                label: const Text('Nuevo elemento'),
-              )
-            : const SizedBox.shrink(),
-      ),
+      floatingActionButton: (_puedeEntrada && _tab.index == 0)
+          ? FloatingActionButton.extended(
+              onPressed: _nuevoElemento,
+              backgroundColor: Colors.amber.shade700,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.playlist_add),
+              label: const Text('Nuevo elemento'),
+            )
+          : null,
       body: Container(
         color: _fondoAprov,
         child: Column(
@@ -313,25 +318,14 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                     ),
                     tooltip: 'Qué es esto',
                     visualDensity: VisualDensity.compact,
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        icon: Icon(
-                          Icons.content_cut,
-                          color: Colors.brown.shade400,
-                        ),
-                        title: const Text('Tramos aprovechables'),
-                        content: const Text(
+                    onPressed: () => mostrarInfoDialog(
+                      context,
+                      icon: Icons.content_cut,
+                      color: Colors.brown.shade400,
+                      titulo: 'Tramos aprovechables',
+                      contenido:
                           'Retazos/tramos sobrantes valorizados a \$0. '
                           'No afectan el inventario oficial.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Entendido'),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                   const Spacer(),

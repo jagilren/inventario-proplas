@@ -58,6 +58,28 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
 
   bool get _esNuevo => widget.elemento == null;
 
+  // Al crear forzado desde Aprovechamientos: 'es_aprovechamiento' queda fijo
+  // (no editable) y no aplican seriales ni existencia inicial (esos
+  // elementos reciben su stock aparte, como tramos, en ese módulo).
+  bool get _flagAprovechamientoEditable => !widget.forzarAprovechamiento;
+  bool get _mostrarSeriales => _esNuevo && !widget.forzarAprovechamiento;
+  bool get _mostrarExistenciaInicial =>
+      _esNuevo && !_serializado && !widget.forzarAprovechamiento;
+  // Stock mínimo y código de barras no aplican al alta de Aprovechamientos:
+  // esos elementos no manejan alertas de existencia ni pasan por la RPC
+  // dedicada (crear_elemento_aprovechamiento), que no recibe esos campos.
+  bool get _mostrarStockYCodigo => !widget.forzarAprovechamiento;
+  String get _subtitleAprovechamiento {
+    if (widget.forzarAprovechamiento) {
+      return 'Fijo: se creó desde el módulo de Aprovechamientos, '
+          'no se puede desmarcar aquí.';
+    }
+    return _esAprovechamiento
+        ? 'Se maneja por metro; NO aparece en el inventario oficial, '
+              'solo en el módulo de Aprovechamientos.'
+        : 'Elemento normal del inventario oficial.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -145,7 +167,16 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
       Elemento? elementoCreado;
 
       if (_esNuevo) {
-        elementoCreado = await InventarioService.crearElemento(datos);
+        elementoCreado = widget.forzarAprovechamiento
+            ? await InventarioService.crearElementoAprovechamiento(
+                nombre: _nombre.text.trim(),
+                material: _material.text.trim().isEmpty
+                    ? null
+                    : _material.text.trim(),
+                sch: _sch.text.trim().isEmpty ? null : _sch.text.trim(),
+                unidad: _unidad,
+              )
+            : await InventarioService.crearElemento(datos);
         elementoId = elementoCreado.id;
 
         // Existencia inicial, si la indicó
@@ -301,33 +332,35 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
                 .toList(),
             onChanged: (v) => setState(() => _unidad = v ?? 'UND'),
           ),
-          const SizedBox(height: 14),
-          _campo(
-            _stockMin,
-            'Stock mínimo (para alertas)',
-            teclado: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _campo(
-                  _codigoBarras,
-                  'Código de barras',
-                  teclado: TextInputType.text,
-                  hint: 'Escanea o escribe el código',
+          if (_mostrarStockYCodigo) ...[
+            const SizedBox(height: 14),
+            _campo(
+              _stockMin,
+              'Stock mínimo (para alertas)',
+              teclado: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _campo(
+                    _codigoBarras,
+                    'Código de barras',
+                    teclado: TextInputType.text,
+                    hint: 'Escanea o escribe el código',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: IconButton.filledTonal(
-                  icon: const Icon(Icons.qr_code_scanner),
-                  tooltip: 'Escanear código',
-                  onPressed: _escanearCodigo,
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: IconButton.filledTonal(
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: 'Escanear código',
+                    onPressed: _escanearCodigo,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           if (!_esNuevo) ...[
             const Divider(height: 20),
             SwitchListTile(
@@ -347,23 +380,15 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Es de aprovechamiento'),
-              subtitle: Text(
-                widget.forzarAprovechamiento
-                    ? 'Fijo: se creó desde el módulo de Aprovechamientos, '
-                          'no se puede desmarcar aquí.'
-                    : (_esAprovechamiento
-                          ? 'Se maneja por metro; NO aparece en el inventario oficial, '
-                                'solo en el módulo de Aprovechamientos.'
-                          : 'Elemento normal del inventario oficial.'),
-              ),
+              subtitle: Text(_subtitleAprovechamiento),
               secondary: const Icon(Icons.content_cut),
               value: _esAprovechamiento,
-              onChanged: widget.forzarAprovechamiento
-                  ? null
-                  : (v) => setState(() => _esAprovechamiento = v),
+              onChanged: _flagAprovechamientoEditable
+                  ? (v) => setState(() => _esAprovechamiento = v)
+                  : null,
             ),
           ],
-          if (_esNuevo && !widget.forzarAprovechamiento) ...[
+          if (_mostrarSeriales) ...[
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -380,7 +405,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               onChanged: (v) => setState(() => _serializado = v),
             ),
           ],
-          if (_esNuevo && !_serializado && !widget.forzarAprovechamiento) ...[
+          if (_mostrarExistenciaInicial) ...[
             const Divider(height: 28),
             const Text(
               'Existencia inicial (opcional)',

@@ -1060,6 +1060,27 @@ class InventarioService {
     return Elemento.fromMap(res);
   }
 
+  /// Crea un elemento de Aprovechamientos con es_aprovechamiento=true
+  /// GARANTIZADO del lado del servidor (RPC dedicada, no depende de que el
+  /// cliente mande el flag correcto).
+  static Future<Elemento> crearElementoAprovechamiento({
+    required String nombre,
+    String? material,
+    String? sch,
+    required String unidad,
+  }) async {
+    final res = await supabase.rpc(
+      'crear_elemento_aprovechamiento',
+      params: {
+        'p_nombre': nombre,
+        'p_material': material,
+        'p_sch': sch,
+        'p_unidad': unidad,
+      },
+    );
+    return Elemento.fromMap(res as Map<String, dynamic>);
+  }
+
   // ---- Galería de imágenes del elemento (máximo 3) ----
   static const _baldeImagenes = 'elementos-img';
   static const maxImagenes = 3;
