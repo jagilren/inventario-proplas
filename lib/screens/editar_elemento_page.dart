@@ -8,15 +8,25 @@ import 'escaner_page.dart';
 /// Si [elemento] es null, es creación. Devuelve true si guardó.
 class EditarElementoPage extends StatefulWidget {
   final Elemento? elemento;
+
   /// En modo admin (Catálogo completo) se puede editar 'es_aprovechamiento'
   /// también al editar un elemento existente.
   final bool modoAdmin;
+
   /// Al crear desde el módulo de Aprovechamientos: 'es_aprovechamiento' queda
   /// fijo en true, sin posibilidad de cambiarlo (y sin seriales/existencia
   /// inicial, que no aplican ahí).
   final bool forzarAprovechamiento;
-  const EditarElementoPage({super.key, this.elemento, this.modoAdmin = false,
-      this.forzarAprovechamiento = false});
+
+  /// Se llama con el elemento recién creado (solo en creación exitosa).
+  final void Function(Elemento)? onCreado;
+  const EditarElementoPage({
+    super.key,
+    this.elemento,
+    this.modoAdmin = false,
+    this.forzarAprovechamiento = false,
+    this.onCreado,
+  });
   @override
   State<EditarElementoPage> createState() => _EditarElementoPageState();
 }
@@ -66,7 +76,10 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     if (_esNuevo) {
       InventarioService.bodegas().then((b) {
         if (mounted) {
-          setState(() { _bodegas = b; if (b.length == 1) _bodegaIni = b.first; });
+          setState(() {
+            _bodegas = b;
+            if (b.length == 1) _bodegaIni = b.first;
+          });
         }
       });
     }
@@ -75,7 +88,10 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   void _agregarSerialIni() {
     final s = _serialIniCtrl.text.trim();
     if (s.isEmpty || _serialesIni.contains(s)) return;
-    setState(() { _serialesIni.add(s); _serialIniCtrl.clear(); });
+    setState(() {
+      _serialesIni.add(s);
+      _serialIniCtrl.clear();
+    });
   }
 
   Future<void> _guardar() async {
@@ -106,34 +122,36 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     try {
       final datos = <String, dynamic>{
         'nombre': _nombre.text.trim(),
-        'material': _material.text.trim().isEmpty ? null : _material.text.trim(),
+        'material': _material.text.trim().isEmpty
+            ? null
+            : _material.text.trim(),
         'sch': _sch.text.trim().isEmpty ? null : _sch.text.trim(),
         'unidad': _unidad,
         'stock_minimo': num.tryParse(_stockMin.text.replaceAll(',', '.')) ?? 0,
-        'codigo_barras':
-            _codigoBarras.text.trim().isEmpty ? null : _codigoBarras.text.trim(),
+        'codigo_barras': _codigoBarras.text.trim().isEmpty
+            ? null
+            : _codigoBarras.text.trim(),
         'activo': _activo,
         // La bandera de seriales solo se fija al crear. En edición, para pasar
         // un elemento normal a serializado se usa "Convertir a serializado"
         // (que registra los seriales de las unidades ya existentes).
         if (_esNuevo) 'serializado': _serializado,
         // Marca de aprovechamiento: al crear, o al editar en modo admin.
-        if (_esNuevo || widget.modoAdmin) 'es_aprovechamiento': _esAprovechamiento,
+        if (_esNuevo || widget.modoAdmin)
+          'es_aprovechamiento': _esAprovechamiento,
       };
 
       String? elementoId = widget.elemento?.id;
+      Elemento? elementoCreado;
 
       if (_esNuevo) {
-        await InventarioService.crearElemento(datos);
-        // Al crear no conocemos el id: lo buscamos por su nombre (único).
-        final creados = await InventarioService.buscar(_nombre.text.trim());
-        final nuevo = creados.where((x) => x.nombre == _nombre.text.trim());
-        if (nuevo.isNotEmpty) elementoId = nuevo.first.id;
+        elementoCreado = await InventarioService.crearElemento(datos);
+        elementoId = elementoCreado.id;
 
         // Existencia inicial, si la indicó
         final cant = num.tryParse(_cantIni.text.replaceAll(',', '.'));
         final costo = num.tryParse(_costoIni.text.replaceAll(',', '.'));
-        if (!_serializado && cant != null && cant > 0 && elementoId != null) {
+        if (!_serializado && cant != null && cant > 0) {
           final bods = await InventarioService.bodegas();
           if (bods.isNotEmpty) {
             await InventarioService.registrarMovimiento(
@@ -149,20 +167,20 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
 
         // Unidades iniciales serializadas: se registran con su serial en la
         // bodega elegida (la existencia la deriva el trigger de series).
-        if (_serializado &&
-            _serialesIni.isNotEmpty &&
-            _bodegaIni != null &&
-            elementoId != null) {
+        if (_serializado && _serialesIni.isNotEmpty && _bodegaIni != null) {
           final costoS = num.tryParse(_costoIni.text.replaceAll(',', '.')) ?? 0;
           await InventarioService.serializarElemento(
-              elementoId,
-              _serialesIni
-                  .map((s) => {
-                        'bodega_id': _bodegaIni!.id,
-                        'serial': s,
-                        'costo': costoS,
-                      })
-                  .toList());
+            elementoId,
+            _serialesIni
+                .map(
+                  (s) => {
+                    'bodega_id': _bodegaIni!.id,
+                    'serial': s,
+                    'costo': costoS,
+                  },
+                )
+                .toList(),
+          );
         }
       } else {
         await InventarioService.actualizarElemento(widget.elemento!.id, datos);
@@ -174,6 +192,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
           await InventarioService.agregarImagen(elementoId, bytes);
         }
       }
+
+      if (elementoCreado != null) widget.onCreado?.call(elementoCreado);
 
       if (!mounted) return;
       _msg(_esNuevo ? '✓ Elemento creado' : '✓ Elemento actualizado');
@@ -188,8 +208,10 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   /// Escanea el código del fabricante y lo pone en el campo.
   /// Así se "aprende" el código de un artículo la primera vez que se usa.
   Future<void> _escanearCodigo() async {
-    final codigo = await Navigator.push<String>(context,
-        MaterialPageRoute(builder: (_) => const EscanerPage()));
+    final codigo = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const EscanerPage()),
+    );
     if (codigo == null || !mounted) return;
     setState(() => _codigoBarras.text = codigo);
     _msg('Código capturado: $codigo. Guarda para asociarlo.');
@@ -210,11 +232,14 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         icon: const Icon(Icons.warning_amber, color: Colors.orange, size: 40),
         title: const Text('Configuración inconsistente'),
         content: const Text(
-            'Un elemento no puede ser "Maneja seriales" y "Es de aprovechamiento" '
-            'al mismo tiempo. Deja activo solo uno de los dos y vuelve a guardar.'),
+          'Un elemento no puede ser "Maneja seriales" y "Es de aprovechamiento" '
+          'al mismo tiempo. Deja activo solo uno de los dos y vuelve a guardar.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-              child: const Text('Entendido')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
         ],
       ),
     );
@@ -224,7 +249,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   /// código de barras, que es único).
   Future<void> _copiarDeOtro() async {
     final sel = await showModalBottomSheet<Elemento>(
-      context: context, isScrollControlled: true,
+      context: context,
+      isScrollControlled: true,
       builder: (_) => const _BuscadorCopia(),
     );
     if (sel == null) return;
@@ -242,7 +268,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: Text(_esNuevo ? 'Nuevo elemento' : 'Editar elemento')),
+        title: Text(_esNuevo ? 'Nuevo elemento' : 'Editar elemento'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -266,21 +293,29 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
           DropdownButtonFormField<String>(
             initialValue: _unidad,
             decoration: const InputDecoration(
-                labelText: 'Unidad', border: OutlineInputBorder()),
+              labelText: 'Unidad',
+              border: OutlineInputBorder(),
+            ),
             items: _unidades
                 .map((u) => DropdownMenuItem(value: u, child: Text(u)))
                 .toList(),
             onChanged: (v) => setState(() => _unidad = v ?? 'UND'),
           ),
           const SizedBox(height: 14),
-          _campo(_stockMin, 'Stock mínimo (para alertas)',
-              teclado: const TextInputType.numberWithOptions(decimal: true)),
+          _campo(
+            _stockMin,
+            'Stock mínimo (para alertas)',
+            teclado: const TextInputType.numberWithOptions(decimal: true),
+          ),
           Row(
             children: [
               Expanded(
-                child: _campo(_codigoBarras, 'Código de barras',
-                    teclado: TextInputType.text,
-                    hint: 'Escanea o escribe el código'),
+                child: _campo(
+                  _codigoBarras,
+                  'Código de barras',
+                  teclado: TextInputType.text,
+                  hint: 'Escanea o escribe el código',
+                ),
               ),
               const SizedBox(width: 8),
               Padding(
@@ -298,9 +333,11 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Elemento activo'),
-              subtitle: Text(_activo
-                  ? 'Visible en búsquedas y movimientos'
-                  : 'Dado de baja: no aparece, pero conserva su kardex'),
+              subtitle: Text(
+                _activo
+                    ? 'Visible en búsquedas y movimientos'
+                    : 'Dado de baja: no aparece, pero conserva su kardex',
+              ),
               value: _activo,
               onChanged: (v) => setState(() => _activo = v),
             ),
@@ -310,13 +347,15 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Es de aprovechamiento'),
-              subtitle: Text(widget.forzarAprovechamiento
-                  ? 'Fijo: se creó desde el módulo de Aprovechamientos, '
-                      'no se puede desmarcar aquí.'
-                  : (_esAprovechamiento
-                      ? 'Se maneja por metro; NO aparece en el inventario oficial, '
-                          'solo en el módulo de Aprovechamientos.'
-                      : 'Elemento normal del inventario oficial.')),
+              subtitle: Text(
+                widget.forzarAprovechamiento
+                    ? 'Fijo: se creó desde el módulo de Aprovechamientos, '
+                          'no se puede desmarcar aquí.'
+                    : (_esAprovechamiento
+                          ? 'Se maneja por metro; NO aparece en el inventario oficial, '
+                                'solo en el módulo de Aprovechamientos.'
+                          : 'Elemento normal del inventario oficial.'),
+              ),
               secondary: const Icon(Icons.content_cut),
               value: _esAprovechamiento,
               onChanged: widget.forzarAprovechamiento
@@ -329,11 +368,13 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Maneja seriales'),
-              subtitle: Text(_serializado
-                  ? 'Cada unidad tiene un serial único (ej. Blowers). '
-                      'Registra abajo los seriales de las unidades iniciales '
-                      '(o déjalo en 0 y agrégalas luego en la Entrada).'
-                  : 'Inventario normal por cantidad.'),
+              subtitle: Text(
+                _serializado
+                    ? 'Cada unidad tiene un serial único (ej. Blowers). '
+                          'Registra abajo los seriales de las unidades iniciales '
+                          '(o déjalo en 0 y agrégalas luego en la Entrada).'
+                    : 'Inventario normal por cantidad.',
+              ),
               secondary: const Icon(Icons.tag),
               value: _serializado,
               onChanged: (v) => setState(() => _serializado = v),
@@ -341,37 +382,55 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
           ],
           if (_esNuevo && !_serializado && !widget.forzarAprovechamiento) ...[
             const Divider(height: 28),
-            const Text('Existencia inicial (opcional)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Existencia inicial (opcional)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            const Text('Si ya tienes unidades en bodega, regístralas aquí.',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Si ya tienes unidades en bodega, regístralas aquí.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 12),
-            _campo(_cantIni, 'Cantidad inicial',
-                teclado: const TextInputType.numberWithOptions(decimal: true)),
-            _campo(_costoIni, 'Costo unitario',
-                teclado: const TextInputType.numberWithOptions(decimal: true)),
+            _campo(
+              _cantIni,
+              'Cantidad inicial',
+              teclado: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            _campo(
+              _costoIni,
+              'Costo unitario',
+              teclado: const TextInputType.numberWithOptions(decimal: true),
+            ),
           ],
           if (_esNuevo && _serializado) ...[
             const Divider(height: 28),
-            const Text('Unidades iniciales (opcional)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Unidades iniciales (opcional)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            const Text('Si ya tienes unidades, elige la bodega y registra el '
-                'serial de cada una (uno por unidad).',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Si ya tienes unidades, elige la bodega y registra el '
+              'serial de cada una (uno por unidad).',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 12),
             DropdownButtonFormField<Bodega>(
               initialValue: _bodegaIni,
               isExpanded: true,
               decoration: const InputDecoration(
-                  labelText: 'Bodega de las unidades',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.warehouse)),
+                labelText: 'Bodega de las unidades',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.warehouse),
+              ),
               items: _bodegas
-                  .map((b) => DropdownMenuItem(
+                  .map(
+                    (b) => DropdownMenuItem(
                       value: b,
-                      child: Text(b.nombre, overflow: TextOverflow.ellipsis)))
+                      child: Text(b.nombre, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _bodegaIni = v),
             ),
@@ -383,44 +442,56 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
-                    labelText: 'Cantidad inicial',
-                    border: OutlineInputBorder()),
-              ),
-            ),
-            _campo(_costoIni, 'Costo por serial',
-                teclado: const TextInputType.numberWithOptions(decimal: true)),
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _serialIniCtrl,
-                  onSubmitted: (_) => _agregarSerialIni(),
-                  decoration: const InputDecoration(
-                      labelText: 'Serial', border: OutlineInputBorder()),
+                  labelText: 'Cantidad inicial',
+                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
+            ),
+            _campo(
+              _costoIni,
+              'Costo por serial',
+              teclado: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _serialIniCtrl,
+                    onSubmitted: (_) => _agregarSerialIni(),
+                    decoration: const InputDecoration(
+                      labelText: 'Serial',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
                   iconSize: 28,
                   icon: const Icon(Icons.add),
                   tooltip: 'Agregar serial',
-                  onPressed: _agregarSerialIni),
-            ]),
+                  onPressed: _agregarSerialIni,
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
-            Builder(builder: (_) {
-              final meta = int.tryParse(_cantIni.text.trim()) ?? 0;
-              final ok = meta > 0 && _serialesIni.length == meta;
-              return Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Seriales: ${_serialesIni.length}${meta > 0 ? ' / $meta' : ''}',
-                  style: TextStyle(
+            Builder(
+              builder: (_) {
+                final meta = int.tryParse(_cantIni.text.trim()) ?? 0;
+                final ok = meta > 0 && _serialesIni.length == meta;
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Seriales: ${_serialesIni.length}${meta > 0 ? ' / $meta' : ''}',
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: ok
                           ? Colors.green
-                          : (meta > 0 ? Colors.orange : Colors.grey)),
-                ),
-              );
-            }),
+                          : (meta > 0 ? Colors.orange : Colors.grey),
+                    ),
+                  ),
+                );
+              },
+            ),
             if (_serialesIni.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -428,10 +499,13 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
                   spacing: 6,
                   runSpacing: 4,
                   children: _serialesIni
-                      .map((s) => Chip(
+                      .map(
+                        (s) => Chip(
                           label: Text(s),
                           onDeleted: () =>
-                              setState(() => _serialesIni.remove(s))))
+                              setState(() => _serialesIni.remove(s)),
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -442,8 +516,11 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             child: FilledButton.icon(
               onPressed: _guardando ? null : _guardar,
               icon: _guardando
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.save),
               label: Text(_esNuevo ? 'Crear elemento' : 'Guardar cambios'),
             ),
@@ -453,8 +530,12 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     );
   }
 
-  Widget _campo(TextEditingController c, String label,
-      {TextInputType? teclado, String? hint}) {
+  Widget _campo(
+    TextEditingController c,
+    String label, {
+    TextInputType? teclado,
+    String? hint,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
@@ -495,34 +576,47 @@ class _BuscadorCopiaState extends State<_BuscadorCopia> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.75,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _ctrl, autofocus: true, onChanged: _buscar,
-              decoration: const InputDecoration(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                onChanged: _buscar,
+                decoration: const InputDecoration(
                   hintText: 'Buscar artículo a copiar…',
-                  prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _items.length,
-              itemBuilder: (_, i) {
-                final e = _items[i];
-                return ListTile(
-                  title: Text(e.nombre),
-                  subtitle: Text([e.material, e.sch, e.unidad]
-                      .where((x) => x != null && x.isNotEmpty).join(' · ')),
-                  onTap: () => Navigator.pop(context, e),
-                );
-              },
+            Expanded(
+              child: ListView.builder(
+                itemCount: _items.length,
+                itemBuilder: (_, i) {
+                  final e = _items[i];
+                  return ListTile(
+                    title: Text(e.nombre),
+                    subtitle: Text(
+                      [
+                        e.material,
+                        e.sch,
+                        e.unidad,
+                      ].where((x) => x != null && x.isNotEmpty).join(' · '),
+                    ),
+                    onTap: () => Navigator.pop(context, e),
+                  );
+                },
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }

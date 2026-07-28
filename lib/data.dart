@@ -24,19 +24,19 @@ class Elemento {
   final bool esAprovechamiento;
 
   Elemento.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        nombre = m['nombre'] as String,
-        material = m['material'] as String?,
-        sch = m['sch'] as String?,
-        unidad = (m['unidad'] as String?) ?? 'UND',
-        codigoBarras = m['codigo_barras'] as String?,
-        imagenUrl = m['imagen_url'] as String?,
-        existencia = (m['existencia'] ?? 0) as num,
-        costoPromedio = (m['costo_promedio'] ?? 0) as num,
-        stockMinimo = (m['stock_minimo'] ?? 0) as num,
-        activo = (m['activo'] ?? true) as bool,
-        serializado = (m['serializado'] ?? false) as bool,
-        esAprovechamiento = (m['es_aprovechamiento'] ?? false) as bool;
+    : id = m['id'] as String,
+      nombre = m['nombre'] as String,
+      material = m['material'] as String?,
+      sch = m['sch'] as String?,
+      unidad = (m['unidad'] as String?) ?? 'UND',
+      codigoBarras = m['codigo_barras'] as String?,
+      imagenUrl = m['imagen_url'] as String?,
+      existencia = (m['existencia'] ?? 0) as num,
+      costoPromedio = (m['costo_promedio'] ?? 0) as num,
+      stockMinimo = (m['stock_minimo'] ?? 0) as num,
+      activo = (m['activo'] ?? true) as bool,
+      serializado = (m['serializado'] ?? false) as bool,
+      esAprovechamiento = (m['es_aprovechamiento'] ?? false) as bool;
 
   bool get bajoMinimo => stockMinimo > 0 && existencia <= stockMinimo;
 }
@@ -50,12 +50,12 @@ class Serie {
   final String estado;
   final num costo;
   Serie.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        serial = m['serial'] as String,
-        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
-        bodegaId = m['bodega_id'] as String?,
-        estado = (m['estado'] as String?) ?? 'disponible',
-        costo = (m['costo'] ?? 0) as num;
+    : id = m['id'] as String,
+      serial = m['serial'] as String,
+      bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+      bodegaId = m['bodega_id'] as String?,
+      estado = (m['estado'] as String?) ?? 'disponible',
+      costo = (m['costo'] ?? 0) as num;
   bool get disponible => estado == 'disponible';
 }
 
@@ -68,11 +68,11 @@ class ImagenElem {
   final int orden;
 
   ImagenElem.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        url = m['url'] as String,
-        ruta = m['ruta'] as String,
-        principal = (m['principal'] ?? false) as bool,
-        orden = ((m['orden'] ?? 0) as num).toInt();
+    : id = m['id'] as String,
+      url = m['url'] as String,
+      ruta = m['ruta'] as String,
+      principal = (m['principal'] ?? false) as bool,
+      orden = ((m['orden'] ?? 0) as num).toInt();
 }
 
 class CentroCosto {
@@ -83,14 +83,17 @@ class CentroCosto {
 
   final bool activo;
   CentroCosto.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        codigo = m['codigo'] as String,
-        descripcion = m['descripcion'] as String?,
-        cliente = m['cliente'] as String?,
-        activo = (m['activo'] ?? true) as bool;
+    : id = m['id'] as String,
+      codigo = m['codigo'] as String,
+      descripcion = m['descripcion'] as String?,
+      cliente = m['cliente'] as String?,
+      activo = (m['activo'] ?? true) as bool;
 
-  String get etiqueta =>
-      [codigo, descripcion, cliente].where((e) => e != null && e.isNotEmpty).join(' · ');
+  String get etiqueta => [
+    codigo,
+    descripcion,
+    cliente,
+  ].where((e) => e != null && e.isNotEmpty).join(' · ');
 }
 
 class Bodega {
@@ -99,10 +102,10 @@ class Bodega {
   final String? codigo;
   final bool activo;
   Bodega.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        nombre = m['nombre'] as String,
-        codigo = m['codigo'] as String?,
-        activo = (m['activo'] ?? true) as bool;
+    : id = m['id'] as String,
+      nombre = m['nombre'] as String,
+      codigo = m['codigo'] as String?,
+      activo = (m['activo'] ?? true) as bool;
 }
 
 class ExistenciaBodega {
@@ -110,9 +113,10 @@ class ExistenciaBodega {
   final num existencia;
   final num costoPromedio;
   ExistenciaBodega.fromMap(Map<String, dynamic> m)
-      : bodega = ((m['bodegas'] as Map?)?['nombre'] ?? m['bodega'] ?? '—') as String,
-        existencia = (m['existencia'] ?? 0) as num,
-        costoPromedio = (m['costo_promedio'] ?? 0) as num;
+    : bodega =
+          ((m['bodegas'] as Map?)?['nombre'] ?? m['bodega'] ?? '—') as String,
+      existencia = (m['existencia'] ?? 0) as num,
+      costoPromedio = (m['costo_promedio'] ?? 0) as num;
 }
 
 class MovKardex {
@@ -129,16 +133,18 @@ class MovKardex {
   final String? bodega;
 
   MovKardex.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String?,
-        fecha = DateTime.parse(m['fecha'] as String),
-        tipo = m['tipo'] as String,
-        cantidad = (m['cantidad'] ?? 0) as num,
-        costoUnitario = m['costo_unitario'] as num?,
-        centroCosto = ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo']) as String?,
-        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
-        referencia = m['referencia'] as String?,
-        observacion = m['observacion'] as String?,
-        usuarioId = m['usuario_id'] as String?;
+    : id = m['id'] as String?,
+      fecha = DateTime.parse(m['fecha'] as String),
+      tipo = m['tipo'] as String,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      costoUnitario = m['costo_unitario'] as num?,
+      centroCosto =
+          ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo'])
+              as String?,
+      bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+      referencia = m['referencia'] as String?,
+      observacion = m['observacion'] as String?,
+      usuarioId = m['usuario_id'] as String?;
 
   bool get esAnulacion => (referencia ?? '').startsWith('ANULACION');
 }
@@ -154,17 +160,18 @@ class Adjunto {
   final int? tamano;
 
   Adjunto.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        movimientoId = m['movimiento_id'] as String,
-        nombre = m['nombre'] as String,
-        ruta = m['ruta'] as String,
-        url = m['url'] as String,
-        tipo = m['tipo'] as String?,
-        tamano = (m['tamano'] as num?)?.toInt();
+    : id = m['id'] as String,
+      movimientoId = m['movimiento_id'] as String,
+      nombre = m['nombre'] as String,
+      ruta = m['ruta'] as String,
+      url = m['url'] as String,
+      tipo = m['tipo'] as String?,
+      tamano = (m['tamano'] as num?)?.toInt();
 
-  bool get esPdf => (tipo ?? '').contains('pdf') ||
-      nombre.toLowerCase().endsWith('.pdf');
-  bool get esExcel => (tipo ?? '').contains('sheet') ||
+  bool get esPdf =>
+      (tipo ?? '').contains('pdf') || nombre.toLowerCase().endsWith('.pdf');
+  bool get esExcel =>
+      (tipo ?? '').contains('sheet') ||
       (tipo ?? '').contains('excel') ||
       nombre.toLowerCase().endsWith('.xlsx') ||
       nombre.toLowerCase().endsWith('.xls');
@@ -177,8 +184,8 @@ class Trozo {
   final String elementoId;
   final String elementoNombre;
   final String unidad;
-  final num longitud;        // longitud inicial
-  final num longitudActual;  // lo que queda disponible
+  final num longitud; // longitud inicial
+  final num longitudActual; // lo que queda disponible
   final String? bodega;
   final String? observacion;
   final String? creadoEmail;
@@ -186,19 +193,21 @@ class Trozo {
   final DateTime? consumidoEn;
 
   Trozo.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        elementoId = m['elemento_id'] as String,
-        elementoNombre = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
-        unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
-        longitud = (m['longitud'] ?? 0) as num,
-        longitudActual = (m['longitud_actual'] ?? 0) as num,
-        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
-        observacion = m['observacion'] as String?,
-        creadoEmail = m['creado_email'] as String?,
-        creadoEn = m['creado_en'] == null
-            ? null : DateTime.parse(m['creado_en'] as String),
-        consumidoEn = m['consumido_en'] == null
-            ? null : DateTime.parse(m['consumido_en'] as String);
+    : id = m['id'] as String,
+      elementoId = m['elemento_id'] as String,
+      elementoNombre = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
+      unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
+      longitud = (m['longitud'] ?? 0) as num,
+      longitudActual = (m['longitud_actual'] ?? 0) as num,
+      bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+      observacion = m['observacion'] as String?,
+      creadoEmail = m['creado_email'] as String?,
+      creadoEn = m['creado_en'] == null
+          ? null
+          : DateTime.parse(m['creado_en'] as String),
+      consumidoEn = m['consumido_en'] == null
+          ? null
+          : DateTime.parse(m['consumido_en'] as String);
 
   bool get disponible => longitudActual > 0;
   bool get parcial => longitudActual < longitud;
@@ -213,17 +222,18 @@ class SalidaTrozo {
   final DateTime fecha;
 
   SalidaTrozo.fromMap(Map<String, dynamic> m)
-      : cantidad = (m['cantidad'] ?? 0) as num,
-        centroCosto = _cc(m['centros_costo'] as Map?),
-        observacion = m['observacion'] as String?,
-        usuarioEmail = m['usuario_email'] as String?,
-        fecha = DateTime.parse(m['fecha'] as String);
+    : cantidad = (m['cantidad'] ?? 0) as num,
+      centroCosto = _cc(m['centros_costo'] as Map?),
+      observacion = m['observacion'] as String?,
+      usuarioEmail = m['usuario_email'] as String?,
+      fecha = DateTime.parse(m['fecha'] as String);
 
   static String? _cc(Map? c) {
     if (c == null) return null;
-    final parts = [c['codigo'], c['descripcion']]
-        .where((x) => x != null && (x as String).trim().isNotEmpty)
-        .cast<String>();
+    final parts = [
+      c['codigo'],
+      c['descripcion'],
+    ].where((x) => x != null && (x as String).trim().isNotEmpty).cast<String>();
     return parts.isEmpty ? null : parts.join(' · ');
   }
 }
@@ -233,13 +243,20 @@ class TrozoResumen {
   final String elementoId;
   final String nombre;
   final String unidad;
-  final int disponibles;   // # de trozos con saldo
-  final num totalDisp;     // suma de los saldos disponibles
-  final int totalTrozos;   // # de trozos en total (incluye consumidos)
-  final DateTime? ultimaCreacion; // creación del trozo más reciente del elemento
-  TrozoResumen(this.elementoId, this.nombre, this.unidad,
-      this.disponibles, this.totalDisp, this.totalTrozos,
-      [this.ultimaCreacion]);
+  final int disponibles; // # de trozos con saldo
+  final num totalDisp; // suma de los saldos disponibles
+  final int totalTrozos; // # de trozos en total (incluye consumidos)
+  final DateTime?
+  ultimaCreacion; // creación del trozo más reciente del elemento
+  TrozoResumen(
+    this.elementoId,
+    this.nombre,
+    this.unidad,
+    this.disponibles,
+    this.totalDisp,
+    this.totalTrozos, [
+    this.ultimaCreacion,
+  ]);
 }
 
 class Resumen {
@@ -248,10 +265,10 @@ class Resumen {
   final int bajoMinimo;
   final int totalMovimientos;
   Resumen.fromMap(Map<String, dynamic> m)
-      : totalElementos = ((m['total_elementos'] ?? 0) as num).toInt(),
-        valorizacionTotal = (m['valorizacion_total'] ?? 0) as num,
-        bajoMinimo = ((m['bajo_minimo'] ?? 0) as num).toInt(),
-        totalMovimientos = ((m['total_movimientos'] ?? 0) as num).toInt();
+    : totalElementos = ((m['total_elementos'] ?? 0) as num).toInt(),
+      valorizacionTotal = (m['valorizacion_total'] ?? 0) as num,
+      bajoMinimo = ((m['bajo_minimo'] ?? 0) as num).toInt(),
+      totalMovimientos = ((m['total_movimientos'] ?? 0) as num).toInt();
 }
 
 class MovReciente {
@@ -262,12 +279,12 @@ class MovReciente {
   final String unidad;
   final String? centroCosto;
   MovReciente.fromMap(Map<String, dynamic> m)
-      : fecha = DateTime.parse(m['fecha'] as String),
-        tipo = m['tipo'] as String,
-        cantidad = (m['cantidad'] ?? 0) as num,
-        elemento = m['elemento'] as String,
-        unidad = (m['unidad'] as String?) ?? 'UND',
-        centroCosto = m['centro_costo'] as String?;
+    : fecha = DateTime.parse(m['fecha'] as String),
+      tipo = m['tipo'] as String,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      elemento = m['elemento'] as String,
+      unidad = (m['unidad'] as String?) ?? 'UND',
+      centroCosto = m['centro_costo'] as String?;
 }
 
 /// Movimiento para las listas paginadas de Entradas/Salidas (parte inferior).
@@ -282,15 +299,15 @@ class MovLista {
   final String? centroCosto;
   final String? usuario;
   MovLista.fromMap(Map<String, dynamic> m)
-      : fecha = DateTime.parse(m['fecha'] as String),
-        tipo = (m['tipo'] as String?) ?? 'entrada',
-        referencia = m['referencia'] as String?,
-        cantidad = (m['cantidad'] ?? 0) as num,
-        elemento = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
-        unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
-        bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
-        centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
-        usuario = (m['profiles'] as Map?)?['email'] as String?;
+    : fecha = DateTime.parse(m['fecha'] as String),
+      tipo = (m['tipo'] as String?) ?? 'entrada',
+      referencia = m['referencia'] as String?,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      elemento = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
+      unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
+      bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
+      centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
+      usuario = (m['profiles'] as Map?)?['email'] as String?;
 }
 
 class Usuario {
@@ -299,10 +316,10 @@ class Usuario {
   final String? nombre;
   final Set<String> roles;
   Usuario.fromMap(Map<String, dynamic> m)
-      : id = m['id'] as String,
-        email = m['email'] as String?,
-        nombre = m['nombre'] as String?,
-        roles = ((m['roles'] as List?) ?? []).map((e) => e as String).toSet();
+    : id = m['id'] as String,
+      email = m['email'] as String?,
+      nombre = m['nombre'] as String?,
+      roles = ((m['roles'] as List?) ?? []).map((e) => e as String).toSet();
 }
 
 class Auditoria {
@@ -316,21 +333,22 @@ class Auditoria {
   final String? afectado; // nombre del elemento/bodega/usuario/etc. afectado
 
   Auditoria.fromMap(Map<String, dynamic> m)
-      : fecha = DateTime.parse(m['fecha'] as String),
-        tabla = m['tabla'] as String?,
-        accion = m['accion'] as String,
-        campo = m['campo'] as String?,
-        valorAnterior = m['valor_anterior'] as String?,
-        valorNuevo = m['valor_nuevo'] as String?,
-        usuarioEmail = m['usuario_email'] as String?,
-        afectado = m['afectado'] as String?;
+    : fecha = DateTime.parse(m['fecha'] as String),
+      tabla = m['tabla'] as String?,
+      accion = m['accion'] as String,
+      campo = m['campo'] as String?,
+      valorAnterior = m['valor_anterior'] as String?,
+      valorNuevo = m['valor_nuevo'] as String?,
+      usuarioEmail = m['usuario_email'] as String?,
+      afectado = m['afectado'] as String?;
 
   /// Descripción legible del cambio.
   String get descripcion => switch (accion) {
-        'INSERT' => 'Creado',
-        'DELETE' => 'Eliminado',
-        _ => '${campo ?? '—'}: ${valorAnterior ?? '(vacío)'} → ${valorNuevo ?? '(vacío)'}',
-      };
+    'INSERT' => 'Creado',
+    'DELETE' => 'Eliminado',
+    _ =>
+      '${campo ?? '—'}: ${valorAnterior ?? '(vacío)'} → ${valorNuevo ?? '(vacío)'}',
+  };
 }
 
 /// Catálogo de roles con etiqueta legible.
@@ -342,18 +360,24 @@ class Roles {
   static const exportar = 'exportar';
   static const remisiones = 'remisiones';
 
-  static const todos = [admin, coordinador, operarioMas, operarioMenos,
-    exportar, remisiones];
+  static const todos = [
+    admin,
+    coordinador,
+    operarioMas,
+    operarioMenos,
+    exportar,
+    remisiones,
+  ];
 
   static String etiqueta(String rol) => switch (rol) {
-        admin => 'Administrador',
-        coordinador => 'Coordinador',
-        operarioMas => 'Operario + (entradas)',
-        operarioMenos => 'Operario − (salidas)',
-        exportar => 'Exportar informes',
-        remisiones => 'Remisiones de devolución',
-        _ => rol,
-      };
+    admin => 'Administrador',
+    coordinador => 'Coordinador',
+    operarioMas => 'Operario + (entradas)',
+    operarioMenos => 'Operario − (salidas)',
+    exportar => 'Exportar informes',
+    remisiones => 'Remisiones de devolución',
+    _ => rol,
+  };
 }
 
 class InventarioService {
@@ -361,6 +385,7 @@ class InventarioService {
   /// Las vistas abiertas (existencias, dashboard, alertas) lo escuchan y se
   /// recargan solas, sin que el usuario tenga que refrescar a mano.
   static final ValueNotifier<int> revision = ValueNotifier(0);
+
   /// Búsqueda inteligente (palabras en cualquier orden, sin tildes).
   /// Si no hay señal, busca en el caché local con las mismas reglas.
   static Future<List<Elemento>> buscar(String q) async {
@@ -394,50 +419,79 @@ class InventarioService {
 
   /// Centros de costo. Sin señal, los toma del caché local.
   static Future<List<Bodega>> bodegas() async {
-    final res = await supabase.from('bodegas').select()
-        .eq('activo', true).order('nombre');
-    return (res as List).map((e) => Bodega.fromMap(e as Map<String, dynamic>)).toList();
+    final res = await supabase
+        .from('bodegas')
+        .select()
+        .eq('activo', true)
+        .order('nombre');
+    return (res as List)
+        .map((e) => Bodega.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
-  static Future<List<ExistenciaBodega>> existenciasPorBodega(String elementoId) async {
-    final res = await supabase.from('existencias')
+  static Future<List<ExistenciaBodega>> existenciasPorBodega(
+    String elementoId,
+  ) async {
+    final res = await supabase
+        .from('existencias')
         .select('existencia, costo_promedio, bodegas(nombre)')
         .eq('elemento_id', elementoId)
         .neq('existencia', 0)
         .order('existencia', ascending: false);
     return (res as List)
-        .map((e) => ExistenciaBodega.fromMap(e as Map<String, dynamic>)).toList();
+        .map((e) => ExistenciaBodega.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Traslado = salida del origen + entrada al destino, en una sola operación
   /// atómica sobre la tabla (evita el RPC). El costo viaja con el material.
   static Future<void> trasladar({
-    required String elementoId, required num cantidad,
-    required String origenId, required String destinoId, String? obs}) async {
-    final ex = await supabase.from('existencias')
+    required String elementoId,
+    required num cantidad,
+    required String origenId,
+    required String destinoId,
+    String? obs,
+  }) async {
+    final ex = await supabase
+        .from('existencias')
         .select('costo_promedio')
-        .eq('elemento_id', elementoId).eq('bodega_id', origenId).maybeSingle();
+        .eq('elemento_id', elementoId)
+        .eq('bodega_id', origenId)
+        .maybeSingle();
     final costo = (ex?['costo_promedio'] ?? 0) as num;
     final uid = supabase.auth.currentUser?.id;
     await supabase.from('movimientos').insert([
       {
-        'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': origenId,
-        'cantidad': cantidad, 'costo_unitario': null, 'referencia': 'TRASLADO',
-        'observacion': obs, 'usuario_id': uid,
+        'tipo': 'salida',
+        'elemento_id': elementoId,
+        'bodega_id': origenId,
+        'cantidad': cantidad,
+        'costo_unitario': null,
+        'referencia': 'TRASLADO',
+        'observacion': obs,
+        'usuario_id': uid,
         'fecha': DateTime.now().toUtc().toIso8601String(),
       },
       {
-        'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': destinoId,
-        'cantidad': cantidad, 'costo_unitario': costo, 'referencia': 'TRASLADO',
-        'observacion': obs, 'usuario_id': uid,
+        'tipo': 'entrada',
+        'elemento_id': elementoId,
+        'bodega_id': destinoId,
+        'cantidad': cantidad,
+        'costo_unitario': costo,
+        'referencia': 'TRASLADO',
+        'observacion': obs,
+        'usuario_id': uid,
         'fecha': DateTime.now().toUtc().toIso8601String(),
       },
     ]);
     revision.value++;
   }
 
-  static Future<void> guardarBodega({String? id, required String nombre,
-      String? codigo}) async {
+  static Future<void> guardarBodega({
+    String? id,
+    required String nombre,
+    String? codigo,
+  }) async {
     final row = {'nombre': nombre, 'codigo': codigo};
     if (id == null) {
       await supabase.from('bodegas').insert(row);
@@ -449,21 +503,31 @@ class InventarioService {
   /// Todas las bodegas (activas e inactivas), para la pantalla de gestión.
   static Future<List<Bodega>> bodegasTodas() async {
     final res = await supabase.from('bodegas').select().order('nombre');
-    return (res as List).map((e) => Bodega.fromMap(e as Map<String, dynamic>)).toList();
+    return (res as List)
+        .map((e) => Bodega.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<List<CentroCosto>> centrosTodos() async {
     final res = await supabase.from('centros_costo').select().order('codigo');
-    return (res as List).map((e) => CentroCosto.fromMap(e as Map<String, dynamic>)).toList();
+    return (res as List)
+        .map((e) => CentroCosto.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Baja lógica. No se permite si la bodega tiene inventario.
   static Future<void> eliminarBodega(String id) async {
-    final ex = await supabase.from('existencias')
-        .select('existencia').eq('bodega_id', id).neq('existencia', 0).limit(1);
+    final ex = await supabase
+        .from('existencias')
+        .select('existencia')
+        .eq('bodega_id', id)
+        .neq('existencia', 0)
+        .limit(1);
     if ((ex as List).isNotEmpty) {
-      throw Exception('No se puede desactivar: la bodega tiene inventario. '
-          'Traslada o consume el stock primero.');
+      throw Exception(
+        'No se puede desactivar: la bodega tiene inventario. '
+        'Traslada o consume el stock primero.',
+      );
     }
     await supabase.from('bodegas').update({'activo': false}).eq('id', id);
   }
@@ -535,8 +599,10 @@ class InventarioService {
     if (t.isEmpty) return todos;
     final palabras = t.split(RegExp(r'\s+'));
     return todos.where((e) {
-      final s = '${e.nombre} ${e.material ?? ''} ${e.sch ?? ''} '
-          '${e.codigoBarras ?? ''}'.toLowerCase();
+      final s =
+          '${e.nombre} ${e.material ?? ''} ${e.sch ?? ''} '
+                  '${e.codigoBarras ?? ''}'
+              .toLowerCase();
       return palabras.every((w) => s.contains(w));
     }).toList();
   }
@@ -544,14 +610,23 @@ class InventarioService {
   /// ¿El elemento tiene historial (movimientos, tramos o seriales)?
   /// Si lo tiene, no se puede borrar de verdad (solo desactivar).
   static Future<bool> elementoTieneHistorial(String id) async {
-    final m = await supabase.from('movimientos').select('id')
-        .eq('elemento_id', id).limit(1);
+    final m = await supabase
+        .from('movimientos')
+        .select('id')
+        .eq('elemento_id', id)
+        .limit(1);
     if ((m as List).isNotEmpty) return true;
-    final tr = await supabase.from('aprovechamiento_trozos').select('id')
-        .eq('elemento_id', id).limit(1);
+    final tr = await supabase
+        .from('aprovechamiento_trozos')
+        .select('id')
+        .eq('elemento_id', id)
+        .limit(1);
     if ((tr as List).isNotEmpty) return true;
-    final se = await supabase.from('series').select('id')
-        .eq('elemento_id', id).limit(1);
+    final se = await supabase
+        .from('series')
+        .select('id')
+        .eq('elemento_id', id)
+        .limit(1);
     return (se as List).isNotEmpty;
   }
 
@@ -577,13 +652,18 @@ class InventarioService {
   }
 
   static Future<List<MovKardex>> kardex(String elementoId) async {
-    final res = await supabase.from('movimientos')
-        .select('id, fecha, tipo, cantidad, costo_unitario, referencia, '
-            'observacion, usuario_id, bodegas(nombre), centros_costo(codigo)')
+    final res = await supabase
+        .from('movimientos')
+        .select(
+          'id, fecha, tipo, cantidad, costo_unitario, referencia, '
+          'observacion, usuario_id, bodegas(nombre), centros_costo(codigo)',
+        )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)
         .order('created_at', ascending: false);
-    return (res as List).map((e) => MovKardex.fromMap(e as Map<String, dynamic>)).toList();
+    return (res as List)
+        .map((e) => MovKardex.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Id del usuario autenticado (para saber si es autor de un movimiento).
@@ -592,8 +672,13 @@ class InventarioService {
   /// Edita SOLO la observación de un movimiento (el candado de la base impide
   /// cambiar cualquier otra cosa). Permiso: admin, coordinador o autor.
   static Future<void> editarObservacion(String movId, String? obs) async {
-    await supabase.from('movimientos')
-        .update({'observacion': (obs == null || obs.trim().isEmpty) ? null : obs.trim()})
+    await supabase
+        .from('movimientos')
+        .update({
+          'observacion': (obs == null || obs.trim().isEmpty)
+              ? null
+              : obs.trim(),
+        })
         .eq('id', movId);
     revision.value++;
   }
@@ -602,30 +687,46 @@ class InventarioService {
 
   /// Adjuntos de un movimiento (PDF/XLSX/imagen).
   static Future<List<Adjunto>> adjuntosMovimiento(String movId) async {
-    final res = await supabase.from('movimiento_adjuntos')
-        .select().eq('movimiento_id', movId).order('creado_en');
-    return (res as List).map((e) => Adjunto.fromMap(e as Map<String, dynamic>)).toList();
+    final res = await supabase
+        .from('movimiento_adjuntos')
+        .select()
+        .eq('movimiento_id', movId)
+        .order('creado_en');
+    return (res as List)
+        .map((e) => Adjunto.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Sube un archivo y lo asocia al movimiento. Devuelve el adjunto creado.
-  static Future<Adjunto> agregarAdjunto(String movId, String nombre,
-      Uint8List bytes, String tipo) async {
+  static Future<Adjunto> agregarAdjunto(
+    String movId,
+    String nombre,
+    Uint8List bytes,
+    String tipo,
+  ) async {
     final limpio = nombre.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final ruta = '$movId/${DateTime.now().millisecondsSinceEpoch}_$limpio';
-    await supabase.storage.from(_baldeAdjuntos).uploadBinary(
-          ruta, bytes,
+    await supabase.storage
+        .from(_baldeAdjuntos)
+        .uploadBinary(
+          ruta,
+          bytes,
           fileOptions: FileOptions(contentType: tipo, upsert: true),
         );
     final url = supabase.storage.from(_baldeAdjuntos).getPublicUrl(ruta);
-    final res = await supabase.from('movimiento_adjuntos').insert({
-      'movimiento_id': movId,
-      'nombre': nombre,
-      'ruta': ruta,
-      'url': url,
-      'tipo': tipo,
-      'tamano': bytes.length,
-      'subido_por': supabase.auth.currentUser?.id,
-    }).select().single();
+    final res = await supabase
+        .from('movimiento_adjuntos')
+        .insert({
+          'movimiento_id': movId,
+          'nombre': nombre,
+          'ruta': ruta,
+          'url': url,
+          'tipo': tipo,
+          'tamano': bytes.length,
+          'subido_por': supabase.auth.currentUser?.id,
+        })
+        .select()
+        .single();
     return Adjunto.fromMap(res);
   }
 
@@ -645,12 +746,14 @@ class InventarioService {
   static Future<List<TrozoResumen>> aprovechamientosResumen() async {
     final res = await supabase
         .from('aprovechamiento_trozos')
-        .select('elemento_id, longitud_actual, creado_en, elementos(nombre, unidad)');
+        .select(
+          'elemento_id, longitud_actual, creado_en, elementos(nombre, unidad)',
+        );
     final nombres = <String, String>{};
     final unidades = <String, String>{};
-    final disp = <String, int>{};       // # con saldo
-    final totalDisp = <String, num>{};  // suma de saldos
-    final total = <String, int>{};      // # de trozos en total
+    final disp = <String, int>{}; // # con saldo
+    final totalDisp = <String, num>{}; // suma de saldos
+    final total = <String, int>{}; // # de trozos en total
     final ultima = <String, DateTime>{}; // creación más reciente por elemento
     for (final e in (res as List)) {
       final m = e as Map<String, dynamic>;
@@ -670,8 +773,17 @@ class InventarioService {
       }
     }
     final out = total.keys
-        .map((id) => TrozoResumen(id, nombres[id] ?? '', unidades[id] ?? 'UND',
-            disp[id] ?? 0, totalDisp[id] ?? 0, total[id] ?? 0, ultima[id]))
+        .map(
+          (id) => TrozoResumen(
+            id,
+            nombres[id] ?? '',
+            unidades[id] ?? 'UND',
+            disp[id] ?? 0,
+            totalDisp[id] ?? 0,
+            total[id] ?? 0,
+            ultima[id],
+          ),
+        )
         .toList();
     // Primero los que tienen saldo, luego alfabético.
     out.sort((a, b) {
@@ -716,8 +828,10 @@ class InventarioService {
   }
 
   /// Trozos de un elemento (por defecto solo los que tienen saldo disponible).
-  static Future<List<Trozo>> trozosDeElemento(String elementoId,
-      {bool soloDisponibles = true}) async {
+  static Future<List<Trozo>> trozosDeElemento(
+    String elementoId, {
+    bool soloDisponibles = true,
+  }) async {
     var q = supabase
         .from('aprovechamiento_trozos')
         .select('*, elementos(nombre, unidad), bodegas(nombre)')
@@ -742,8 +856,9 @@ class InventarioService {
       'longitud': longitud,
       'longitud_actual': longitud, // al ingresar, el saldo disponible = total
       'bodega_id': bodegaId,
-      'observacion':
-          (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
+      'observacion': (observacion == null || observacion.trim().isEmpty)
+          ? null
+          : observacion.trim(),
       'creado_por': supabase.auth.currentUser?.id,
       'creado_email': supabase.auth.currentUser?.email,
     });
@@ -752,14 +867,19 @@ class InventarioService {
 
   /// Saca un sub-segmento de un trozo (salida parcial). El trigger descuenta
   /// del saldo y valida que no exceda lo disponible. Permiso: operario- o admin.
-  static Future<void> sacarDeTrozo(String trozoId,
-      {required num cantidad, String? centroCostoId, String? observacion}) async {
+  static Future<void> sacarDeTrozo(
+    String trozoId, {
+    required num cantidad,
+    String? centroCostoId,
+    String? observacion,
+  }) async {
     await supabase.from('aprovechamiento_salidas').insert({
       'trozo_id': trozoId,
       'cantidad': cantidad,
       'centro_costo_id': centroCostoId,
-      'observacion':
-          (observacion == null || observacion.trim().isEmpty) ? null : observacion.trim(),
+      'observacion': (observacion == null || observacion.trim().isEmpty)
+          ? null
+          : observacion.trim(),
       'usuario_id': supabase.auth.currentUser?.id,
       'usuario_email': supabase.auth.currentUser?.email,
     });
@@ -771,8 +891,10 @@ class InventarioService {
   static Future<List<SalidaTrozo>> salidasDeTrozo(String trozoId) async {
     final res = await supabase
         .from('aprovechamiento_salidas')
-        .select('cantidad, observacion, usuario_email, fecha, '
-            'centros_costo(codigo, descripcion)')
+        .select(
+          'cantidad, observacion, usuario_email, fecha, '
+          'centros_costo(codigo, descripcion)',
+        )
         .eq('trozo_id', trozoId)
         .order('fecha');
     return (res as List)
@@ -793,18 +915,29 @@ class InventarioService {
   }
 
   static Future<List<MovReciente>> ultimosMovimientos() async {
-    final res = await supabase.rpc('ultimos_movimientos', params: {'p_limit': 15});
-    return (res as List).map((e) => MovReciente.fromMap(e as Map<String, dynamic>)).toList();
+    final res = await supabase.rpc(
+      'ultimos_movimientos',
+      params: {'p_limit': 15},
+    );
+    return (res as List)
+        .map((e) => MovReciente.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Movimientos de un TIPO (entrada/salida) paginados, del más reciente al más
   /// antiguo. Excluye elementos de aprovechamiento. Para la lista "cargar más".
-  static Future<List<MovLista>> movimientosPorTipo(String tipo,
-      {int offset = 0, int limit = 10}) async {
-    final res = await supabase.from('movimientos')
-        .select('fecha, tipo, referencia, cantidad, '
-            'elementos!inner(nombre, unidad), '
-            'bodegas(nombre), centros_costo(codigo), profiles(email)')
+  static Future<List<MovLista>> movimientosPorTipo(
+    String tipo, {
+    int offset = 0,
+    int limit = 10,
+  }) async {
+    final res = await supabase
+        .from('movimientos')
+        .select(
+          'fecha, tipo, referencia, cantidad, '
+          'elementos!inner(nombre, unidad), '
+          'bodegas(nombre), centros_costo(codigo), profiles(email)',
+        )
         .eq('tipo', tipo)
         .eq('elementos.es_aprovechamiento', false)
         .order('fecha', ascending: false)
@@ -816,8 +949,10 @@ class InventarioService {
   }
 
   static Future<void> anularMovimiento(String movId, String? motivo) async {
-    await supabase.rpc('anular_movimiento',
-        params: {'p_mov': movId, 'p_motivo': motivo});
+    await supabase.rpc(
+      'anular_movimiento',
+      params: {'p_mov': movId, 'p_motivo': motivo},
+    );
     revision.value++;
   }
 
@@ -825,14 +960,19 @@ class InventarioService {
   static Future<Set<String>> misRoles() async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return {};
-    final res = await supabase.from('usuario_roles').select('rol').eq('usuario_id', uid);
+    final res = await supabase
+        .from('usuario_roles')
+        .select('rol')
+        .eq('usuario_id', uid);
     return (res as List).map((e) => e['rol'] as String).toSet();
   }
 
   // ---- Gestión de usuarios (solo admin) ----
   static Future<List<Usuario>> listarUsuarios() async {
     final res = await supabase.rpc('listar_usuarios');
-    return (res as List).map((e) => Usuario.fromMap(e as Map<String, dynamic>)).toList();
+    return (res as List)
+        .map((e) => Usuario.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Busca usuarios por correo o nombre (servidor, máx. 30). Para el selector
@@ -843,16 +983,24 @@ class InventarioService {
         ? base
         : base.or('email.ilike.%$q%,nombre.ilike.%$q%');
     final res = await filtrado.order('email').limit(30);
-    return (res as List).map((e) => Usuario.fromMap(e as Map<String, dynamic>)).toList();
+    return (res as List)
+        .map((e) => Usuario.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<void> asignarRol(String usuarioId, String rol) async {
-    await supabase.from('usuario_roles').insert({'usuario_id': usuarioId, 'rol': rol});
+    await supabase.from('usuario_roles').insert({
+      'usuario_id': usuarioId,
+      'rol': rol,
+    });
   }
 
   static Future<void> quitarRol(String usuarioId, String rol) async {
-    await supabase.from('usuario_roles').delete()
-        .eq('usuario_id', usuarioId).eq('rol', rol);
+    await supabase
+        .from('usuario_roles')
+        .delete()
+        .eq('usuario_id', usuarioId)
+        .eq('rol', rol);
   }
 
   static Future<void> crearUsuario({
@@ -861,9 +1009,15 @@ class InventarioService {
     String? nombre,
     required List<String> roles,
   }) async {
-    final res = await supabase.functions.invoke('crear-usuario', body: {
-      'email': email, 'password': password, 'nombre': nombre, 'roles': roles,
-    });
+    final res = await supabase.functions.invoke(
+      'crear-usuario',
+      body: {
+        'email': email,
+        'password': password,
+        'nombre': nombre,
+        'roles': roles,
+      },
+    );
     final data = res.data;
     if (data is Map && data['error'] != null) {
       throw Exception(data['error']);
@@ -871,9 +1025,17 @@ class InventarioService {
   }
 
   // ---- CRUD centros de costo (admin / coordinador) ----
-  static Future<void> guardarCentro({String? id, required String codigo,
-      String? descripcion, String? cliente}) async {
-    final row = {'codigo': codigo, 'descripcion': descripcion, 'cliente': cliente};
+  static Future<void> guardarCentro({
+    String? id,
+    required String codigo,
+    String? descripcion,
+    String? cliente,
+  }) async {
+    final row = {
+      'codigo': codigo,
+      'descripcion': descripcion,
+      'cliente': cliente,
+    };
     if (id == null) {
       await supabase.from('centros_costo').insert(row);
     } else {
@@ -881,13 +1043,21 @@ class InventarioService {
     }
   }
 
-  static Future<void> actualizarElemento(String id, Map<String, dynamic> cambios) async {
+  static Future<void> actualizarElemento(
+    String id,
+    Map<String, dynamic> cambios,
+  ) async {
     await supabase.from('elementos').update(cambios).eq('id', id);
   }
 
   /// Crea un elemento nuevo (admin o coordinador).
-  static Future<void> crearElemento(Map<String, dynamic> datos) async {
-    await supabase.from('elementos').insert(datos);
+  static Future<Elemento> crearElemento(Map<String, dynamic> datos) async {
+    final res = await supabase
+        .from('elementos')
+        .insert(datos)
+        .select()
+        .single();
+    return Elemento.fromMap(res);
   }
 
   // ---- Galería de imágenes del elemento (máximo 3) ----
@@ -896,8 +1066,10 @@ class InventarioService {
 
   /// Fotos de un elemento, la principal primero.
   static Future<List<ImagenElem>> imagenesElemento(String elementoId) async {
-    final res = await supabase
-        .rpc('imagenes_elemento', params: {'p_elemento': elementoId});
+    final res = await supabase.rpc(
+      'imagenes_elemento',
+      params: {'p_elemento': elementoId},
+    );
     return (res as List)
         .map((e) => ImagenElem.fromMap(e as Map<String, dynamic>))
         .toList();
@@ -907,10 +1079,15 @@ class InventarioService {
   /// Cada archivo va en su propia carpeta: {elemento_id}/{marca}.jpg
   static Future<void> agregarImagen(String elementoId, Uint8List bytes) async {
     final ruta = '$elementoId/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    await supabase.storage.from(_baldeImagenes).uploadBinary(
+    await supabase.storage
+        .from(_baldeImagenes)
+        .uploadBinary(
           ruta,
           bytes,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: true,
+          ),
         );
     final url = supabase.storage.from(_baldeImagenes).getPublicUrl(ruta);
     // El disparador de la base marca la principal y actualiza elementos.imagen_url
@@ -923,7 +1100,10 @@ class InventarioService {
     // Huella visual para reconocer el elemento por foto.
     final h = PHash.dhash(bytes);
     if (h != null) {
-      await supabase.from('elementos').update({'phash': h}).eq('id', elementoId);
+      await supabase
+          .from('elementos')
+          .update({'phash': h})
+          .eq('id', elementoId);
     }
   }
 
@@ -932,86 +1112,168 @@ class InventarioService {
   static Future<List<Elemento>> reconocerPorFoto(Uint8List bytes) async {
     final q = PHash.dhash(bytes);
     if (q == null) return [];
-    final res = await supabase.from('elementos')
-        .select('id,nombre,material,sch,unidad,codigo_barras,imagen_url,'
-            'existencia,costo_promedio,stock_minimo,phash')
+    final res = await supabase
+        .from('elementos')
+        .select(
+          'id,nombre,material,sch,unidad,codigo_barras,imagen_url,'
+          'existencia,costo_promedio,stock_minimo,phash',
+        )
         .eq('activo', true)
         .eq('es_aprovechamiento', false)
         .not('phash', 'is', null);
     final lista = (res as List)
-        .map((e) => (Elemento.fromMap(e as Map<String, dynamic>),
-            PHash.hamming(q, e['phash'] as String)))
+        .map(
+          (e) => (
+            Elemento.fromMap(e as Map<String, dynamic>),
+            PHash.hamming(q, e['phash'] as String),
+          ),
+        )
         .toList();
     lista.sort((a, b) => a.$2.compareTo(b.$2));
     return lista.take(8).map((e) => e.$1).toList();
   }
 
   // ---- Serializados (elementos con serial, ej. Blowers) ----
-  static Future<List<Serie>> seriesDisponibles(String elementoId, String bodegaId) async {
-    final res = await supabase.from('series')
+  static Future<List<Serie>> seriesDisponibles(
+    String elementoId,
+    String bodegaId,
+  ) async {
+    final res = await supabase
+        .from('series')
         .select('id, serial, bodega_id, estado, costo')
-        .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
-        .eq('estado', 'disponible').order('serial');
-    return (res as List).map((e) => Serie.fromMap(e as Map<String, dynamic>)).toList();
+        .eq('elemento_id', elementoId)
+        .eq('bodega_id', bodegaId)
+        .eq('estado', 'disponible')
+        .order('serial');
+    return (res as List)
+        .map((e) => Serie.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<List<Serie>> seriesDeElemento(String elementoId) async {
-    final res = await supabase.from('series')
+    final res = await supabase
+        .from('series')
         .select('id, serial, bodega_id, estado, costo, bodegas(nombre)')
-        .eq('elemento_id', elementoId).order('estado').order('serial');
-    return (res as List).map((e) => Serie.fromMap(e as Map<String, dynamic>)).toList();
+        .eq('elemento_id', elementoId)
+        .order('estado')
+        .order('serial');
+    return (res as List)
+        .map((e) => Serie.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Marca un elemento como serializado y carga los seriales de sus unidades
   /// actuales. items = [{bodega_id, serial, costo}].
   static Future<void> serializarElemento(
-      String elementoId, List<Map<String, dynamic>> items) async {
-    await supabase.rpc('serializar_elemento',
-        params: {'p_elemento': elementoId, 'p_items': items});
+    String elementoId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    await supabase.rpc(
+      'serializar_elemento',
+      params: {'p_elemento': elementoId, 'p_items': items},
+    );
     revision.value++;
   }
 
   /// Movimiento de un elemento serializado (por operaciones directas: el
   /// trigger de `series` mantiene las existencias).
   static Future<void> moverSerie({
-    required String tipo, required String elementoId, required String bodegaId,
-    required List<String> serials, num? costo, String? centroCostoId,
-    String? observacion, String? bodegaDestinoId}) async {
+    required String tipo,
+    required String elementoId,
+    required String bodegaId,
+    required List<String> serials,
+    num? costo,
+    String? centroCostoId,
+    String? observacion,
+    String? bodegaDestinoId,
+  }) async {
     final uid = supabase.auth.currentUser?.id;
     final n = serials.length;
     final ahora = DateTime.now().toUtc().toIso8601String();
     if (tipo == 'entrada') {
-      final mov = await supabase.from('movimientos').insert({
-        'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': bodegaId,
-        'cantidad': n, 'costo_unitario': costo ?? 0, 'observacion': observacion,
-        'usuario_id': uid, 'fecha': ahora,
-      }).select('id').single();
-      await supabase.from('series').insert(serials.map((s) => {
-        'elemento_id': elementoId, 'serial': s, 'bodega_id': bodegaId,
-        'costo': costo ?? 0, 'movimiento_ingreso': mov['id'],
-      }).toList());
+      final mov = await supabase
+          .from('movimientos')
+          .insert({
+            'tipo': 'entrada',
+            'elemento_id': elementoId,
+            'bodega_id': bodegaId,
+            'cantidad': n,
+            'costo_unitario': costo ?? 0,
+            'observacion': observacion,
+            'usuario_id': uid,
+            'fecha': ahora,
+          })
+          .select('id')
+          .single();
+      await supabase
+          .from('series')
+          .insert(
+            serials
+                .map(
+                  (s) => {
+                    'elemento_id': elementoId,
+                    'serial': s,
+                    'bodega_id': bodegaId,
+                    'costo': costo ?? 0,
+                    'movimiento_ingreso': mov['id'],
+                  },
+                )
+                .toList(),
+          );
     } else if (tipo == 'salida') {
-      final mov = await supabase.from('movimientos').insert({
-        'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': bodegaId,
-        'cantidad': n, 'centro_costo_id': centroCostoId, 'observacion': observacion,
-        'usuario_id': uid, 'fecha': ahora,
-      }).select('id').single();
-      await supabase.from('series')
+      final mov = await supabase
+          .from('movimientos')
+          .insert({
+            'tipo': 'salida',
+            'elemento_id': elementoId,
+            'bodega_id': bodegaId,
+            'cantidad': n,
+            'centro_costo_id': centroCostoId,
+            'observacion': observacion,
+            'usuario_id': uid,
+            'fecha': ahora,
+          })
+          .select('id')
+          .single();
+      await supabase
+          .from('series')
           .update({'estado': 'consumido', 'movimiento_salida': mov['id']})
-          .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
-          .eq('estado', 'disponible').inFilter('serial', serials);
+          .eq('elemento_id', elementoId)
+          .eq('bodega_id', bodegaId)
+          .eq('estado', 'disponible')
+          .inFilter('serial', serials);
     } else if (tipo == 'traslado') {
       await supabase.from('movimientos').insert([
-        {'tipo': 'salida', 'elemento_id': elementoId, 'bodega_id': bodegaId,
-         'cantidad': n, 'costo_unitario': null, 'referencia': 'TRASLADO',
-         'observacion': observacion, 'usuario_id': uid, 'fecha': ahora},
-        {'tipo': 'entrada', 'elemento_id': elementoId, 'bodega_id': bodegaDestinoId,
-         'cantidad': n, 'costo_unitario': costo ?? 0, 'referencia': 'TRASLADO',
-         'observacion': observacion, 'usuario_id': uid, 'fecha': ahora},
+        {
+          'tipo': 'salida',
+          'elemento_id': elementoId,
+          'bodega_id': bodegaId,
+          'cantidad': n,
+          'costo_unitario': null,
+          'referencia': 'TRASLADO',
+          'observacion': observacion,
+          'usuario_id': uid,
+          'fecha': ahora,
+        },
+        {
+          'tipo': 'entrada',
+          'elemento_id': elementoId,
+          'bodega_id': bodegaDestinoId,
+          'cantidad': n,
+          'costo_unitario': costo ?? 0,
+          'referencia': 'TRASLADO',
+          'observacion': observacion,
+          'usuario_id': uid,
+          'fecha': ahora,
+        },
       ]);
-      await supabase.from('series').update({'bodega_id': bodegaDestinoId})
-          .eq('elemento_id', elementoId).eq('bodega_id', bodegaId)
-          .eq('estado', 'disponible').inFilter('serial', serials);
+      await supabase
+          .from('series')
+          .update({'bodega_id': bodegaDestinoId})
+          .eq('elemento_id', elementoId)
+          .eq('bodega_id', bodegaId)
+          .eq('estado', 'disponible')
+          .inFilter('serial', serials);
     }
     revision.value++;
   }
@@ -1030,34 +1292,54 @@ class InventarioService {
   static Future<void> marcarPrincipal(String imagenId) async {
     await supabase
         .from('elemento_imagenes')
-        .update({'principal': true}).eq('id', imagenId);
+        .update({'principal': true})
+        .eq('id', imagenId);
   }
 
   // ---- Auditoría ----
   /// Historial de cambios de un registro concreto.
-  static Future<List<Auditoria>> historialRegistro(String tabla, String id) async {
-    final res = await supabase.rpc('historial_registro',
-        params: {'p_tabla': tabla, 'p_id': id});
-    return (res as List).map((e) => Auditoria.fromMap(e as Map<String, dynamic>)).toList();
+  static Future<List<Auditoria>> historialRegistro(
+    String tabla,
+    String id,
+  ) async {
+    final res = await supabase.rpc(
+      'historial_registro',
+      params: {'p_tabla': tabla, 'p_id': id},
+    );
+    return (res as List)
+        .map((e) => Auditoria.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Auditoría reciente global.
   static Future<List<Auditoria>> auditoriaReciente({int limite = 100}) async {
-    final res = await supabase.rpc('auditoria_reciente', params: {'p_limit': limite});
-    return (res as List).map((e) => Auditoria.fromMap(e as Map<String, dynamic>)).toList();
+    final res = await supabase.rpc(
+      'auditoria_reciente',
+      params: {'p_limit': limite},
+    );
+    return (res as List)
+        .map((e) => Auditoria.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Auditoría clasificada por categoría, con nombre del afectado, búsqueda y
   /// paginación. categoría: null/'recientes' | entradas | salidas | bodegas |
   /// centros | usuarios | aprovechamientos.
-  static Future<List<Auditoria>> auditoriaClasificada(String? categoria,
-      {String? q, int offset = 0, int limit = 10}) async {
-    final res = await supabase.rpc('auditoria_clasificada', params: {
-      'p_categoria': categoria,
-      'p_q': (q == null || q.trim().isEmpty) ? null : q.trim(),
-      'p_limit': limit,
-      'p_offset': offset,
-    });
+  static Future<List<Auditoria>> auditoriaClasificada(
+    String? categoria, {
+    String? q,
+    int offset = 0,
+    int limit = 10,
+  }) async {
+    final res = await supabase.rpc(
+      'auditoria_clasificada',
+      params: {
+        'p_categoria': categoria,
+        'p_q': (q == null || q.trim().isEmpty) ? null : q.trim(),
+        'p_limit': limit,
+        'p_offset': offset,
+      },
+    );
     return (res as List)
         .map((e) => Auditoria.fromMap(e as Map<String, dynamic>))
         .toList();
@@ -1086,7 +1368,8 @@ class InventarioService {
     final deviceId = await LocalStore.deviceId();
     // En web solo hay precisión de milisegundos: dos movimientos en el mismo
     // ms tendrían igual id y uno se perdería. Se añade un sufijo aleatorio.
-    final localId = '${DateTime.now().microsecondsSinceEpoch}-'
+    final localId =
+        '${DateTime.now().microsecondsSinceEpoch}-'
         '${Random().nextInt(0xFFFFFF).toRadixString(16)}';
 
     final fila = {
@@ -1124,15 +1407,19 @@ class InventarioService {
       if (tipo == 'salida') {
         final existLocal = await LocalStore.existenciaLocal(elementoId);
         if (existLocal != null && cantidad > existLocal) {
-          throw Exception('Existencia insuficiente: hay $existLocal y se '
-              'intenta sacar $cantidad');
+          throw Exception(
+            'Existencia insuficiente: hay $existLocal y se '
+            'intenta sacar $cantidad',
+          );
         }
       }
       // Guardar en la cola y ajustar el stock local para que el bodeguero
       // vea la existencia correcta mientras tanto.
       await LocalStore.encolar(fila);
       await LocalStore.ajustarExistenciaLocal(
-          elementoId, tipo == 'salida' ? -cantidad : cantidad);
+        elementoId,
+        tipo == 'salida' ? -cantidad : cantidad,
+      );
       SyncService.enLinea.value = false;
       await SyncService.refrescarPendientes();
       revision.value++;

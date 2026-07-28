@@ -222,13 +222,48 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   /// Crea un elemento NUEVO ya marcado como aprovechamiento (fijo, sin
   /// posibilidad de desmarcarlo desde aquí).
   Future<void> _nuevoElemento() async {
+    Elemento? creado;
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => const EditarElementoPage(forzarAprovechamiento: true),
+        builder: (_) => EditarElementoPage(
+          forzarAprovechamiento: true,
+          onCreado: (e) => creado = e,
+        ),
       ),
     );
-    if (ok == true) _cargar();
+    if (ok != true) return;
+    await _cargar();
+    // Un elemento sin tramos no aparece en ninguna lista (ambas se arman
+    // desde los tramos, no desde el catálogo): ofrecemos registrar el
+    // primero de una vez para que no "desaparezca".
+    if (creado != null && mounted) {
+      final registrar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: Icon(Icons.content_cut, color: Colors.amber.shade700),
+          title: const Text('Elemento creado'),
+          content: Text(
+            '"${creado!.nombre}" no aparecerá en las listas hasta que '
+            'tenga al menos un tramo. ¿Registramos el primero ahora?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Después'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Registrar tramo'),
+            ),
+          ],
+        ),
+      );
+      if (registrar == true && mounted)
+        await _ingresar(
+          TrozoResumen(creado!.id, creado!.nombre, creado!.unidad, 0, 0, 0),
+        );
+    }
   }
 
   @override
