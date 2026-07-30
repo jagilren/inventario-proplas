@@ -23,10 +23,21 @@ class ElementosPage extends StatefulWidget {
 
 class _ElementosPageState extends State<ElementosPage> {
   final _ctrl = TextEditingController();
-  List<Elemento> _items = [];
+  final List<Elemento> _items = [];
   bool _cargando = false;
   bool _puedeCrear = false;
   String? _error;
+
+  /// La lista se pide de a poco. El filtro sí se evalúa contra TODO el
+  /// catálogo en el servidor: el tamaño de página solo decide cuántas filas
+  /// viajan por vez, nunca cuántas se revisan.
+  static const _porPagina = 10;
+  int _offset = 0;
+  bool _hayMas = true;
+  bool _cargandoMas = false;
+
+  /// Total de coincidencias en el servidor (null si no hay señal).
+  int? _total;
 
   @override
   void initState() {
@@ -64,15 +75,57 @@ class _ElementosPageState extends State<ElementosPage> {
     super.dispose();
   }
 
+  /// Búsqueda nueva: vuelve a empezar por la primera página.
   Future<void> _buscar(String q) async {
-    setState(() { _cargando = true; _error = null; });
+    setState(() {
+      _cargando = true;
+      _error = null;
+      _items.clear();
+      _offset = 0;
+      _hayMas = true;
+      _total = null;
+    });
     try {
-      final r = await InventarioService.buscar(q);
-      if (mounted) setState(() => _items = r);
+      // Las dos consultas van a la vez: así el total no agrega otra espera.
+      final (primera, total) = await (
+        InventarioService.buscar(q, offset: 0, limit: _porPagina),
+        InventarioService.contarElementos(q),
+      ).wait;
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(primera);
+        _offset = primera.length;
+        _hayMas = primera.length == _porPagina;
+        _total = total;
+      });
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  /// Trae la siguiente página y la agrega al final de la lista.
+  Future<void> _cargarMas() async {
+    if (_cargandoMas || !_hayMas) return;
+    setState(() => _cargandoMas = true);
+    try {
+      final r = await InventarioService.buscar(
+        _ctrl.text,
+        offset: _offset,
+        limit: _porPagina,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(r);
+        _offset += r.length;
+        if (r.length < _porPagina) _hayMas = false;
+      });
+    } catch (_) {
+      // Sin red: la lista se queda como está, sin romper nada.
+      if (mounted) setState(() => _hayMas = false);
+    } finally {
+      if (mounted) setState(() => _cargandoMas = false);
     }
   }
 
@@ -164,9 +217,11 @@ class _ElementosPageState extends State<ElementosPage> {
                 ? const Center(child: Text('Sin resultados'))
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: _items.length,
+                    // La fila extra del final es el pie con "Cargar más".
+                    itemCount: _items.length + 1,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
+                      if (i == _items.length) return _pieDeLista();
                       final e = _items[i];
                       return ListTile(
                         // La existencia ya va en el subtítulo, así que este
@@ -214,6 +269,43 @@ class _ElementosPageState extends State<ElementosPage> {
                     },
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Pie de la lista: cuántos se ven de cuántos hay, y el botón para traer
+  /// la siguiente tanda. El total sale del servidor, así queda claro que
+  /// buscar sigue mirando el catálogo completo aunque se muestren de a 10.
+  Widget _pieDeLista() {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          Text(
+            _total == null
+                ? '${_items.length} artículos'
+                : 'Mostrando ${_items.length} de $_total',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          if (_cargandoMas)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(),
+            ),
+          if (_hayMas && !_cargandoMas)
+            TextButton.icon(
+              onPressed: _cargarMas,
+              icon: const Icon(Icons.expand_more, size: 18),
+              label: const Text('Cargar más'),
+            ),
+          if (!_hayMas)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('— No hay más —',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
         ],
       ),
     );

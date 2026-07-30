@@ -132,7 +132,13 @@ class SyncService {
 
   /// Búsqueda sobre el caché local (mismas reglas que el buscador del
   /// servidor: todas las palabras como fragmento, en cualquier orden).
-  static Future<List<Elemento>> buscarLocal(String q) async {
+  /// Pagina igual que el servidor para que "Cargar más" también sirva
+  /// cuando no hay señal.
+  static Future<List<Elemento>> buscarLocal(
+    String q, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
     final filas = await LocalStore.leerElementos();
     final palabras = _normalizar(q).split(RegExp(r'\s+'))
         .where((w) => w.isNotEmpty).toList();
@@ -143,7 +149,7 @@ class SyncService {
         e['nombre'], e['material'], e['sch'], e['codigo_barras'],
       ].where((x) => x != null).join(' '));
       return palabras.every(texto.contains);
-    }).take(100).map((e) => Elemento.fromMap(e)).toList();
+    }).skip(offset).take(limit).map((e) => Elemento.fromMap(e)).toList();
     return res;
   }
 

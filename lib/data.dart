@@ -388,15 +388,40 @@ class InventarioService {
 
   /// Búsqueda inteligente (palabras en cualquier orden, sin tildes).
   /// Si no hay señal, busca en el caché local con las mismas reglas.
-  static Future<List<Elemento>> buscar(String q) async {
+  ///
+  /// El filtro SIEMPRE se evalúa sobre el catálogo completo; [limit] y
+  /// [offset] solo deciden cuántas filas viajan en cada petición, para que
+  /// la pantalla pueda pedirlas de a poco. Los valores por defecto son los
+  /// de siempre (100 desde el inicio), así los buscadores emergentes de las
+  /// otras pantallas se comportan igual que antes.
+  static Future<List<Elemento>> buscar(
+    String q, {
+    int offset = 0,
+    int limit = 100,
+  }) async {
     try {
-      final res = await supabase.rpc('buscar_elementos', params: {'q': q});
+      final res = await supabase.rpc(
+        'buscar_elementos',
+        params: {'q': q, 'p_limit': limit, 'p_offset': offset},
+      );
       return (res as List)
           .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
           .toList();
     } catch (_) {
       SyncService.enLinea.value = false;
-      return SyncService.buscarLocal(q);
+      return SyncService.buscarLocal(q, offset: offset, limit: limit);
+    }
+  }
+
+  /// Cuántos artículos coinciden EN TOTAL con la búsqueda (sin paginar).
+  /// Sirve para mostrar "10 de 137" y saber si quedan páginas por traer.
+  /// Sin señal devuelve null: el caché local no sabe el total del servidor.
+  static Future<int?> contarElementos(String q) async {
+    try {
+      final res = await supabase.rpc('contar_elementos', params: {'q': q});
+      return (res as num).toInt();
+    } catch (_) {
+      return null;
     }
   }
 
