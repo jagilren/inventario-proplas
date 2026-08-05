@@ -14,6 +14,17 @@ import '../data.dart';
 
 /// Quita acentos, baja a minúsculas y deja solo letras/números separados por
 /// espacios. Es la forma en que se comparan los nombres.
+///
+/// Lo importante: **las medidas fraccionarias se convierten en UN solo
+/// número decimal** antes de partir el texto. Antes `1/2"` se partía en dos
+/// palabras (`1` y `2`) y `2-1/2"` en tres (`2`, `1`, `2`); como el parecido
+/// se calcula con CONJUNTOS de palabras, y un conjunto descarta repetidos,
+/// ambos quedaban como `{1,2}` — idénticos. Resultado: dos artículos de
+/// medidas distintas daban parecido perfecto. Ahora quedan `0.5` y `2.5`,
+/// que son palabras distintas.
+///
+/// De paso, esto hace que `1 1/2"` y `1-1/2"` (que en el catálogo se
+/// escriben de las dos formas) se reconozcan como la misma medida.
 String normalizarTexto(String s) {
   s = s.toLowerCase().trim();
   const from = 'áàäâãéèëêíìïîóòöôõúùüûñ';
@@ -23,8 +34,70 @@ String normalizarTexto(String s) {
     final i = from.indexOf(ch);
     sb.write(i >= 0 ? to[i] : ch);
   }
-  return sb.toString().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  var t = sb.toString();
+
+  // Número mixto: "2-1/2", "1 1/2", "1- 1/2"  ->  2.5 / 1.5
+  // Solo si la parte entera es chica (<= 12, o sea una medida en pulgadas):
+  // así "SCH 40 1/2" NO se lee como "cuarenta y medio" — el 40 es el
+  // schedule y el 1/2 es el diámetro, son dos números distintos.
+  t = t.replaceAllMapped(RegExp(r'(\d+)[\s\-]+(\d+)\s*/\s*(\d+)'), (m) {
+    final ent = int.parse(m[1]!);
+    final num = int.parse(m[2]!);
+    final den = int.parse(m[3]!);
+    if (den == 0) return m[0]!;
+    if (ent <= 12 && num < den) return _limpiarDecimal(ent + num / den);
+    return '$ent ${_limpiarDecimal(num / den)}';
+  });
+
+  // Fracción suelta: "1/2" -> 0.5 ; "3/4" -> 0.75
+  t = t.replaceAllMapped(RegExp(r'(\d+)\s*/\s*(\d+)'), (m) {
+    final den = int.parse(m[2]!);
+    if (den == 0) return m[0]!;
+    return _limpiarDecimal(int.parse(m[1]!) / den);
+  });
+
+  // Se conserva el punto para no volver a partir los decimales.
+  return t.replaceAll(RegExp(r'[^a-z0-9.]+'), ' ').replaceAll(
+      RegExp(r'\s+'), ' ').trim();
 }
+
+/// 2.50 -> "2.5" ; 3.0 -> "3" (para que la misma medida escrita de dos
+/// formas dé exactamente el mismo texto).
+String _limpiarDecimal(double v) {
+  var s = v.toStringAsFixed(4);
+  s = s.replaceFirst(RegExp(r'0+$'), '');
+  s = s.replaceFirst(RegExp(r'\.$'), '');
+  return s;
+}
+
+/// Los números que aparecen en un texto ya normalizado.
+/// En un catálogo industrial los números SON la identidad del artículo
+/// (diámetro, schedule, aleación), no un detalle decorativo.
+Set<String> firmaNumerica(String normalizado) => RegExp(r'\d+(?:\.\d+)?')
+    .allMatches(normalizado)
+    .map((m) => m[0]!)
+    .toSet();
+
+/// ¿Las medidas de los dos textos pueden ser del mismo artículo?
+///
+/// Regla: uno de los conjuntos debe estar contenido en el otro. Así
+/// "TUBO PVC 2 PULG" {2} sigue emparejando con "Tubo PVC SCH 40 2\"" {2,40}
+/// (el usuario escribió menos datos, no datos distintos), pero
+/// "Tapon SCH 40 1/2\"" {40, 0.5} NO empareja con "Tapon SCH 40 2-1/2\""
+/// {40, 2.5}, porque cada uno trae una medida que el otro contradice.
+///
+/// Si alguno no tiene números, no se opina: manda el parecido del texto.
+bool medidasCompatibles(String normA, String normB) {
+  final fa = firmaNumerica(normA);
+  final fb = firmaNumerica(normB);
+  if (fa.isEmpty || fb.isEmpty) return true;
+  return fa.containsAll(fb) || fb.containsAll(fa);
+}
+
+/// Tope para cuando las medidas no cuadran. Queda por debajo del umbral de
+/// emparejamiento (0.55), así que la línea sale "sin emparejar" y el usuario
+/// elige a mano — que es lo correcto cuando el archivo no dice qué medida es.
+const double _topeMedidaDistinta = 0.45;
 
 int _lev(String a, String b) {
   if (a == b) return 0;
@@ -47,9 +120,15 @@ int _lev(String a, String b) {
 }
 
 /// Qué tan parecidos son dos textos ya normalizados (0..1).
+///
+/// Si las medidas se contradicen, el parecido se topa por debajo del umbral
+/// de emparejamiento: por muy iguales que sean las palabras, un tapón de
+/// 1/2" no es un tapón de 2-1/2". Sin este tope, Levenshtein los rescataba
+/// igual (cambian 3 letras de 33) y quedaban emparejados con confianza alta.
 double similitud(String a, String b) {
   if (a == b) return 1;
   if (a.isEmpty || b.isEmpty) return 0;
+  if (!medidasCompatibles(a, b)) return _topeMedidaDistinta;
   final ta = a.split(' ').where((t) => t.isNotEmpty).toSet();
   final tb = b.split(' ').where((t) => t.isNotEmpty).toSet();
   double jac = 0;
