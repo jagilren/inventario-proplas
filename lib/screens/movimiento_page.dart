@@ -5,6 +5,7 @@ import 'escaner_page.dart';
 import 'devoluciones_page.dart';
 import 'remision_devolucion_page.dart';
 import 'salida_masiva_page.dart';
+import 'entrada_masiva_page.dart';
 import '../util/adjuntos_gate.dart';
 import '../util/tiempo.dart';
 import '../util/movimiento_fmt.dart';
@@ -287,6 +288,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
                         } else if (v == 'cargar') {
                           Navigator.push(context, MaterialPageRoute(
                               builder: (_) => const DevolucionesPage()));
+                        } else if (v == 'compra') {
+                          Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => const EntradaMasivaPage()))
+                            .then((_) {
+                              if (mounted) _cargarRecientes(reset: true);
+                            });
                         }
                       },
                       itemBuilder: (_) => const [
@@ -299,6 +306,17 @@ class _MovimientoPageState extends State<MovimientoPage> {
                             child: ListTile(
                                 leading: Icon(Icons.upload_file),
                                 title: Text('Cargar devolución (Excel/CSV)'),
+                                dense: true)),
+                        PopupMenuDivider(),
+                        // La compra es otra cosa: entra al precio pagado, no
+                        // al costo promedio, y por eso recalcula el promedio.
+                        PopupMenuItem(value: 'compra',
+                            child: ListTile(
+                                leading: Icon(Icons.local_shipping,
+                                    color: Color(0xFF00695C)),
+                                title: Text('Compra masiva a proveedor'),
+                                subtitle: Text('Excel con costo unitario',
+                                    style: TextStyle(fontSize: 11)),
                                 dense: true)),
                       ],
                     ),

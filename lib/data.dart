@@ -1296,6 +1296,35 @@ class InventarioService {
     return (res as num).toInt();
   }
 
+  /// Registra una COMPRA completa (muchas líneas) en una sola transacción.
+  /// items = [{elemento_id, cantidad, costo}]. El costo es UNITARIO y SIN
+  /// IVA: es el que recalcula el promedio ponderado móvil del artículo.
+  /// Devuelve cuántas líneas registró.
+  static Future<int> registrarEntradaMasiva({
+    required String bodegaId,
+    required List<Map<String, dynamic>> items,
+    String? referencia,
+    String? observacion,
+  }) async {
+    final deviceId = await LocalStore.deviceId();
+    final lote =
+        'entmas-${DateTime.now().microsecondsSinceEpoch}-'
+        '${Random().nextInt(0xFFFFFF).toRadixString(16)}';
+    final res = await supabase.rpc(
+      'registrar_entrada_masiva',
+      params: {
+        'p_bodega': bodegaId,
+        'p_device': deviceId,
+        'p_lote': lote,
+        'p_items': items,
+        'p_referencia': referencia,
+        'p_observacion': observacion,
+      },
+    );
+    revision.value++;
+    return (res as num).toInt();
+  }
+
   /// Marca un elemento como serializado y carga los seriales de sus unidades
   /// actuales. items = [{bodega_id, serial, costo}].
   static Future<void> serializarElemento(
