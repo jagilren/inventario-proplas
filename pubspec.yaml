@@ -67,9 +67,21 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon.png"
+  # Fuente única de todos los íconos. Es la versión CUADRADA de assets/icon.png
+  # (el original es 1920x1777 y los íconos de app deben ser cuadrados, o salen
+  # deformados). icon_cuadrado.png se genera poniendo el original centrado en
+  # un lienzo cuadrado transparente: no se deforma nada.
+  image_path: "assets/icon_cuadrado.png"
   adaptive_icon_background: "#00695C"
-  adaptive_icon_foreground: "assets/icon.png"
+  adaptive_icon_foreground: "assets/icon_cuadrado.png"
+  # La WEB también se genera desde aquí: antes web/favicon.png y web/icons/*
+  # eran archivos sueltos que había que actualizar a mano, y por eso se
+  # quedaban atrás cuando se cambiaba el logo.
+  web:
+    generate: true
+    image_path: "assets/icon_cuadrado.png"
+    background_color: "#00695C"
+    theme_color: "#00695C"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
