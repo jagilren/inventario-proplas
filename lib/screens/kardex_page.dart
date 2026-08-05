@@ -100,7 +100,8 @@ class _KardexPageState extends State<KardexPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Anular movimiento'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${m.tipo.toUpperCase()} · ${m.cantidad} ${_elemento.unidad}\n'
+          Text('${m.tipo.toUpperCase()} · '
+              '${cantidadConSigno(m.tipo, m.cantidad)} ${_elemento.unidad}\n'
               'Se creará una reversa que compensa este movimiento. '
               'Nada se borra; queda en el historial.'),
           const SizedBox(height: 12),
@@ -151,7 +152,8 @@ class _KardexPageState extends State<KardexPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${m.tipo.toUpperCase()} · ${m.cantidad} ${_elemento.unidad}',
+              Text('${m.tipo.toUpperCase()} · '
+                  '${cantidadConSigno(m.tipo, m.cantidad)} ${_elemento.unidad}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 4),
               Text([
@@ -374,7 +376,7 @@ class _KardexPageState extends State<KardexPage> {
                         ),
                       ),
                       title: Text('${m.tipo.toUpperCase()} · '
-                          '${m.cantidad} ${e.unidad}'),
+                          '${cantidadConSigno(m.tipo, m.cantidad)} ${e.unidad}'),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

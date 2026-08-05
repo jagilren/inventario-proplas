@@ -6,6 +6,7 @@ import 'package:file_saver/file_saver.dart';
 import 'ajustes.dart';
 import 'data.dart';
 import 'util/tiempo.dart';
+import 'util/movimiento_fmt.dart';
 
 class Reportes {
   /// Convierte las filas a CSV y dispara la descarga (web y móvil).
@@ -120,7 +121,10 @@ class Reportes {
         r['tipo'],
         (r['elementos'] as Map?)?['nombre'] ?? '',
         (r['bodegas'] as Map?)?['nombre'] ?? '',
-        r['cantidad'] ?? '',
+        // Con signo: lo que sale resta, lo que entra suma. Así la columna
+        // se puede sumar directo en Excel y da el movimiento neto.
+        cantidadConSigno(
+            (r['tipo'] ?? '') as String, (r['cantidad'] ?? 0) as num),
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',
         (r['profiles'] as Map?)?['email'] ?? '',
@@ -267,7 +271,8 @@ class Reportes {
         'SALIDA',
         el?['nombre'] ?? '',
         el?['unidad'] ?? '',
-        (m['cantidad'] ?? 0) as num,
+        // Negativo: en este informe conviven entradas y salidas de tramos.
+        -((m['cantidad'] ?? 0) as num).abs(),
         ccLabel,
         (tr?['bodegas'] as Map?)?['nombre'] ?? '',
         m['usuario_email'] ?? '',
