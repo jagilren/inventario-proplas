@@ -4,9 +4,11 @@ import '../data.dart';
 import 'escaner_page.dart';
 import 'devoluciones_page.dart';
 import 'remision_devolucion_page.dart';
+import 'salida_masiva_page.dart';
 import '../util/adjuntos_gate.dart';
 import '../util/tiempo.dart';
 import '../util/movimiento_fmt.dart';
+import '../widgets/selector_recargable.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -43,6 +45,33 @@ class _MovimientoPageState extends State<MovimientoPage> {
   int _offset = 0;
   bool _hayMas = true;
   bool _cargandoMas = false;
+
+  bool _recargandoCentros = false;
+  bool _recargandoBodegas = false;
+
+  /// Vuelve a pedir los centros de costo: sirve cuando alguien crea uno
+  /// mientras esta pantalla ya estaba abierta.
+  Future<void> _recargarCentros() async {
+    setState(() => _recargandoCentros = true);
+    final nueva = await recargarCatalogo(
+        context, InventarioService.centrosCosto, _centros.length);
+    if (!mounted) return;
+    setState(() {
+      if (nueva != null) _centros = nueva;
+      _recargandoCentros = false;
+    });
+  }
+
+  Future<void> _recargarBodegas() async {
+    setState(() => _recargandoBodegas = true);
+    final nueva = await recargarCatalogo(
+        context, InventarioService.bodegas, _bodegas.length);
+    if (!mounted) return;
+    setState(() {
+      if (nueva != null) _bodegas = nueva;
+      _recargandoBodegas = false;
+    });
+  }
 
   Future<void> _cargarDisponibles() async {
     if (_serial && _esSalida && _elemento != null && _bodega != null) {
@@ -232,9 +261,21 @@ class _MovimientoPageState extends State<MovimientoPage> {
               leading: Icon(_esSalida ? Icons.upload : Icons.download),
               title: Text(_esSalida ? 'Registrar SALIDA' : 'Registrar ENTRADA',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              // Acceso discreto a utilidades de Devoluciones, solo en Entrada.
+              // Simétrico al de Devoluciones: en SALIDA, acceso a la carga
+              // masiva desde un archivo de Excel.
               trailing: _esSalida
-                  ? null
+                  ? IconButton(
+                      icon: const Icon(Icons.playlist_add_check,
+                          color: Color(0xFFE65100)),
+                      tooltip: 'Salida masiva desde Excel',
+                      onPressed: () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SalidaMasivaPage()));
+                        if (mounted) _cargarRecientes(reset: true);
+                      },
+                    )
                   : PopupMenuButton<String>(
                       icon: const Icon(Icons.assignment_return,
                           color: Color(0xFF1565C0)),
@@ -288,19 +329,14 @@ class _MovimientoPageState extends State<MovimientoPage> {
             ),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<Bodega>(
-            initialValue: _bodega,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Bodega',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.warehouse),
-            ),
-            items: _bodegas
-                .map((b) => DropdownMenuItem(
-                    value: b,
-                    child: Text(b.nombre, overflow: TextOverflow.ellipsis)))
-                .toList(),
+          SelectorRecargable<Bodega>(
+            etiqueta: 'Bodega',
+            icono: Icons.warehouse,
+            valor: _bodega,
+            opciones: _bodegas,
+            textoDe: (b) => b.nombre,
+            recargando: _recargandoBodegas,
+            onRecargar: _recargarBodegas,
             onChanged: (v) { setState(() => _bodega = v); _cargarDisponibles(); },
           ),
           const SizedBox(height: 8),
@@ -362,18 +398,13 @@ class _MovimientoPageState extends State<MovimientoPage> {
               ),
             ),
           if (_esSalida)
-            DropdownButtonFormField<CentroCosto>(
-              initialValue: _cc,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Centro de costo destino',
-                border: OutlineInputBorder(),
-              ),
-              items: _centros
-                  .map((c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c.etiqueta, overflow: TextOverflow.ellipsis)))
-                  .toList(),
+            SelectorRecargable<CentroCosto>(
+              etiqueta: 'Centro de costo destino',
+              valor: _cc,
+              opciones: _centros,
+              textoDe: (c) => c.etiqueta,
+              recargando: _recargandoCentros,
+              onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _cc = v),
             ),
           const SizedBox(height: 8),

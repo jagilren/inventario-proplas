@@ -53,8 +53,85 @@
 
   <title>Inventario PROPLAS</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Pantalla de carga: se ve AL INSTANTE (es HTML plano) mientras se
+       descargan y arrancan los ~4 MB de main.dart.js. Sin esto el usuario
+       se queda mirando una página en blanco, sin saber si la app está
+       cargando o si se colgó. -->
+  <style>
+    #carga {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px;
+      background: #00695C; color: #fff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity .35s ease;
+    }
+    #carga.oculto { opacity: 0; pointer-events: none; }
+    #carga img { width: 84px; height: 84px; border-radius: 18px; }
+    #carga .titulo { font-size: 19px; font-weight: 600; letter-spacing: .2px; }
+    #carga .paso { font-size: 13.5px; opacity: .85; min-height: 20px;
+                   text-align: center; padding: 0 24px; max-width: 340px; }
+    /* Barra indeterminada: no sabemos el porcentaje real, pero el
+       movimiento constante comunica que el proceso sigue vivo. */
+    #carga .barra {
+      width: 190px; height: 4px; border-radius: 4px;
+      background: rgba(255,255,255,.25); overflow: hidden;
+    }
+    #carga .barra span {
+      display: block; width: 40%; height: 100%; border-radius: 4px;
+      background: #fff; animation: corre 1.15s ease-in-out infinite;
+    }
+    @keyframes corre {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #carga .barra span { animation: none; width: 100%; opacity: .6; }
+    }
+  </style>
 </head>
 <body>
+  <div id="carga">
+    <img src="icons/Icon-192.png" alt="">
+    <div class="titulo">Inventario PROPLAS</div>
+    <div class="barra"><span></span></div>
+    <div class="paso" id="carga-paso">Cargando la aplicación…</div>
+  </div>
+
+  <script>
+    (function () {
+      var paso = document.getElementById('carga-paso');
+      var t0 = Date.now();
+      // Mensajes escalonados: si algo va mal, el usuario se entera en vez de
+      // quedarse esperando frente a un texto congelado.
+      var avisos = [
+        [ 6000, 'Descargando… la primera vez tarda un poco más.' ],
+        [ 14000, 'Sigue cargando. Si tu conexión es lenta, puede demorar.' ],
+        [ 28000, 'Está tardando más de lo normal. Revisa tu conexión a internet.' ],
+      ];
+      var timers = avisos.map(function (a) {
+        return setTimeout(function () { if (paso) paso.textContent = a[1]; }, a[0]);
+      });
+
+      function quitar() {
+        timers.forEach(clearTimeout);
+        var c = document.getElementById('carga');
+        if (!c) return;
+        c.classList.add('oculto');
+        setTimeout(function () { if (c.parentNode) c.parentNode.removeChild(c); }, 400);
+        console.log('App lista en ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
+      }
+
+      // Flutter avisa cuando pinta el primer cuadro: ahí ya hay algo que ver.
+      window.addEventListener('flutter-first-frame', quitar);
+      // Red de seguridad: si por lo que sea no llega ese evento, no dejar la
+      // pantalla de carga tapando la app para siempre.
+      setTimeout(quitar, 60000);
+    })();
+  </script>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

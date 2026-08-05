@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
@@ -36,8 +37,19 @@ class _ElementosPageState extends State<ElementosPage> {
   bool _hayMas = true;
   bool _cargandoMas = false;
 
-  /// Total de coincidencias en el servidor (null si no hay señal).
+  /// Total de coincidencias en el servidor (null mientras llega o sin señal).
   int? _total;
+
+  /// Espera a que el usuario termine de escribir antes de consultar. Sin
+  /// esto, cada tecla disparaba una búsqueda: escribir "valvula" eran 7
+  /// viajes al servidor (14 contando el total). Con la espera son 2.
+  static const _esperaTecleo = Duration(milliseconds: 350);
+  Timer? _debounce;
+
+  /// Cada búsqueda lleva número. Si llega la respuesta de una anterior
+  /// (porque se demoró más que la siguiente), se descarta: así la lista
+  /// nunca muestra el resultado de algo que el usuario ya dejó de escribir.
+  int _seq = 0;
 
   @override
   void initState() {
@@ -69,14 +81,28 @@ class _ElementosPageState extends State<ElementosPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     InventarioService.revision.removeListener(_onCambioInventario);
     ElementosPage.limpiarBusqueda.removeListener(_limpiarBusqueda);
     _ctrl.dispose();
     super.dispose();
   }
 
+  /// Lo que dispara el campo de texto: espera a que el usuario deje de
+  /// escribir. La barra de progreso se enciende de una, para que se note
+  /// que la app sí reaccionó a la tecla.
+  void _alEscribir(String q) {
+    _debounce?.cancel();
+    setState(() => _cargando = true);
+    _debounce = Timer(_esperaTecleo, () => _buscar(q));
+  }
+
   /// Búsqueda nueva: vuelve a empezar por la primera página.
+  /// Se llama directo (sin espera) cuando el disparo no es del teclado:
+  /// al abrir la pantalla, al limpiar el buscador o tras editar un elemento.
   Future<void> _buscar(String q) async {
+    _debounce?.cancel();
+    final mio = ++_seq;
     setState(() {
       _cargando = true;
       _error = null;
@@ -85,23 +111,27 @@ class _ElementosPageState extends State<ElementosPage> {
       _hayMas = true;
       _total = null;
     });
+
+    // El total viaja aparte y NO frena la lista: apenas llegan los 10
+    // primeros se pintan, y el contador se completa cuando esté listo.
+    InventarioService.contarElementos(q).then((t) {
+      if (mounted && mio == _seq) setState(() => _total = t);
+    });
+
     try {
-      // Las dos consultas van a la vez: así el total no agrega otra espera.
-      final (primera, total) = await (
-        InventarioService.buscar(q, offset: 0, limit: _porPagina),
-        InventarioService.contarElementos(q),
-      ).wait;
-      if (!mounted) return;
+      final primera =
+          await InventarioService.buscar(q, offset: 0, limit: _porPagina);
+      // Llegó tarde: el usuario ya va en otra búsqueda. Se descarta.
+      if (!mounted || mio != _seq) return;
       setState(() {
         _items.addAll(primera);
         _offset = primera.length;
         _hayMas = primera.length == _porPagina;
-        _total = total;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted && mio == _seq) setState(() => _error = '$e');
     } finally {
-      if (mounted) setState(() => _cargando = false);
+      if (mounted && mio == _seq) setState(() => _cargando = false);
     }
   }
 
@@ -173,7 +203,7 @@ class _ElementosPageState extends State<ElementosPage> {
             padding: const EdgeInsets.all(12),
             child: TextField(
               controller: _ctrl,
-              onChanged: _buscar,
+              onChanged: _alEscribir,
               decoration: InputDecoration(
                 hintText: 'Buscar elemento (palabras en cualquier orden)…',
                 prefixIcon: const Icon(Icons.search),
@@ -284,8 +314,10 @@ class _ElementosPageState extends State<ElementosPage> {
       child: Column(
         children: [
           Text(
+            // El total llega un instante después que la lista; mientras
+            // tanto se muestra solo lo que ya se ve, sin números falsos.
             _total == null
-                ? '${_items.length} artículos'
+                ? 'Mostrando ${_items.length}'
                 : 'Mostrando ${_items.length} de $_total',
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),

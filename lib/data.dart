@@ -94,6 +94,36 @@ class CentroCosto {
     descripcion,
     cliente,
   ].where((e) => e != null && e.isNotEmpty).join(' · ');
+
+  // Igualdad por id: al recargar el catálogo llegan objetos nuevos, y sin
+  // esto el valor ya elegido en un desplegable no coincidiría con ningún
+  // ítem de la lista nueva (DropdownButtonFormField exige que coincida con
+  // exactamente uno, o revienta).
+  @override
+  bool operator ==(Object other) => other is CentroCosto && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// Resultado de revisar una línea de salida masiva contra la existencia.
+class ValidacionSalida {
+  final String elementoId;
+  final String nombre;
+  final String unidad;
+  final num pedido;
+  final num disponible;
+  final bool alcanza;
+
+  ValidacionSalida.fromMap(Map<String, dynamic> m)
+    : elementoId = m['elemento_id'] as String,
+      nombre = (m['nombre'] ?? '') as String,
+      unidad = (m['unidad'] ?? 'UND') as String,
+      pedido = (m['pedido'] ?? 0) as num,
+      disponible = (m['disponible'] ?? 0) as num,
+      alcanza = (m['alcanza'] ?? false) as bool;
+
+  num get faltante => pedido - disponible;
 }
 
 class Bodega {
@@ -106,6 +136,14 @@ class Bodega {
       nombre = m['nombre'] as String,
       codigo = m['codigo'] as String?,
       activo = (m['activo'] ?? true) as bool;
+
+  // Igualdad por id, por el mismo motivo que en CentroCosto: sin esto, al
+  // recargar el catálogo se rompe el desplegable que ya tenía selección.
+  @override
+  bool operator ==(Object other) => other is Bodega && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class ExistenciaBodega {
@@ -1206,6 +1244,56 @@ class InventarioService {
     return (res as List)
         .map((e) => Serie.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ---- Salida masiva (una lista de Excel hacia un centro de costo) ----
+
+  /// Revisa, SIN registrar nada, qué líneas alcanzan y cuáles no.
+  /// Agrupa por elemento: si el archivo trae el mismo artículo en dos líneas,
+  /// lo que se compara contra la existencia es la SUMA.
+  static Future<List<ValidacionSalida>> validarSalidaMasiva({
+    required String bodegaId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final res = await supabase.rpc(
+      'validar_salida_masiva',
+      params: {'p_bodega': bodegaId, 'p_items': items},
+    );
+    return (res as List)
+        .map((e) => ValidacionSalida.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Registra TODAS las salidas en una sola transacción del servidor.
+  /// O entran todas, o no entra ninguna: nunca queda una salida a medias.
+  /// Devuelve cuántas líneas registró.
+  static Future<int> registrarSalidaMasiva({
+    required String bodegaId,
+    String? centroCostoId,
+    required List<Map<String, dynamic>> items,
+    String? observacion,
+  }) async {
+    final deviceId = await LocalStore.deviceId();
+    // El lote identifica esta carga. Si el usuario pulsa dos veces, la
+    // segunda choca contra la llave (device_id, local_id) y se deshace
+    // entera, en vez de duplicar movimientos.
+    final lote =
+        'salmas-${DateTime.now().microsecondsSinceEpoch}-'
+        '${Random().nextInt(0xFFFFFF).toRadixString(16)}';
+    final res = await supabase.rpc(
+      'registrar_salida_masiva',
+      params: {
+        'p_bodega': bodegaId,
+        'p_centro_costo': centroCostoId,
+        'p_device': deviceId,
+        'p_lote': lote,
+        'p_items': items,
+        'p_referencia': 'SALIDA MASIVA',
+        'p_observacion': observacion,
+      },
+    );
+    revision.value++;
+    return (res as num).toInt();
   }
 
   /// Marca un elemento como serializado y carga los seriales de sus unidades

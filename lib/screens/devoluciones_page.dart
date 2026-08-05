@@ -8,6 +8,8 @@ import 'package:excel/excel.dart';
 import 'package:csv/csv.dart';
 import '../data.dart';
 import '../util/picker.dart';
+import '../util/plantilla_import.dart';
+import '../widgets/selector_recargable.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -42,6 +44,32 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   bool _leyendo = false;
   bool _cargando = false;
   String? _archivo;
+  bool _recargandoBodegas = false;
+  bool _recargandoCentros = false;
+
+  /// Vuelven a pedir el catálogo al servidor: sirve cuando alguien crea una
+  /// bodega o un centro de costo mientras esta pantalla ya estaba abierta.
+  Future<void> _recargarBodegas() async {
+    setState(() => _recargandoBodegas = true);
+    final nueva = await recargarCatalogo(
+        context, InventarioService.bodegas, _bodegas.length);
+    if (!mounted) return;
+    setState(() {
+      if (nueva != null) _bodegas = nueva;
+      _recargandoBodegas = false;
+    });
+  }
+
+  Future<void> _recargarCentros() async {
+    setState(() => _recargandoCentros = true);
+    final nueva = await recargarCatalogo(
+        context, InventarioService.centrosCosto, _centros.length);
+    if (!mounted) return;
+    setState(() {
+      if (nueva != null) _centros = nueva;
+      _recargandoCentros = false;
+    });
+  }
 
   @override
   void initState() {
@@ -461,32 +489,27 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: DropdownButtonFormField<Bodega>(
-              initialValue: _bodega,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Bodega física donde entran las devoluciones',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.warehouse),
-              ),
-              items: _bodegas.map((b) => DropdownMenuItem(value: b,
-                  child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
+            child: SelectorRecargable<Bodega>(
+              etiqueta: 'Bodega física donde entran las devoluciones',
+              icono: Icons.warehouse,
+              valor: _bodega,
+              opciones: _bodegas,
+              textoDe: (b) => b.nombre,
+              recargando: _recargandoBodegas,
+              onRecargar: _recargarBodegas,
               onChanged: (v) => setState(() => _bodega = v),
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: DropdownButtonFormField<CentroCosto>(
-              initialValue: _centroOrigen,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Centro de costo de origen (de dónde vuelve)',
-                helperText: 'Queda en la observación: "código ➜ bodega"',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.account_tree),
-              ),
-              items: _centros.map((c) => DropdownMenuItem(value: c,
-                  child: Text(c.etiqueta, overflow: TextOverflow.ellipsis))).toList(),
+            child: SelectorRecargable<CentroCosto>(
+              etiqueta: 'Centro de costo de origen (de dónde vuelve)',
+              icono: Icons.account_tree,
+              valor: _centroOrigen,
+              opciones: _centros,
+              textoDe: (c) => c.etiqueta,
+              recargando: _recargandoCentros,
+              onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _centroOrigen = v),
             ),
           ),
@@ -501,6 +524,23 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                       ? 'Elegir Excel/CSV'
                       : _archivo!, overflow: TextOverflow.ellipsis),
                 ),
+              ),
+              const SizedBox(width: 4),
+              // Plantilla de ejemplo y ayuda del formato, a la mano ANTES de
+              // equivocarse (antes esto solo salía si el archivo fallaba).
+              TextButton.icon(
+                onPressed: () => descargarPlantillaImport(context,
+                    nombreArchivo: 'plantilla_devoluciones'),
+                icon: const Icon(Icons.download, size: 18),
+                label: const Text('Plantilla'),
+              ),
+              IconButton(
+                onPressed: () => mostrarAyudaFormato(context),
+                icon: const Icon(Icons.info_outline),
+                tooltip: 'Cómo armar el archivo',
+                // Área táctil cómoda en móvil sin robarle ancho a la fila.
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               ),
             ]),
           ),

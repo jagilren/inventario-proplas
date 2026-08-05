@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
+import '../widgets/selector_recargable.dart';
 
 /// Traslado de stock de una bodega a otra (admin / coordinador).
 class TrasladosPage extends StatefulWidget {
@@ -33,6 +34,21 @@ class _TrasladosPageState extends State<TrasladosPage> {
     super.initState();
     InventarioService.bodegas().then((b) {
       if (mounted) setState(() => _bodegas = b);
+    });
+  }
+
+  bool _recargandoBodegas = false;
+
+  /// Vuelve a pedir las bodegas: sirve cuando alguien crea una mientras
+  /// esta pantalla ya estaba abierta.
+  Future<void> _recargarBodegas() async {
+    setState(() => _recargandoBodegas = true);
+    final nueva = await recargarCatalogo(
+        context, InventarioService.bodegas, _bodegas.length);
+    if (!mounted) return;
+    setState(() {
+      if (nueva != null) _bodegas = nueva;
+      _recargandoBodegas = false;
     });
   }
 
@@ -145,25 +161,25 @@ class _TrasladosPageState extends State<TrasladosPage> {
                     .toList()),
               ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<Bodega>(
-              initialValue: _origen,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Desde (origen)', border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.logout)),
-              items: _bodegas.map((b) => DropdownMenuItem(value: b,
-                  child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
+            SelectorRecargable<Bodega>(
+              etiqueta: 'Desde (origen)',
+              icono: Icons.logout,
+              valor: _origen,
+              opciones: _bodegas,
+              textoDe: (b) => b.nombre,
+              recargando: _recargandoBodegas,
+              onRecargar: _recargarBodegas,
               onChanged: (v) { setState(() => _origen = v); _cargarDispon(); },
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<Bodega>(
-              initialValue: _destino,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Hacia (destino)', border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.login)),
-              items: _bodegas.map((b) => DropdownMenuItem(value: b,
-                  child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
+            SelectorRecargable<Bodega>(
+              etiqueta: 'Hacia (destino)',
+              icono: Icons.login,
+              valor: _destino,
+              opciones: _bodegas,
+              textoDe: (b) => b.nombre,
+              recargando: _recargandoBodegas,
+              onRecargar: _recargarBodegas,
               onChanged: (v) => setState(() => _destino = v),
             ),
             const SizedBox(height: 10),
