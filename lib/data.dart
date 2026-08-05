@@ -107,8 +107,23 @@ class CentroCosto {
 }
 
 /// Resultado de revisar una línea de salida masiva contra la existencia.
+/// Una bodega donde sí hay saldo de un artículo.
+class BodegaConSaldo {
+  final String bodegaId;
+  final String bodega;
+  final num existencia;
+  BodegaConSaldo.fromMap(Map<String, dynamic> m)
+    : bodegaId = m['bodega_id'] as String,
+      bodega = (m['bodega'] ?? '') as String,
+      existencia = (m['existencia'] ?? 0) as num;
+}
+
 class ValidacionSalida {
   final String elementoId;
+
+  /// De qué bodega sale ESTA línea (puede no ser la general de la pantalla).
+  final String? bodegaId;
+  final String? bodega;
   final String nombre;
   final String unidad;
   final num pedido;
@@ -123,6 +138,8 @@ class ValidacionSalida {
 
   ValidacionSalida.fromMap(Map<String, dynamic> m)
     : elementoId = m['elemento_id'] as String,
+      bodegaId = m['bodega_id'] as String?,
+      bodega = m['bodega'] as String?,
       nombre = (m['nombre'] ?? '') as String,
       unidad = (m['unidad'] ?? 'UND') as String,
       pedido = (m['pedido'] ?? 0) as num,
@@ -1263,6 +1280,22 @@ class InventarioService {
   /// Revisa, SIN registrar nada, qué líneas alcanzan y cuáles no.
   /// Agrupa por elemento: si el archivo trae el mismo artículo en dos líneas,
   /// lo que se compara contra la existencia es la SUMA.
+  /// Bodegas donde SÍ hay saldo de un artículo (para ofrecer despacharlo
+  /// desde otra sin tener que hacer un traslado).
+  static Future<List<BodegaConSaldo>> bodegasConSaldo(
+    String elementoId, {
+    String? excluir,
+  }) async {
+    final res = await supabase.rpc(
+      'bodegas_con_saldo',
+      params: {'p_elemento': elementoId, 'p_excluir': excluir},
+    );
+    return (res as List)
+        .map((e) => BodegaConSaldo.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Cada item puede traer 'bodega_id' propio; si no, se usa [bodegaId].
   static Future<List<ValidacionSalida>> validarSalidaMasiva({
     required String bodegaId,
     required List<Map<String, dynamic>> items,

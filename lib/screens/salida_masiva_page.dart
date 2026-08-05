@@ -17,6 +17,13 @@ class _FilaSal {
   num cantidad; // editable antes de cargar
   Elemento? match; // con qué elemento del catálogo se emparejó
   double score; // qué tan seguro es el emparejamiento (0..1)
+
+  /// Excepción: esta línea sale de OTRA bodega, no de la general.
+  /// Sirve cuando el saldo está en otra bodega: en vez de abandonar la
+  /// pantalla para hacer un traslado (perdiendo el trabajo), se despacha
+  /// desde donde de verdad está el material.
+  Bodega? bodegaPropia;
+
   _FilaSal(this.textoOriginal, this.cantidad, {this.match, this.score = 0});
 }
 
@@ -53,8 +60,15 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   /// Antes esta revisión solo ocurría al pulsar "Despachar": el usuario veía
   /// 40 líneas en verde, se confiaba, y solo al final le decían que dos no
   /// alcanzaban. Ahora el problema se ve junto a la línea, de una.
+  /// Clave: "elementoId|bodegaId", porque una misma línea puede salir de
+  /// una bodega distinta a la general.
   Map<String, ValidacionSalida> _saldos = {};
   bool _revisandoSaldos = false;
+
+  /// De qué bodega sale realmente una línea.
+  Bodega? _bodegaDe(_FilaSal f) => f.bodegaPropia ?? _bodega;
+  String _clave(String elementoId, String? bodegaId) =>
+      '$elementoId|${bodegaId ?? ''}';
 
   @override
   void initState() {
@@ -220,6 +234,59 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
     }
   }
 
+  /// Ofrece despachar ESTA línea desde otra bodega, sin salir de la pantalla
+  /// y sin hacer un traslado: si el material está allá, de allá sale. Así no
+  /// se pierden los emparejamientos ya hechos.
+  Future<void> _cambiarBodegaDeLinea(_FilaSal f) async {
+    if (f.match == null) return;
+    final opciones = await InventarioService.bodegasConSaldo(f.match!.id);
+    if (!mounted) return;
+    if (opciones.isEmpty) {
+      return _msg('No hay saldo de este artículo en ninguna bodega');
+    }
+    final volverAGeneral = Bodega.fromMap(const {
+      'id': '__general__',
+      'nombre': '',
+      'activo': true,
+    });
+    final sel = await showDialog<Bodega>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('¿Desde qué bodega sale?\n${f.match!.nombre}',
+            style: const TextStyle(fontSize: 15)),
+        children: [
+          for (final o in opciones)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(
+                  ctx, _bodegas.where((x) => x.id == o.bodegaId).firstOrNull),
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.warehouse),
+                title: Text(o.bodega),
+                subtitle: Text('${_qty.format(o.existencia)} disponibles'),
+                trailing: _bodegaDe(f)?.id == o.bodegaId
+                    ? const Icon(Icons.check, color: Colors.green)
+                    : null,
+              ),
+            ),
+          if (f.bodegaPropia != null)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, volverAGeneral),
+              child: const ListTile(
+                dense: true,
+                leading: Icon(Icons.undo),
+                title: Text('Volver a la bodega general'),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (sel == null || !mounted) return; // cerró el diálogo: no cambia nada
+    setState(() =>
+        f.bodegaPropia = sel.id == '__general__' ? null : sel);
+    await _revisarSaldos();
+  }
+
   Future<void> _corregir(_FilaSal fila) async {
     final sel = await showModalBottomSheet<Elemento>(
       context: context,
@@ -263,11 +330,16 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
         bodegaId: _bodega!.id,
         items: [
           for (final f in validas)
-            {'elemento_id': f.match!.id, 'cantidad': f.cantidad}
+            {
+              'elemento_id': f.match!.id,
+              'cantidad': f.cantidad,
+              if (f.bodegaPropia != null) 'bodega_id': f.bodegaPropia!.id,
+            }
         ],
       );
       if (!mounted) return;
-      setState(() => _saldos = {for (final v in r) v.elementoId: v});
+      setState(() =>
+          _saldos = {for (final v in r) _clave(v.elementoId, v.bodegaId): v});
     } catch (_) {
       // Sin señal: se queda sin datos de saldo y no se bloquea nada. La
       // validación de verdad ocurre igual en el servidor al despachar.
@@ -286,9 +358,15 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
       return _msg('No hay líneas listas (revisa emparejamientos y cantidades)');
     }
 
+    // Cada línea lleva su bodega si el usuario la cambió; si no, va sin ella
+    // y el servidor usa la general.
     final items = [
       for (final f in validas)
-        {'elemento_id': f.match!.id, 'cantidad': f.cantidad}
+        {
+          'elemento_id': f.match!.id,
+          'cantidad': f.cantidad,
+          if (f.bodegaPropia != null) 'bodega_id': f.bodegaPropia!.id,
+        }
     ];
 
     setState(() => _cargando = true);
@@ -585,8 +663,12 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
     final dudoso = !sinMatch && f.score < 0.8;
     // Saldo revisado contra la bodega elegida (null si aún no se ha
     // consultado o si no hay señal).
-    final saldo = f.match == null ? null : _saldos[f.match!.id];
+    final bodegaLinea = _bodegaDe(f);
+    final saldo = f.match == null
+        ? null
+        : _saldos[_clave(f.match!.id, bodegaLinea?.id)];
     final falta = saldo != null && !saldo.alcanza;
+    final otraBodega = f.bodegaPropia != null;
 
     return ListTile(
       dense: true,
@@ -648,20 +730,43 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
               fontWeight: (falta || sinMatch) ? FontWeight.bold : null,
             ),
           ),
+          // Esta línea sale de una bodega distinta a la general: hay que
+          // decirlo bien claro, es una excepción.
+          if (otraBodega)
+            Text('➜ Sale desde ${f.bodegaPropia!.nombre}',
+                style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF00695C),
+                    fontWeight: FontWeight.bold)),
           // Si no alcanza AQUÍ pero sí hay en otra bodega, el problema no es
-          // de inventario sino de ubicación: hay que trasladar o despachar
-          // desde allá. Decirlo evita que el usuario crea que no existe.
-          if (falta && saldo.hayEnOtras)
+          // de inventario sino de ubicación. En vez de mandar al usuario a
+          // hacer un traslado (perdiendo todo el trabajo de la pantalla), se
+          // le ofrece despachar esa línea desde donde está el material.
+          if (falta && saldo.hayEnOtras) ...[
             Text(
               '↪ Hay ${_qty.format(saldo.enOtras)} en otra bodega — '
-              '${saldo.otrasDetalle}'
-              '${saldo.alcanzaTrasladando ? ' (alcanzaría trasladando)' : ''}',
+              '${saldo.otrasDetalle}',
               style: const TextStyle(
                 fontSize: 11.5,
                 color: Color(0xFF1565C0),
                 fontWeight: FontWeight.w600,
               ),
             ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _cambiarBodegaDeLinea(f),
+                icon: const Icon(Icons.move_down, size: 16),
+                label: const Text('Despachar desde otra bodega',
+                    style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       isThreeLine: true,
