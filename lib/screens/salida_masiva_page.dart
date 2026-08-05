@@ -47,6 +47,15 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   bool _recargandoCentros = false;
   String? _archivo;
 
+  /// Existencia de cada elemento en la bodega elegida, consultada al
+  /// servidor apenas se carga el archivo (y cada vez que cambia algo).
+  ///
+  /// Antes esta revisión solo ocurría al pulsar "Despachar": el usuario veía
+  /// 40 líneas en verde, se confiaba, y solo al final le decían que dos no
+  /// alcanzaban. Ahora el problema se ve junto a la línea, de una.
+  Map<String, ValidacionSalida> _saldos = {};
+  bool _revisandoSaldos = false;
+
   @override
   void initState() {
     super.initState();
@@ -132,7 +141,10 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
         final (match, score) = _emparejador!.mejor(texto);
         out.add(_FilaSal(texto, cant, match: match, score: score));
       }
-      if (mounted) setState(() => _filas = out);
+      if (mounted) {
+        setState(() => _filas = out);
+        await _revisarSaldos(); // marca de una las que no alcanzan
+      }
     } on FormatException catch (e) {
       setState(() {
         _filas = [];
@@ -202,7 +214,10 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
         ],
       ),
     );
-    if (cant != null && mounted) setState(() => fila.cantidad = cant);
+    if (cant != null && mounted) {
+      setState(() => fila.cantidad = cant);
+      await _revisarSaldos(); // la cantidad nueva puede ya no alcanzar
+    }
   }
 
   Future<void> _corregir(_FilaSal fila) async {
@@ -216,6 +231,7 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
         fila.match = sel;
         fila.score = 1;
       });
+      await _revisarSaldos(); // otro artículo, otro saldo
     }
   }
 
@@ -225,6 +241,41 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
       .where((f) =>
           f.match != null && f.cantidad > 0 && !(f.match!.serializado))
       .toList();
+
+  /// Cuántos artículos distintos no tienen existencia suficiente.
+  /// Se cuenta por artículo, no por línea: la revisión suma las líneas
+  /// repetidas del mismo artículo contra el saldo.
+  int get _sinExistencia =>
+      _saldos.values.where((v) => !v.alcanza).length;
+
+  /// Vuelve a preguntarle al servidor cuánto hay de cada artículo.
+  /// Se llama al cargar el archivo, al cambiar de bodega y cada vez que se
+  /// toca una cantidad o un emparejamiento.
+  Future<void> _revisarSaldos() async {
+    final validas = _validas;
+    if (_bodega == null || validas.isEmpty) {
+      if (mounted) setState(() => _saldos = {});
+      return;
+    }
+    setState(() => _revisandoSaldos = true);
+    try {
+      final r = await InventarioService.validarSalidaMasiva(
+        bodegaId: _bodega!.id,
+        items: [
+          for (final f in validas)
+            {'elemento_id': f.match!.id, 'cantidad': f.cantidad}
+        ],
+      );
+      if (!mounted) return;
+      setState(() => _saldos = {for (final v in r) v.elementoId: v});
+    } catch (_) {
+      // Sin señal: se queda sin datos de saldo y no se bloquea nada. La
+      // validación de verdad ocurre igual en el servidor al despachar.
+      if (mounted) setState(() => _saldos = {});
+    } finally {
+      if (mounted) setState(() => _revisandoSaldos = false);
+    }
+  }
 
   // ---- Revisión de saldos y carga ------------------------------------
   Future<void> _revisarYCargar() async {
@@ -344,12 +395,26 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
                             color: r.alcanza ? Colors.green : Colors.red),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            '${r.nombre}\n'
-                            'pide ${_qty.format(r.pedido)} · '
-                            'hay ${_qty.format(r.disponible)} ${r.unidad}'
-                            '${r.alcanza ? '' : ' · faltan ${_qty.format(r.faltante)}'}',
-                            style: const TextStyle(fontSize: 12.5),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${r.nombre}\n'
+                                'pide ${_qty.format(r.pedido)} · '
+                                'hay ${_qty.format(r.disponible)} ${r.unidad}'
+                                '${r.alcanza ? '' : ' · faltan ${_qty.format(r.faltante)}'}',
+                                style: const TextStyle(fontSize: 12.5),
+                              ),
+                              if (!r.alcanza && r.hayEnOtras)
+                                Text(
+                                  '↪ hay ${_qty.format(r.enOtras)} en otra '
+                                  'bodega — ${r.otrasDetalle}',
+                                  style: const TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xFF1565C0),
+                                      fontWeight: FontWeight.w600),
+                                ),
+                            ],
                           ),
                         ),
                       ],
@@ -408,7 +473,10 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
               textoDe: (b) => b.nombre,
               recargando: _recargandoBodegas,
               onRecargar: _recargarBodegas,
-              onChanged: (v) => setState(() => _bodega = v),
+              onChanged: (v) {
+                setState(() => _bodega = v);
+                _revisarSaldos(); // otra bodega, otros saldos
+              },
             ),
           ),
           Padding(
@@ -459,8 +527,12 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${_filas.length} filas · ${_validas.length} listas'
-                  '${serializados > 0 ? ' · $serializados serializadas (se omiten)' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  '${_sinExistencia > 0 ? ' · $_sinExistencia sin existencia' : ''}'
+                  '${serializados > 0 ? ' · $serializados serializadas (se omiten)' : ''}'
+                  '${_revisandoSaldos ? ' · revisando saldos…' : ''}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _sinExistencia > 0 ? Colors.red : null),
                 ),
               ),
             ),
@@ -511,6 +583,11 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
     final serial = f.match?.serializado ?? false;
     final sinMatch = f.match == null;
     final dudoso = !sinMatch && f.score < 0.8;
+    // Saldo revisado contra la bodega elegida (null si aún no se ha
+    // consultado o si no hay señal).
+    final saldo = f.match == null ? null : _saldos[f.match!.id];
+    final falta = saldo != null && !saldo.alcanza;
+
     return ListTile(
       dense: true,
       leading: Icon(
@@ -518,29 +595,76 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
             ? Icons.help_outline
             : serial
                 ? Icons.block
-                : dudoso
-                    ? Icons.warning_amber
-                    : Icons.check_circle,
+                : falta
+                    ? Icons.remove_shopping_cart
+                    : dudoso
+                        ? Icons.warning_amber
+                        : Icons.check_circle,
         color: sinMatch
             ? Colors.red
             : serial
                 ? Colors.grey
-                : dudoso
-                    ? Colors.orange
-                    : Colors.green,
+                : falta
+                    ? Colors.red
+                    : dudoso
+                        ? Colors.orange
+                        : Colors.green,
       ),
       title: Text(f.match?.nombre ?? f.textoOriginal,
           style: TextStyle(
               decoration: serial ? TextDecoration.lineThrough : null)),
-      subtitle: Text(
-        sinMatch
-            ? 'Sin emparejar · del archivo: "${f.textoOriginal}"'
-            : serial
-                ? 'Serializado: se omite, despáchalo aparte eligiendo seriales'
-                : 'Del archivo: "${f.textoOriginal}"'
-                    '${dudoso ? ' · revisa el emparejamiento' : ''}',
-        style: const TextStyle(fontSize: 11.5),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Del archivo: "${f.textoOriginal}"',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontStyle: FontStyle.italic,
+              color: sinMatch ? Colors.red : Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            sinMatch
+                ? 'Sin emparejar: elige el artículo con ✎'
+                : serial
+                    ? 'Serializado: se omite, despáchalo aparte eligiendo '
+                        'seriales'
+                    : falta
+                        ? 'NO ALCANZA: pide ${_qty.format(saldo.pedido)} · '
+                            'hay ${_qty.format(saldo.disponible)} '
+                            '${saldo.unidad} · faltan '
+                            '${_qty.format(saldo.faltante)}'
+                        : saldo != null
+                            ? 'Hay ${_qty.format(saldo.disponible)} '
+                                '${saldo.unidad} en bodega'
+                                '${dudoso ? ' · revisa el emparejamiento' : ''}'
+                            : dudoso
+                                ? 'Revisa el emparejamiento'
+                                : '',
+            style: TextStyle(
+              fontSize: 11.5,
+              color: (falta || sinMatch) ? Colors.red : null,
+              fontWeight: (falta || sinMatch) ? FontWeight.bold : null,
+            ),
+          ),
+          // Si no alcanza AQUÍ pero sí hay en otra bodega, el problema no es
+          // de inventario sino de ubicación: hay que trasladar o despachar
+          // desde allá. Decirlo evita que el usuario crea que no existe.
+          if (falta && saldo.hayEnOtras)
+            Text(
+              '↪ Hay ${_qty.format(saldo.enOtras)} en otra bodega — '
+              '${saldo.otrasDetalle}'
+              '${saldo.alcanzaTrasladando ? ' (alcanzaría trasladando)' : ''}',
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: Color(0xFF1565C0),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
       ),
+      isThreeLine: true,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

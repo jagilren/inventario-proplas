@@ -112,8 +112,14 @@ class ValidacionSalida {
   final String nombre;
   final String unidad;
   final num pedido;
-  final num disponible;
+  final num disponible; // en la bodega elegida
   final bool alcanza;
+
+  /// Cuánto hay del mismo artículo en las OTRAS bodegas, y dónde.
+  /// Sin este dato, "no hay en esta bodega" se ve igual que "no existe en
+  /// ninguna parte", y son dos problemas con soluciones distintas.
+  final num enOtras;
+  final String? otrasDetalle;
 
   ValidacionSalida.fromMap(Map<String, dynamic> m)
     : elementoId = m['elemento_id'] as String,
@@ -121,9 +127,15 @@ class ValidacionSalida {
       unidad = (m['unidad'] ?? 'UND') as String,
       pedido = (m['pedido'] ?? 0) as num,
       disponible = (m['disponible'] ?? 0) as num,
-      alcanza = (m['alcanza'] ?? false) as bool;
+      alcanza = (m['alcanza'] ?? false) as bool,
+      enOtras = (m['en_otras'] ?? 0) as num,
+      otrasDetalle = m['otras_detalle'] as String?;
 
   num get faltante => pedido - disponible;
+
+  /// Lo que falta aquí, ¿estaría cubierto trayéndolo de otra bodega?
+  bool get hayEnOtras => enOtras > 0;
+  bool get alcanzaTrasladando => !alcanza && (disponible + enOtras) >= pedido;
 }
 
 class Bodega {
