@@ -1,13 +1,11 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
-import 'package:csv/csv.dart';
 import '../data.dart';
 import '../util/picker.dart';
+import '../util/import_archivo.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
 
@@ -38,8 +36,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
   CentroCosto? _centroOrigen; // centro de costo de origen de la devolución
-  List<Elemento> _catalogo = [];
-  List<String> _catNorm = []; // nombres normalizados (paralelo a _catalogo)
+  /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
+  /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
+  /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
+  EmparejadorCatalogo? _emparejador;
   List<_FilaDev> _filas = [];
   bool _leyendo = false;
   bool _cargando = false;
@@ -83,84 +83,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       if (mounted) setState(() => _centros = c);
     });
     InventarioService.todosElementos().then((e) {
-      if (mounted) {
-        setState(() {
-          _catalogo = e;
-          _catNorm = e.map((x) => _norm(x.nombre)).toList();
-        });
-      }
+      if (mounted) setState(() => _emparejador = EmparejadorCatalogo(e));
     });
   }
-
-  // ---- Normalización y coincidencia aproximada (sin librerías) ----
-  static String _norm(String s) {
-    s = s.toLowerCase().trim();
-    const from = 'áàäâãéèëêíìïîóòöôõúùüûñ';
-    const to = 'aaaaaeeeeiiiiooooouuuun';
-    final sb = StringBuffer();
-    for (final ch in s.split('')) {
-      final i = from.indexOf(ch);
-      sb.write(i >= 0 ? to[i] : ch);
-    }
-    return sb.toString().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
-  }
-
-  static int _lev(String a, String b) {
-    if (a == b) return 0;
-    if (a.isEmpty) return b.length;
-    if (b.isEmpty) return a.length;
-    final prev = List<int>.generate(b.length + 1, (i) => i);
-    final cur = List<int>.filled(b.length + 1, 0);
-    for (var i = 0; i < a.length; i++) {
-      cur[0] = i + 1;
-      for (var j = 0; j < b.length; j++) {
-        final cost = a.codeUnitAt(i) == b.codeUnitAt(j) ? 0 : 1;
-        cur[j + 1] = [cur[j] + 1, prev[j + 1] + 1, prev[j] + cost]
-            .reduce((x, y) => x < y ? x : y);
-      }
-      for (var k = 0; k <= b.length; k++) {
-        prev[k] = cur[k];
-      }
-    }
-    return prev[b.length];
-  }
-
-  static double _sim(String a, String b) {
-    if (a == b) return 1;
-    if (a.isEmpty || b.isEmpty) return 0;
-    final ta = a.split(' ').where((t) => t.isNotEmpty).toSet();
-    final tb = b.split(' ').where((t) => t.isNotEmpty).toSet();
-    double jac = 0;
-    if (ta.isNotEmpty && tb.isNotEmpty) {
-      jac = ta.intersection(tb).length / ta.union(tb).length;
-    }
-    double cont = 0;
-    if (a.contains(b) || b.contains(a)) cont = 0.9;
-    // Levenshtein solo si aún no hay buena señal (para no penalizar velocidad).
-    double lev = 0;
-    if (jac < 0.82 && cont < 0.82) {
-      final d = _lev(a, b);
-      final ml = a.length > b.length ? a.length : b.length;
-      lev = ml == 0 ? 0 : 1 - d / ml;
-    }
-    return [jac, cont, lev].reduce((x, y) => x > y ? x : y);
-  }
-
-  Elemento? _mejor(String texto, [double umbral = 0.55]) {
-    final nq = _norm(texto);
-    if (nq.isEmpty) return null;
-    Elemento? best;
-    double bestScore = 0;
-    for (var i = 0; i < _catalogo.length; i++) {
-      final s = _sim(nq, _catNorm[i]);
-      if (s > bestScore) { bestScore = s; best = _catalogo[i]; }
-      if (bestScore == 1) break;
-    }
-    _ultimoScore = bestScore;
-    return bestScore >= umbral ? best : null;
-  }
-
-  double _ultimoScore = 0;
 
   // ---- Lectura del archivo ----
   Future<void> _elegirArchivo() async {
@@ -193,9 +118,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
     setState(() { _leyendo = true; _archivo = nombre; });
     try {
-      final crudas = nombre.toLowerCase().endsWith('.csv')
-          ? _leerCsv(bytes)
-          : _leerXlsx(bytes);
+      final crudas = leerArchivoImport(bytes, nombre);
       final filas = _emparejar(crudas);
       if (mounted) setState(() => _filas = filas);
     } on FormatException catch (e) {
@@ -237,121 +160,17 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     );
   }
 
-  /// Devuelve filas crudas [texto, cantidad] ya sin encabezado.
-  List<List<dynamic>> _leerXlsx(Uint8List bytes) {
-    final libro = Excel.decodeBytes(bytes);
-    if (libro.tables.isEmpty) return [];
-    final hoja = libro.tables[libro.tables.keys.first]!;
-    final filas = <List<dynamic>>[];
-    for (final row in hoja.rows) {
-      filas.add(row.map((c) => _celda(c?.value)).toList());
-    }
-    return _sinEncabezado(filas);
-  }
-
-  List<List<dynamic>> _leerCsv(Uint8List bytes) {
-    String txt;
-    try {
-      txt = utf8.decode(bytes);
-    } catch (_) {
-      txt = latin1.decode(bytes);
-    }
-    // Delimitador: el que más aparezca en la primera línea (; o ,)
-    final primera = txt.split(RegExp(r'\r?\n')).firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
-    final delim = primera.split(';').length > primera.split(',').length ? ';' : ',';
-    final filas = const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
-        .convert(txt.replaceAll('\r\n', '\n'), fieldDelimiter: delim);
-    return _sinEncabezado(filas);
-  }
-
-  /// Convierte el valor de una celda de excel a texto plano.
-  /// En excel 4.x, TextCellValue.value es un TextSpan (no un String), así que
-  /// se resuelve con toPlainText(); los numéricos exponen su valor crudo.
-  String _celda(dynamic v) {
-    if (v == null) return '';
-    if (v is TextCellValue) return v.value.toString().trim();
-    if (v is IntCellValue) return v.value.toString();
-    if (v is DoubleCellValue) return v.value.toString();
-    if (v is BoolCellValue) return v.value.toString();
-    if (v is DateCellValue) return v.toString();
-    return v.toString().trim();
-  }
-
-  /// Detecta las columnas ELEMENTO/CANTIDAD y devuelve solo los datos como
-  /// [textoElemento, cantidadTexto]. Si el archivo no tiene esas dos columnas,
-  /// lanza [FormatException] con un mensaje claro (archivo inválido).
-  ///
-  /// - Columnas de MÁS: no importan, se emparejan por el nombre del encabezado
-  ///   y las demás se ignoran.
-  /// - Columnas de MENOS (falta ELEMENTO o CANTIDAD): archivo inválido.
-  List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas) {
-    // Quita filas totalmente vacías.
-    final rows = filas
-        .where((f) => f.any((c) => c.toString().trim().isNotEmpty))
-        .toList();
-    if (rows.isEmpty) {
-      throw const FormatException('El archivo está vacío.');
-    }
-
-    int idxHeader = -1, colElem = -1, colCant = -1;
-    for (var r = 0; r < rows.length; r++) {
-      final fila = rows[r];
-      int ce = -1, cc = -1;
-      for (var c = 0; c < fila.length; c++) {
-        final t = _norm(fila[c].toString());
-        if (ce < 0 && t.contains('elemento')) ce = c;
-        if (cc < 0 && (t.contains('cantidad') || t == 'cant')) cc = c;
-      }
-      if (ce >= 0 && cc >= 0) { idxHeader = r; colElem = ce; colCant = cc; break; }
-    }
-
-    int inicio;
-    if (idxHeader >= 0) {
-      inicio = idxHeader + 1;
-    } else {
-      // Sin encabezado reconocible. Solo se acepta el modo posicional
-      // (col A = ELEMENTO, col B = CANTIDAD) si de verdad se ve así:
-      // todas las filas con ≥2 columnas y la 2ª con números.
-      final conDos = rows.where((f) => f.length >= 2).length;
-      final numericas = rows.where((f) =>
-          f.length >= 2 && _parseCant(f[1].toString()) > 0).length;
-      if (conDos < rows.length || numericas == 0) {
-        throw const FormatException(
-            'No encontré las columnas ELEMENTO y CANTIDAD.\n\n'
-            'El archivo debe tener exactamente esas dos columnas '
-            '(con su encabezado): ELEMENTO y CANTIDAD.');
-      }
-      colElem = 0; colCant = 1; inicio = 0;
-    }
-
-    final datos = <List<dynamic>>[];
-    for (var r = inicio; r < rows.length; r++) {
-      final fila = rows[r];
-      final texto = colElem < fila.length ? fila[colElem].toString().trim() : '';
-      final cant = colCant < fila.length ? fila[colCant].toString().trim() : '';
-      if (texto.isEmpty && cant.isEmpty) continue;
-      datos.add([texto, cant]);
-    }
-    if (datos.isEmpty) {
-      throw const FormatException(
-          'El archivo tiene los encabezados pero ninguna fila con datos.');
-    }
-    return datos;
-  }
-
-  num _parseCant(String s) {
-    final limpio = s.replaceAll(RegExp(r'[^0-9,.\-]'), '').replaceAll(',', '.');
-    return num.tryParse(limpio) ?? 0;
-  }
 
   List<_FilaDev> _emparejar(List<List<dynamic>> crudas) {
     final out = <_FilaDev>[];
+    final emp = _emparejador;
+    if (emp == null) return out; // el catálogo aún no ha llegado
     for (final r in crudas) {
       final texto = r[0].toString().trim();
       if (texto.isEmpty) continue;
-      final cant = _parseCant(r.length > 1 ? r[1].toString() : '');
-      final match = _mejor(texto);
-      out.add(_FilaDev(texto, cant, match: match, score: match == null ? 0 : _ultimoScore));
+      final cant = parseCantidad(r.length > 1 ? r[1].toString() : '');
+      final (match, score) = emp.mejor(texto);
+      out.add(_FilaDev(texto, cant, match: match, score: score));
     }
     return out;
   }
