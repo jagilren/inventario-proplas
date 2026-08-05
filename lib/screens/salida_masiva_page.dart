@@ -8,6 +8,7 @@ import '../util/picker.dart';
 import '../util/import_archivo.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
+import '../widgets/confirmar_descarte.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
 
@@ -537,6 +538,14 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   Widget build(BuildContext context) {
     final serializados =
         _filas.where((f) => f.match?.serializado ?? false).length;
+    return ConfirmarDescarte(
+      hayTrabajoSinGuardar: _filas.isNotEmpty && !_cargando,
+      queSePierde: '${_filas.length} línea(s) del archivo',
+      child: _contenido(serializados),
+    );
+  }
+
+  Widget _contenido(int serializados) {
     return Scaffold(
       appBar: AppBar(title: const Text('Salida masiva')),
       body: Column(

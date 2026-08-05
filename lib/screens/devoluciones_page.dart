@@ -8,6 +8,7 @@ import '../util/picker.dart';
 import '../util/import_archivo.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
+import '../widgets/confirmar_descarte.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -302,6 +303,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
   @override
   Widget build(BuildContext context) {
+    return ConfirmarDescarte(
+      hayTrabajoSinGuardar: _filas.isNotEmpty && !_cargando,
+      queSePierde: '${_filas.length} línea(s) del archivo',
+      child: _contenido(),
+    );
+  }
+
+  Widget _contenido() {
     return Scaffold(
       appBar: AppBar(title: const Text('Devoluciones · carga masiva')),
       body: Column(
