@@ -233,14 +233,31 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
     }
   }
 
-  /// Listas para cargar: emparejadas, con cantidad y CON costo.
+  /// Listas para cargar: emparejadas, con cantidad, CON costo y NO
+  /// serializadas.
+  ///
+  /// Los serializados quedan por fuera a propósito: registrar la entrada
+  /// subiría la existencia sin crear los seriales en `series`, y el elemento
+  /// quedaría con unidades pero sin ninguna unidad identificable. Esas
+  /// compras se registran aparte, indicando el serial de cada unidad.
   List<_FilaComp> get _validas => _filas
-      .where((f) => f.match != null && f.cantidad > 0 && f.costo > 0)
+      .where((f) =>
+          f.match != null &&
+          f.cantidad > 0 &&
+          f.costo > 0 &&
+          !(f.match!.serializado))
       .toList();
 
-  int get _sinCosto =>
-      _filas.where((f) => f.match != null && f.cantidad > 0 && f.costo <= 0)
-          .length;
+  int get _sinCosto => _filas
+      .where((f) =>
+          f.match != null &&
+          !(f.match!.serializado) &&
+          f.cantidad > 0 &&
+          f.costo <= 0)
+      .length;
+
+  int get _serializados =>
+      _filas.where((f) => f.match?.serializado ?? false).length;
 
   num get _totalCompra =>
       _validas.fold<num>(0, (s, f) => s + f.total);
@@ -281,6 +298,15 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
                 if (_sinCosto > 0) ...[
                   const SizedBox(height: 8),
                   Text('Se omiten $_sinCosto línea(s) sin costo.',
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.orange)),
+                ],
+                if (_serializados > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                      'Se omiten $_serializados línea(s) de artículos '
+                      'serializados: hay que registrarlos aparte indicando '
+                      'el serial de cada unidad.',
                       style: const TextStyle(
                           fontSize: 12, color: Colors.orange)),
                 ],
@@ -458,6 +484,7 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
                 child: Text(
                   '${_filas.length} filas · ${_validas.length} listas'
                   '${_sinCosto > 0 ? ' · $_sinCosto sin costo' : ''}'
+                  '${_serializados > 0 ? ' · $_serializados serializadas (se omiten)' : ''}'
                   '  ·  ${_money.format(_totalCompra)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -507,40 +534,71 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
 
   Widget _filaWidget(_FilaComp f) {
     final sinMatch = f.match == null;
-    final sinCosto = !sinMatch && f.costo <= 0;
+    final serial = f.match?.serializado ?? false;
+    final sinCosto = !sinMatch && !serial && f.costo <= 0;
     final dudoso = !sinMatch && f.score < 0.8;
     return ListTile(
       dense: true,
       leading: Icon(
         sinMatch
             ? Icons.help_outline
-            : sinCosto
-                ? Icons.attach_money
-                : dudoso
-                    ? Icons.warning_amber
-                    : Icons.check_circle,
+            : serial
+                ? Icons.block
+                : sinCosto
+                    ? Icons.attach_money
+                    : dudoso
+                        ? Icons.warning_amber
+                        : Icons.check_circle,
         color: sinMatch
             ? Colors.red
-            : sinCosto
-                ? Colors.red
-                : dudoso
-                    ? Colors.orange
-                    : Colors.green,
+            : serial
+                ? Colors.grey
+                : sinCosto
+                    ? Colors.red
+                    : dudoso
+                        ? Colors.orange
+                        : Colors.green,
       ),
-      title: Text(f.match?.nombre ?? f.textoOriginal),
-      subtitle: Text(
-        sinMatch
-            ? 'Sin emparejar · del archivo: "${f.textoOriginal}"'
-            : sinCosto
-                ? 'FALTA EL COSTO: tócala para escribirlo'
-                : '${_qty.format(f.cantidad)} × ${_money.format(f.costo)}'
-                    ' = ${_money.format(f.total)}'
-                    '${dudoso ? '  ·  revisa el emparejamiento' : ''}',
-        style: TextStyle(
-            fontSize: 11.5,
-            color: sinCosto ? Colors.red : null,
-            fontWeight: sinCosto ? FontWeight.bold : null),
+      // El título es el elemento de la BASE DE DATOS con el que se emparejó.
+      title: Text(f.match?.nombre ?? f.textoOriginal,
+          style: TextStyle(
+              decoration: serial ? TextDecoration.lineThrough : null)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Y aquí SIEMPRE el texto tal como venía en el Excel: sin verlo al
+          // lado del nombre de la base, el usuario no tiene cómo saber si el
+          // emparejamiento quedó bien.
+          Text(
+            'Del archivo: "${f.textoOriginal}"',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontStyle: FontStyle.italic,
+              color: sinMatch ? Colors.red : Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            sinMatch
+                ? 'Sin emparejar: elige el artículo con ⇄'
+                : serial
+                    ? 'Serializado: se omite. Regístralo aparte indicando el '
+                        'serial de cada unidad'
+                    : sinCosto
+                        ? 'FALTA EL COSTO: tócala para escribirlo'
+                        : '${_qty.format(f.cantidad)} × '
+                            '${_money.format(f.costo)}'
+                            ' = ${_money.format(f.total)}'
+                            '${dudoso ? '  ·  revisa el emparejamiento' : ''}',
+            style: TextStyle(
+              fontSize: 11.5,
+              color: (sinCosto || sinMatch) ? Colors.red : null,
+              fontWeight:
+                  (sinCosto || sinMatch) ? FontWeight.bold : null,
+            ),
+          ),
+        ],
       ),
+      isThreeLine: true,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
