@@ -116,8 +116,12 @@ class _ReportesPageState extends State<ReportesPage> {
               'Entradas, salidas, traslados y ajustes del rango elegido.',
               Icons.swap_vert, () => Reportes.movimientos(_desde, _hasta)),
           _reporte('consumo', 'Consumo por centro de costo',
-              'Salidas del rango agrupables por centro de costo.',
+              'Solo las salidas del rango, sin restar devoluciones.',
               Icons.account_tree, () => Reportes.consumoPorCentro(_desde, _hasta)),
+          _reporte('netos', 'Neto por centro de costo',
+              'Lo que se llevó MENOS lo que devolvió, valorizado al costo '
+              'de cada movimiento. Es el consumo real.',
+              Icons.balance, () => Reportes.netosPorCentro(_desde, _hasta)),
           _reporte('minimo', 'Elementos bajo mínimo',
               'Lo que hay que reponer (existencia bajo el mínimo).',
               Icons.warning_amber, () => Reportes.bajoMinimo()),

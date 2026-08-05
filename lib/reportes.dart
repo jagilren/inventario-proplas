@@ -141,7 +141,7 @@ class Reportes {
     final res = await supabase
         .from('movimientos')
         .select(
-          'cantidad, elementos!inner(nombre, costo_promedio), '
+          'cantidad, costo_unitario, elementos!inner(nombre, costo_promedio), '
           'centros_costo(codigo, descripcion)',
         )
         .eq('elementos.es_aprovechamiento', false)
@@ -162,7 +162,12 @@ class Reportes {
       final cc = r['centros_costo'] as Map?;
       final el = r['elementos'] as Map?;
       final cant = (r['cantidad'] ?? 0) as num;
-      final costo = (el?['costo_promedio'] ?? 0) as num;
+      // El costo con el que SALIÓ de verdad, no el promedio de hoy: cuando
+      // un artículo se agota, su promedio queda en 0 y esta salida pasaba a
+      // valer $0 retroactivamente. Medido sobre los datos reales, así se
+      // subvaloraba el 57% del consumo (20 salidas aparecían en cero).
+      final costo =
+          (r['costo_unitario'] ?? el?['costo_promedio'] ?? 0) as num;
       final val = (cant * costo).round(); // dinero como entero (COP)
       total += val;
       filas.add([
@@ -175,6 +180,71 @@ class Reportes {
     }
     filas.add(['', '', '', 'TOTAL', total]);
     await _descargar('consumo_por_centro', filas);
+  }
+
+  /// 3b) NETO por centro de costo: lo que se llevó MENOS lo que devolvió.
+  ///
+  /// El informe de "Consumo" solo mira las salidas, así que un centro que se
+  /// lleva 100 y devuelve 30 aparece consumiendo 100. Este resta.
+  ///
+  /// Además valoriza al costo que el artículo tenía EN CADA MOVIMIENTO
+  /// (`costo_unitario`), no al promedio de hoy: cuando un artículo se agota
+  /// su promedio queda en 0, y con el método viejo esas salidas aparecían
+  /// costando $0 (medido: subvaloraba el 57% del total).
+  static Future<void> netosPorCentro(DateTime desde, DateTime hasta) async {
+    final res = await supabase.rpc(
+      'netos_por_centro',
+      params: {
+        'p_desde': desde.toUtc().toIso8601String(),
+        'p_hasta': hasta
+            .add(const Duration(days: 1))
+            .toUtc()
+            .toIso8601String(),
+      },
+    );
+    final filas = <List<dynamic>>[
+      [
+        'Centro de costo',
+        'Descripción',
+        'Elemento',
+        'Unidad',
+        'Salidas',
+        'Devoluciones',
+        'Neto',
+        'Valor salidas',
+        'Valor devoluciones',
+        'Valor neto',
+      ],
+    ];
+    num totalSal = 0, totalDev = 0, totalNeto = 0;
+    for (final r in (res as List)) {
+      final m = r as Map<String, dynamic>;
+      final vSal = (m['valor_salidas'] ?? 0) as num;
+      final vDev = (m['valor_devoluciones'] ?? 0) as num;
+      final vNeto = (m['valor_neto'] ?? 0) as num;
+      totalSal += vSal;
+      totalDev += vDev;
+      totalNeto += vNeto;
+      filas.add([
+        m['centro'] ?? '',
+        m['descripcion'] ?? '',
+        m['elemento'] ?? '',
+        m['unidad'] ?? '',
+        // Las salidas van en negativo y las devoluciones en positivo, para
+        // que las columnas se puedan sumar directo en Excel.
+        -((m['salidas'] ?? 0) as num),
+        (m['devoluciones'] ?? 0) as num,
+        -((m['neto'] ?? 0) as num),
+        vSal.round(),
+        vDev.round(),
+        vNeto.round(),
+      ]);
+    }
+    filas.add([
+      '', '', '', '', '', '', 'TOTAL',
+      totalSal.round(), totalDev.round(), totalNeto.round(),
+    ]);
+    await _descargar('netos_por_centro', filas);
   }
 
   /// 4) Elementos bajo el mínimo (para reponer).
