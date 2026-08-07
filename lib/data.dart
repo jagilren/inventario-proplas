@@ -628,8 +628,26 @@ class InventarioService {
     await supabase.from('bodegas').update({'activo': true}).eq('id', id);
   }
 
+  /// Desactiva el centro: desaparece de las listas pero el historial sigue
+  /// sabiendo a quién se le cargó cada salida.
   static Future<void> eliminarCentro(String id) async {
     await supabase.from('centros_costo').update({'activo': false}).eq('id', id);
+  }
+
+  /// Cuántos movimientos tiene el centro. Si es 0 se puede borrar de verdad;
+  /// si no, solo desactivar.
+  static Future<int> movimientosDeCentro(String id) async {
+    final res =
+        await supabase.rpc('movimientos_de_centro', params: {'p_id': id});
+    return (res as num).toInt();
+  }
+
+  /// Borrado DEFINITIVO. Solo admin y solo si el centro no tiene historial:
+  /// sirve para los que se crearon por error (un código mal escrito, un
+  /// duplicado), que desactivados quedarían de estorbo para siempre.
+  /// El servidor vuelve a validar; esto no depende de que la app se porte bien.
+  static Future<void> borrarCentroDefinitivo(String id) async {
+    await supabase.rpc('borrar_centro_costo', params: {'p_id': id});
   }
 
   static Future<void> reactivarCentro(String id) async {

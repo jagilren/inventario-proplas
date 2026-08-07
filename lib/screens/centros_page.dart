@@ -169,12 +169,24 @@ class _CentroFormState extends State<_CentroForm> {
   late final TextEditingController _cliente;
   bool _guardando = false;
 
+  /// Cuántos movimientos tiene: decide si se puede borrar de verdad o solo
+  /// desactivar. null = todavía se está consultando.
+  int? _movs;
+
   @override
   void initState() {
     super.initState();
     _codigo = TextEditingController(text: widget.centro?.codigo ?? '');
     _desc = TextEditingController(text: widget.centro?.descripcion ?? '');
     _cliente = TextEditingController(text: widget.centro?.cliente ?? '');
+    final c = widget.centro;
+    if (c != null) {
+      InventarioService.movimientosDeCentro(c.id).then((n) {
+        if (mounted) setState(() => _movs = n);
+      }).catchError((_) {
+        if (mounted) setState(() => _movs = -1); // no se pudo saber
+      });
+    }
   }
 
   Future<void> _guardar() async {
@@ -234,7 +246,7 @@ class _CentroFormState extends State<_CentroForm> {
                 : const Icon(Icons.save),
             label: const Text('Guardar'),
           )),
-          if (widget.centro != null)
+          if (widget.centro != null) ...[
             TextButton.icon(
               onPressed: _guardando
                   ? null
@@ -246,6 +258,35 @@ class _CentroFormState extends State<_CentroForm> {
                   style: TextStyle(
                       color: widget.centro!.activo ? Colors.red : Colors.green)),
             ),
+            // Borrado DEFINITIVO: solo si no tiene ni un movimiento. Sirve
+            // para los creados por error, que desactivados quedarían de
+            // estorbo en la lista para siempre.
+            if (_movs == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Revisando si tiene historial…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              )
+            else if (_movs == 0)
+              TextButton.icon(
+                onPressed: _guardando ? null : _borrarDefinitivo,
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                label: const Text('Eliminar definitivamente',
+                    style: TextStyle(color: Colors.red)),
+              )
+            else if (_movs! > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No se puede eliminar: tiene $_movs movimiento(s) en el '
+                  'historial. Desactivarlo lo saca de las listas y conserva '
+                  'a quién se le cargó cada salida.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -275,6 +316,48 @@ class _CentroFormState extends State<_CentroForm> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _guardando = false);
+      }
+    }
+  }
+
+  /// Borra el centro de la base. Solo se ofrece cuando no tiene historial,
+  /// y el servidor lo vuelve a validar de todas formas.
+  Future<void> _borrarDefinitivo() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.delete_forever, color: Colors.red, size: 40),
+        title: const Text('Eliminar definitivamente'),
+        content: Text(
+          'Se borra "${widget.centro!.codigo}" de la base. Esto NO se puede '
+          'deshacer.\n\nSe puede porque no tiene ningún movimiento asociado; '
+          'si lo tuviera, habría que desactivarlo para no perder el historial.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _guardando = true);
+    try {
+      await InventarioService.borrarCentroDefinitivo(widget.centro!.id);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e
+                .toString()
+                .replaceAll('PostgrestException(message: ', '')),
+            duration: const Duration(seconds: 5)));
         setState(() => _guardando = false);
       }
     }
