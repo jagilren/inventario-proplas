@@ -156,7 +156,7 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
       }
 
       if (opcion.usarIA) {
-        await _emparejarConIA(out, opcion.proveedor);
+        await _emparejarConIA(out, opcion.proveedor, opcion.modelo);
       } else {
         for (final f in out) {
           final (match, score) = _emparejador!.mejor(f.textoOriginal);
@@ -187,12 +187,13 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
   /// NO deja al usuario sin nada: avisa el motivo y cae al algoritmo local,
   /// que siempre funciona.
   Future<void> _emparejarConIA(
-      List<_FilaComp> filas, ProveedorIA proveedor) async {
+      List<_FilaComp> filas, ProveedorIA proveedor, String? modelo) async {
     setState(() => _consultandoIA = true);
     try {
       final res = await EmparejadorIA(_emparejador!).emparejar(
         [for (final f in filas) f.textoOriginal],
         proveedor: proveedor,
+        modelo: modelo,
       );
       for (var i = 0; i < filas.length && i < res.length; i++) {
         filas[i].match = res[i].match;

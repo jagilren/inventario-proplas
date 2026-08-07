@@ -42,6 +42,23 @@ interface Config {
   modelo: string;
 }
 
+// ---------------------------------------------------------------------
+// LISTA BLANCA de modelos que la app puede pedir.
+//
+// Sin esto, cualquiera que llame a esta función podría pedir el modelo más
+// caro que exista y disparar la factura. La app propone; el servidor
+// decide si ese modelo está permitido.
+//
+// Para habilitar uno nuevo: agrégalo aquí y vuelve a desplegar la función.
+// Para cambiar el modelo POR DEFECTO no hace falta tocar código: se cambia
+// el secreto IA_MODELO_<PROVEEDOR>.
+// ---------------------------------------------------------------------
+const PERMITIDOS: Record<Proveedor, string[]> = {
+  anthropic: ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"],
+  openai: ["gpt-4o-mini", "gpt-4o"],
+  china: ["moonshot-v1-8k", "moonshot-v1-32k", "deepseek-chat", "qwen-plus"],
+};
+
 function config(p: Proveedor): Config {
   switch (p) {
     case "anthropic":
@@ -210,6 +227,21 @@ Deno.serve(async (req) => {
     }
 
     const c = config(proveedor);
+
+    // La app puede pedir un modelo concreto (para comparar cuál empareja
+    // mejor), pero solo de la lista blanca. Si no pide ninguno, manda el
+    // secreto del servidor.
+    const pedido: string | undefined = cuerpo.modelo;
+    if (pedido) {
+      if (!PERMITIDOS[proveedor].includes(pedido)) {
+        return json({
+          error: `El modelo "${pedido}" no está permitido para ${proveedor}. ` +
+            `Permitidos: ${PERMITIDOS[proveedor].join(", ")}.`,
+        }, 400);
+      }
+      c.modelo = pedido;
+    }
+
     if (!c.llave) {
       return json({
         error: `Falta la llave del proveedor "${proveedor}". ` +

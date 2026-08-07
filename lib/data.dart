@@ -1367,10 +1367,15 @@ class InventarioService {
   static Future<List<Map<String, dynamic>>> emparejarConIA({
     required List<Map<String, dynamic>> lineas,
     required String proveedor,
+    String? modelo,
   }) async {
     final res = await supabase.functions.invoke(
       'emparejar-ia',
-      body: {'lineas': lineas, 'proveedor': proveedor},
+      body: {
+        'lineas': lineas,
+        'proveedor': proveedor,
+        if (modelo != null) 'modelo': modelo,
+      },
     );
     final data = res.data;
     if (data is Map && data['error'] != null) {

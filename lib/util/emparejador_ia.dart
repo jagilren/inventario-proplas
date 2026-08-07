@@ -19,6 +19,53 @@ extension ProveedorIAX on ProveedorIA {
       };
 }
 
+/// Un modelo concreto que se le puede pedir al proveedor.
+///
+/// Los precios son en USD por millón de tokens, y sirven SOLO para estimar
+/// el costo en pantalla antes de decidir. Envejecen: si el proveedor cambia
+/// tarifas, hay que actualizarlos aquí (precios verificados 2026-08-05).
+class ModeloIA {
+  final String id;
+  final String etiqueta;
+  final double entradaPorMillon;
+  final double salidaPorMillon;
+  final String nota;
+
+  const ModeloIA(this.id, this.etiqueta, this.entradaPorMillon,
+      this.salidaPorMillon, this.nota);
+
+  /// Costo estimado de emparejar [lineas] líneas.
+  ///
+  /// Los tokens por línea salen de medir el formato real que se manda:
+  /// cada línea lleva su texto más 8 candidatos con nombre. Es un orden de
+  /// magnitud para decidir, no una factura.
+  double costo(int lineas) =>
+      lineas * (88 / 1e6 * entradaPorMillon + 50 / 1e6 * salidaPorMillon);
+}
+
+/// Modelos habilitados por proveedor.
+///
+/// ⚠️ Esta lista debe coincidir con la LISTA BLANCA de la Edge Function
+/// (`supabase/functions/emparejar-ia/index.ts`). El servidor rechaza
+/// cualquier modelo que no esté allá — la app propone, el servidor decide.
+const modelosPorProveedor = <ProveedorIA, List<ModeloIA>>{
+  ProveedorIA.anthropic: [
+    ModeloIA('claude-haiku-4-5', 'Haiku 4.5', 1, 5, 'El más barato y rápido'),
+    ModeloIA('claude-sonnet-5', 'Sonnet 5', 3, 15, 'Intermedio'),
+    ModeloIA('claude-opus-5', 'Opus 5', 5, 25, 'El más capaz'),
+  ],
+  ProveedorIA.openai: [
+    ModeloIA('gpt-4o-mini', 'GPT-4o mini', 0.15, 0.6, 'El más barato'),
+    ModeloIA('gpt-4o', 'GPT-4o', 2.5, 10, 'El más capaz'),
+  ],
+  ProveedorIA.china: [
+    ModeloIA('moonshot-v1-8k', 'Kimi 8k', 0.2, 0.2, 'Contexto corto'),
+    ModeloIA('moonshot-v1-32k', 'Kimi 32k', 0.5, 0.5, 'Contexto amplio'),
+    ModeloIA('deepseek-chat', 'DeepSeek', 0.3, 1.2, ''),
+    ModeloIA('qwen-plus', 'Qwen Plus', 0.4, 1.2, ''),
+  ],
+};
+
 /// Resultado de emparejar una línea, venga del algoritmo local o de la IA.
 ///
 /// Las dos vías devuelven ESTA misma forma, y por eso la pantalla no tiene
@@ -58,6 +105,9 @@ class EmparejadorIA {
   Future<List<Emparejamiento>> emparejar(
     List<String> textos, {
     ProveedorIA proveedor = ProveedorIA.anthropic,
+    /// Modelo concreto. Si va null, manda el que tenga configurado el
+    /// servidor como valor por defecto.
+    String? modelo,
   }) async {
     if (textos.isEmpty) return [];
 
@@ -77,6 +127,7 @@ class EmparejadorIA {
     final res = await InventarioService.emparejarConIA(
       lineas: lineas,
       proveedor: proveedor.id,
+      modelo: modelo,
     );
 
     // 3) Se traduce de vuelta a elementos. Se busca por id contra el
