@@ -417,6 +417,8 @@ class _MovimientoPageState extends State<MovimientoPage> {
             ),
           if (_esSalida)
             SelectorRecargable<CentroCosto>(
+              // Los centros de costo SIEMPRE con buscador.
+              forzarBuscador: true,
               etiqueta: 'Centro de costo destino',
               valor: _cc,
               opciones: _centros,

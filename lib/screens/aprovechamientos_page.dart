@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
+import '../widgets/selector_recargable.dart';
 import '../reportes.dart';
 import '../util/tiempo.dart';
 import '../util/dialogos.dart';
@@ -668,24 +669,16 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<CentroCosto>(
-                initialValue: cc,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Centro de costo',
-                  border: OutlineInputBorder(),
-                ),
-                items: centros
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(
-                          c.etiqueta,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
+              // Con buscador, igual que en el resto de la app. Aquí la lista
+              // se vuelve a pedir cada vez que se abre el diálogo, así que no
+              // necesita el botón ↻ (por eso onRecargar no hace nada).
+              SelectorRecargable<CentroCosto>(
+                etiqueta: 'Centro de costo',
+                forzarBuscador: true,
+                valor: cc,
+                opciones: centros,
+                textoDe: (c) => c.etiqueta,
+                onRecargar: () async {},
                 onChanged: (v) => setD(() => cc = v),
               ),
               const SizedBox(height: 10),

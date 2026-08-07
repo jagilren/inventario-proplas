@@ -569,6 +569,8 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             child: SelectorRecargable<CentroCosto>(
+              // Los centros de costo SIEMPRE con buscador.
+              forzarBuscador: true,
               etiqueta: 'Centro de costo destino',
               icono: Icons.account_tree,
               valor: _centro,

@@ -331,6 +331,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             child: SelectorRecargable<CentroCosto>(
+              // Los centros de costo SIEMPRE con buscador.
+              forzarBuscador: true,
               etiqueta: 'Centro de costo de origen (de dónde vuelve)',
               icono: Icons.account_tree,
               valor: _centroOrigen,

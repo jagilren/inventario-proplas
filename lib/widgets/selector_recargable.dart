@@ -47,6 +47,14 @@ class SelectorRecargable<T> extends StatelessWidget {
   /// muchas (centros de costo pueden ser miles) se vuelve inservible.
   final int umbralBuscador;
 
+  /// Fuerza el buscador aunque haya pocas opciones.
+  ///
+  /// Se usa SIEMPRE en los centros de costo: el usuario lo pidió
+  /// explícitamente para ellos, y dejarlo atado a un umbral hacía que con 11
+  /// centros nunca apareciera. Además la lista va a crecer, y es mejor que
+  /// la forma de elegir no le cambie por debajo el día que pase de 12.
+  final bool forzarBuscador;
+
   const SelectorRecargable({
     super.key,
     required this.etiqueta,
@@ -59,6 +67,7 @@ class SelectorRecargable<T> extends StatelessWidget {
     this.icono,
     this.textoVacio = 'No hay opciones. Pulsa ↻ para volver a consultar.',
     this.umbralBuscador = 12,
+    this.forzarBuscador = false,
   });
 
   @override
@@ -70,7 +79,7 @@ class SelectorRecargable<T> extends StatelessWidget {
     // Con pocas opciones el desplegable de siempre es lo más cómodo. Cuando
     // son muchas (centros de costo pueden llegar a miles) un desplegable se
     // vuelve inservible: toca abrir una hoja con buscador.
-    final conBuscador = opciones.length > umbralBuscador;
+    final conBuscador = forzarBuscador || opciones.length > umbralBuscador;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
