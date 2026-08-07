@@ -9,6 +9,11 @@ class CentrosPage extends StatefulWidget {
 
 class _CentrosPageState extends State<CentrosPage> {
   late Future<List<CentroCosto>> _future;
+  final _busca = TextEditingController();
+
+  /// El filtro es LOCAL sobre la lista ya cargada: se siente instantáneo y no
+  /// vuelve a consultar el servidor con cada tecla.
+  String _q = '';
 
   @override
   void initState() {
@@ -16,9 +21,39 @@ class _CentrosPageState extends State<CentrosPage> {
     _future = InventarioService.centrosTodos();
   }
 
+  @override
+  void dispose() {
+    _busca.dispose();
+    super.dispose();
+  }
+
   void _recargar() => setState(() {
         _future = InventarioService.centrosTodos();
       });
+
+  static String _sinTildes(String s) {
+    const con = 'áàäâãéèëêíìïîóòöôõúùüûñ';
+    const sin = 'aaaaaeeeeiiiiooooouuuun';
+    final b = StringBuffer();
+    for (final ch in s.toLowerCase().split('')) {
+      final i = con.indexOf(ch);
+      b.write(i >= 0 ? sin[i] : ch);
+    }
+    return b.toString();
+  }
+
+  /// Busca en código, descripción y cliente a la vez, con las palabras en
+  /// cualquier orden y sin importar tildes — igual que el resto de la app.
+  List<CentroCosto> _filtrar(List<CentroCosto> todos) {
+    final palabras = _sinTildes(_q).split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty).toList();
+    if (palabras.isEmpty) return todos;
+    return todos.where((c) {
+      final texto = _sinTildes(
+          [c.codigo, c.descripcion, c.cliente].where((e) => e != null).join(' '));
+      return palabras.every(texto.contains);
+    }).toList();
+  }
 
   Future<void> _editar([CentroCosto? cc]) async {
     final guardado = await showModalBottomSheet<bool>(
@@ -47,24 +82,73 @@ class _CentrosPageState extends State<CentrosPage> {
           if (snap.hasError) {
             return Center(child: Text('Error: ${snap.error}'));
           }
-          final centros = snap.data ?? [];
-          return ListView.separated(
-            padding: const EdgeInsets.only(bottom: 80),
-            itemCount: centros.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final c = centros[i];
-              return ListTile(
-                leading: Icon(Icons.account_tree,
-                    color: c.activo ? null : Colors.grey),
-                title: Text(c.activo ? c.codigo : '${c.codigo}  (inactivo)',
-                    style: c.activo ? null : const TextStyle(color: Colors.grey)),
-                subtitle: Text([c.descripcion, c.cliente]
-                    .where((e) => e != null && e.isNotEmpty).join(' · ')),
-                trailing: const Icon(Icons.edit, size: 20),
-                onTap: () => _editar(c),
-              );
-            },
+          final todos = snap.data ?? [];
+          final centros = _filtrar(todos);
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                child: TextField(
+                  controller: _busca,
+                  onChanged: (v) => setState(() => _q = v),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por código, descripción o cliente…',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    suffixIcon: _q.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _busca.clear();
+                              setState(() => _q = '');
+                            },
+                          ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _q.isEmpty
+                        ? '${todos.length} centros'
+                        : '${centros.length} de ${todos.length}',
+                    style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: centros.isEmpty
+                    ? const Center(child: Text('Sin coincidencias'))
+                    : ListView.separated(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: centros.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final c = centros[i];
+                          return ListTile(
+                            leading: Icon(Icons.account_tree,
+                                color: c.activo ? null : Colors.grey),
+                            title: Text(
+                                c.activo
+                                    ? c.codigo
+                                    : '${c.codigo}  (inactivo)',
+                                style: c.activo
+                                    ? null
+                                    : const TextStyle(color: Colors.grey)),
+                            subtitle: Text([c.descripcion, c.cliente]
+                                .where((e) => e != null && e.isNotEmpty)
+                                .join(' · ')),
+                            trailing: const Icon(Icons.edit, size: 20),
+                            onTap: () => _editar(c),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
