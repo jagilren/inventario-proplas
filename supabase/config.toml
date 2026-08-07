@@ -4,6 +4,11 @@ project_id = "nyvaswimcxbqxnlcnxij"
 [functions.crear-usuario]
 verify_jwt = true
 
+# Emparejamiento con IA: exige sesión iniciada. Sin esto, cualquiera con la
+# URL podría gastar los tokens de la empresa.
+[functions.emparejar-ia]
+verify_jwt = true
+
 # La web debe ser pública (sin token), es el sitio en sí.
 [functions.web]
 verify_jwt = false

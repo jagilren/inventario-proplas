@@ -9,6 +9,8 @@ import '../util/import_archivo.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/confirmar_descarte.dart';
+import '../widgets/elegir_emparejador.dart';
+import '../util/emparejador_ia.dart';
 
 final _money =
     NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -19,10 +21,12 @@ class _FilaComp {
   final String textoOriginal;
   num cantidad;
   num costo; // UNITARIO y sin IVA
+  /// match y score se llenan DESPUÉS de leer el archivo, cuando el usuario
+  /// elige si empareja con el algoritmo local o con IA.
   Elemento? match;
-  double score;
-  _FilaComp(this.textoOriginal, this.cantidad, this.costo,
-      {this.match, this.score = 0});
+  double score = 0;
+
+  _FilaComp(this.textoOriginal, this.cantidad, this.costo);
 
   num get total => cantidad * costo;
 }
@@ -50,6 +54,8 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
   bool _leyendo = false;
   bool _cargando = false;
   bool _recargandoBodegas = false;
+  bool _consultandoIA = false;
+  bool _emparejadoConIA = false;
   String? _archivo;
 
   @override
@@ -122,14 +128,41 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
     try {
       // conCosto: exige la tercera columna; sin ella la base rechazaría todo.
       final crudas = leerArchivoImport(bytes, nombre, conCosto: true);
+
+      // Se arma primero la lista con cantidad y costo; el emparejamiento se
+      // resuelve después, según lo que elija el usuario.
       final out = <_FilaComp>[];
       for (final r in crudas) {
         final texto = r[0].toString().trim();
         if (texto.isEmpty) continue;
-        final cant = parseCantidad(r.length > 1 ? r[1].toString() : '');
-        final costo = parseCantidad(r.length > 2 ? r[2].toString() : '');
-        final (match, score) = _emparejador!.mejor(texto);
-        out.add(_FilaComp(texto, cant, costo, match: match, score: score));
+        out.add(_FilaComp(
+          texto,
+          parseCantidad(r.length > 1 ? r[1].toString() : ''),
+          parseCantidad(r.length > 2 ? r[2].toString() : ''),
+        ));
+      }
+      if (!mounted) return;
+
+      // Se pregunta CADA VEZ: la IA cuesta plata, y un interruptor que
+      // quedó prendido gastaría sin que nadie lo note.
+      final opcion = await elegirEmparejador(context, lineas: out.length);
+      if (opcion == null) {
+        // Canceló: no se deja el archivo a medias.
+        setState(() {
+          _filas = [];
+          _archivo = null;
+        });
+        return;
+      }
+
+      if (opcion.usarIA) {
+        await _emparejarConIA(out, opcion.proveedor);
+      } else {
+        for (final f in out) {
+          final (match, score) = _emparejador!.mejor(f.textoOriginal);
+          f.match = match;
+          f.score = score;
+        }
       }
       if (mounted) setState(() => _filas = out);
     } on FormatException catch (e) {
@@ -147,6 +180,57 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
           '(.xlsx) o CSV válido.\n\nDetalle: $e');
     } finally {
       if (mounted) setState(() => _leyendo = false);
+    }
+  }
+
+  /// Empareja con IA. Si falla (sin llave, sin red, error del proveedor),
+  /// NO deja al usuario sin nada: avisa el motivo y cae al algoritmo local,
+  /// que siempre funciona.
+  Future<void> _emparejarConIA(
+      List<_FilaComp> filas, ProveedorIA proveedor) async {
+    setState(() => _consultandoIA = true);
+    try {
+      final res = await EmparejadorIA(_emparejador!).emparejar(
+        [for (final f in filas) f.textoOriginal],
+        proveedor: proveedor,
+      );
+      for (var i = 0; i < filas.length && i < res.length; i++) {
+        filas[i].match = res[i].match;
+        filas[i].score = res[i].score;
+      }
+      if (mounted) {
+        setState(() => _emparejadoConIA = true);
+        _msg('✓ Emparejado con ${proveedor.etiqueta}');
+      }
+    } catch (e) {
+      // Se completa con el algoritmo local para no perder el trabajo.
+      for (final f in filas) {
+        final (match, score) = _emparejador!.mejor(f.textoOriginal);
+        f.match = match;
+        f.score = score;
+      }
+      if (mounted) {
+        setState(() => _emparejadoConIA = false);
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.cloud_off, color: Colors.orange, size: 40),
+            title: const Text('No se pudo usar la IA'),
+            content: SingleChildScrollView(
+              child: Text('Se emparejó con el algoritmo local, así que no '
+                  'perdiste el archivo — revisa las líneas antes de '
+                  'registrar.\n\nMotivo:\n$e'),
+            ),
+            actions: [
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Entendido')),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _consultandoIA = false);
     }
   }
 
@@ -484,13 +568,15 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
               ),
             ]),
           ),
-          if (_leyendo || _cargando) const LinearProgressIndicator(),
+          if (_leyendo || _cargando || _consultandoIA)
+            const LinearProgressIndicator(),
           if (_filas.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
+                  '${_emparejadoConIA ? '✨ IA · ' : ''}'
                   '${_filas.length} filas · ${_validas.length} listas'
                   '${_sinCosto > 0 ? ' · $_sinCosto sin costo' : ''}'
                   '${_serializados > 0 ? ' · $_serializados serializadas (se omiten)' : ''}'

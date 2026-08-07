@@ -1359,6 +1359,27 @@ class InventarioService {
     return (res as num).toInt();
   }
 
+  /// Empareja líneas de un archivo usando un LLM, a través de la Edge
+  /// Function `emparejar-ia`.
+  ///
+  /// Las llaves de los proveedores viven SOLO en el servidor: la web y la
+  /// APK son públicas, así que cualquiera podría sacarlas del código.
+  static Future<List<Map<String, dynamic>>> emparejarConIA({
+    required List<Map<String, dynamic>> lineas,
+    required String proveedor,
+  }) async {
+    final res = await supabase.functions.invoke(
+      'emparejar-ia',
+      body: {'lineas': lineas, 'proveedor': proveedor},
+    );
+    final data = res.data;
+    if (data is Map && data['error'] != null) {
+      throw Exception(data['error']);
+    }
+    return ((data as Map)['resultados'] as List)
+        .cast<Map<String, dynamic>>();
+  }
+
   /// Registra una COMPRA completa (muchas líneas) en una sola transacción.
   /// items = [{elemento_id, cantidad, costo}]. El costo es UNITARIO y SIN
   /// IVA: es el que recalcula el promedio ponderado móvil del artículo.
