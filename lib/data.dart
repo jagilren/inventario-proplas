@@ -400,11 +400,18 @@ class Usuario {
   final String? email;
   final String? nombre;
   final Set<String> roles;
+
+  /// Un usuario inactivo conserva sus roles pero no puede hacer NI VER nada:
+  /// las funciones es_admin()/tiene_rol() y todas las políticas de lectura
+  /// exigen que esté activo. Al reactivarlo vuelve tal como estaba.
+  final bool activo;
+
   Usuario.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String,
       email = m['email'] as String?,
       nombre = m['nombre'] as String?,
-      roles = ((m['roles'] as List?) ?? []).map((e) => e as String).toSet();
+      roles = ((m['roles'] as List?) ?? []).map((e) => e as String).toSet(),
+      activo = (m['activo'] ?? true) as bool;
 }
 
 class Auditoria {
@@ -1116,10 +1123,13 @@ class InventarioService {
   /// movimientos por fuera sin que nadie se entere. Devuelve null si todavía
   /// no hay ningún movimiento.
   static Future<DateTime?> primeraFechaMovimiento() async {
+    // OJO: en el cliente de Supabase order() es DESCENDENTE por defecto. Sin
+    // ascending:true esto devolvía el movimiento más RECIENTE, y el rango
+    // "desde el principio" quedaba casi vacío.
     final res = await supabase
         .from('movimientos')
         .select('fecha')
-        .order('fecha')
+        .order('fecha', ascending: true)
         .limit(1)
         .maybeSingle();
     if (res == null) return null;
@@ -1143,6 +1153,40 @@ class InventarioService {
     return (res as List)
         .map((e) => Usuario.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Activa o inactiva un usuario (solo admin).
+  ///
+  /// Inactivar NO le quita los roles: se los deja para que reactivarlo lo
+  /// devuelva exactamente como estaba. Lo que lo bloquea es la bandera, que
+  /// revisan tanto las funciones de rol como todas las políticas de lectura.
+  /// El servidor rechaza inactivarse a uno mismo y dejar la organización sin
+  /// ningún administrador activo.
+  static Future<void> inactivarUsuario(String id, bool activo) async {
+    await supabase.rpc(
+      'inactivar_usuario',
+      params: {'p_id': id, 'p_activo': activo},
+    );
+  }
+
+  /// Cuántos movimientos e imágenes tiene atados un usuario. Si hay alguno,
+  /// no se puede borrar: solo inactivar.
+  static Future<({int movimientos, int imagenes})> usosDeUsuario(
+    String id,
+  ) async {
+    final res = await supabase
+        .rpc('usos_de_usuario', params: {'p_id': id})
+        .single();
+    return (
+      movimientos: ((res['movimientos'] ?? 0) as num).toInt(),
+      imagenes: ((res['imagenes'] ?? 0) as num).toInt(),
+    );
+  }
+
+  /// Borra un usuario DE VERDAD. Solo funciona si no tiene movimientos ni
+  /// imágenes; si los tiene, el servidor lanza excepción diciendo cuántos.
+  static Future<void> borrarUsuario(String id) async {
+    await supabase.rpc('borrar_usuario', params: {'p_id': id});
   }
 
   /// Busca usuarios por correo o nombre (servidor, máx. 30). Para el selector

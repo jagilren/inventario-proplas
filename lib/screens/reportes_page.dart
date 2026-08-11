@@ -85,7 +85,9 @@ class _ReportesPageState extends State<ReportesPage> {
       return;
     }
     setState(() {
-      _desde = primera;
+      // Al inicio de ESE día: si el primer movimiento fue a las 14:30, arrancar
+      // a las 14:30 dejaría por fuera cualquier otro de esa misma mañana.
+      _desde = DateTime(primera.year, primera.month, primera.day);
       _hasta = DateTime.now();
     });
     if (!mounted) return;
