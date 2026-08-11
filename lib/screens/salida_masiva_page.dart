@@ -6,6 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import '../data.dart';
 import '../util/picker.dart';
 import '../util/import_archivo.dart';
+import '../util/emparejador_ia.dart';
+import '../widgets/elegir_emparejador.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/confirmar_descarte.dart';
@@ -17,7 +19,7 @@ class _FilaSal {
   final String textoOriginal; // lo que traía la columna ELEMENTO
   num cantidad; // editable antes de cargar
   Elemento? match; // con qué elemento del catálogo se emparejó
-  double score; // qué tan seguro es el emparejamiento (0..1)
+  double score = 0; // qué tan seguro es el emparejamiento (0..1)
 
   /// Excepción: esta línea sale de OTRA bodega, no de la general.
   /// Sirve cuando el saldo está en otra bodega: en vez de abandonar la
@@ -25,7 +27,9 @@ class _FilaSal {
   /// desde donde de verdad está el material.
   Bodega? bodegaPropia;
 
-  _FilaSal(this.textoOriginal, this.cantidad, {this.match, this.score = 0});
+  // match y score se llenan después de emparejar (algoritmo local o IA), y
+  // se pueden corregir a mano desde la lista.
+  _FilaSal(this.textoOriginal, this.cantidad);
 }
 
 /// Carga masiva de SALIDAS: sube un Excel/CSV con columnas ELEMENTO y
@@ -48,6 +52,8 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   List<CentroCosto> _centros = [];
   CentroCosto? _centro;
   EmparejadorCatalogo? _emparejador;
+  bool _consultandoIA = false;
+  bool _emparejadoConIA = false;
   List<_FilaSal> _filas = [];
   bool _leyendo = false;
   bool _cargando = false;
@@ -112,6 +118,47 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
     });
   }
 
+  /// Empareja con IA. Si falla (sin llave, sin red, error del proveedor), NO
+  /// deja al usuario sin nada: avisa el motivo y cae al algoritmo local, que
+  /// siempre funciona.
+  ///
+  /// La IA solo decide CON QUÉ artículo se empareja cada línea. No toca
+  /// cantidades, ni bodegas, ni la valorización: el costo lo estampa la base
+  /// al registrar la salida (costo promedio de esa bodega en ese instante), y
+  /// que alcance la existencia lo sigue revisando `_revisarSaldos`.
+  Future<void> _emparejarConIA(
+      List<_FilaSal> filas, ProveedorIA proveedor, String? modelo) async {
+    setState(() => _consultandoIA = true);
+    try {
+      final res = await EmparejadorIA(_emparejador!).emparejar(
+        [for (final f in filas) f.textoOriginal],
+        proveedor: proveedor,
+        modelo: modelo,
+      );
+      for (var i = 0; i < filas.length && i < res.length; i++) {
+        filas[i].match = res[i].match;
+        filas[i].score = res[i].score;
+      }
+      if (mounted) {
+        setState(() => _emparejadoConIA = true);
+        _msg('✓ Emparejado con ${proveedor.etiqueta}');
+      }
+    } catch (e) {
+      // Se completa con el algoritmo local para no perder el trabajo.
+      for (final f in filas) {
+        final (match, score) = _emparejador!.mejor(f.textoOriginal);
+        f.match = match;
+        f.score = score;
+      }
+      if (mounted) {
+        setState(() => _emparejadoConIA = false);
+        _msg('La IA falló ($e). Se emparejó con el algoritmo local.');
+      }
+    } finally {
+      if (mounted) setState(() => _consultandoIA = false);
+    }
+  }
+
   // ---- Lectura del archivo ------------------------------------------
   Future<void> _elegirArchivo() async {
     if (_emparejador == null) {
@@ -153,12 +200,38 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
         final texto = r[0].toString().trim();
         if (texto.isEmpty) continue;
         final cant = parseCantidad(r.length > 1 ? r[1].toString() : '');
-        final (match, score) = _emparejador!.mejor(texto);
-        out.add(_FilaSal(texto, cant, match: match, score: score));
+        out.add(_FilaSal(texto, cant));
+      }
+      if (!mounted) return;
+
+      // Se pregunta CADA VEZ: la IA cuesta plata, y un interruptor que quedó
+      // prendido gastaría sin que nadie lo note.
+      final opcion = await elegirEmparejador(context, lineas: out.length);
+      if (opcion == null) {
+        // Canceló: no se deja el archivo a medias.
+        setState(() {
+          _filas = [];
+          _archivo = null;
+        });
+        return;
+      }
+
+      if (opcion.usarIA) {
+        await _emparejarConIA(out, opcion.proveedor, opcion.modelo);
+      } else {
+        for (final f in out) {
+          final (match, score) = _emparejador!.mejor(f.textoOriginal);
+          f.match = match;
+          f.score = score;
+        }
       }
       if (mounted) {
         setState(() => _filas = out);
-        await _revisarSaldos(); // marca de una las que no alcanzan
+        // SIEMPRE después de emparejar, venga del algoritmo o de la IA: una
+        // línea que la IA asoció a un artículo sin saldo tiene que quedar
+        // marcada igual que las del local. La IA cambia CON QUÉ se empareja,
+        // nunca si alcanza la existencia.
+        await _revisarSaldos();
       }
     } on FormatException catch (e) {
       setState(() {
@@ -608,13 +681,15 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
               ),
             ]),
           ),
-          if (_leyendo || _cargando) const LinearProgressIndicator(),
+          if (_leyendo || _cargando || _consultandoIA)
+            const LinearProgressIndicator(),
           if (_filas.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
+                  '${_emparejadoConIA ? '✨ IA · ' : ''}'
                   '${_filas.length} filas · ${_validas.length} listas'
                   '${_sinExistencia > 0 ? ' · $_sinExistencia sin existencia' : ''}'
                   '${serializados > 0 ? ' · $serializados serializadas (se omiten)' : ''}'
