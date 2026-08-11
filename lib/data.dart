@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'phash.dart';
 import 'local_store.dart';
 import 'sync_service.dart';
+import 'util/busqueda.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -251,6 +252,11 @@ class Trozo {
   final String elementoId;
   final String elementoNombre;
   final String unidad;
+  // Del elemento, solo para que la búsqueda del histórico mire lo mismo que
+  // la de Existencias (ver util/busqueda.dart).
+  final String? elementoMaterial;
+  final String? elementoSch;
+  final String? elementoCodigoBarras;
   final num longitud; // longitud inicial
   final num longitudActual; // lo que queda disponible
   final String? bodega;
@@ -264,6 +270,10 @@ class Trozo {
       elementoId = m['elemento_id'] as String,
       elementoNombre = ((m['elementos'] as Map?)?['nombre'] ?? '') as String,
       unidad = ((m['elementos'] as Map?)?['unidad'] ?? 'UND') as String,
+      elementoMaterial = (m['elementos'] as Map?)?['material'] as String?,
+      elementoSch = (m['elementos'] as Map?)?['sch'] as String?,
+      elementoCodigoBarras =
+          (m['elementos'] as Map?)?['codigo_barras'] as String?,
       longitud = (m['longitud'] ?? 0) as num,
       longitudActual = (m['longitud_actual'] ?? 0) as num,
       bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
@@ -315,6 +325,11 @@ class TrozoResumen {
   final int totalTrozos; // # de trozos en total (incluye consumidos)
   final DateTime?
   ultimaCreacion; // creación del trozo más reciente del elemento
+  // Campos del elemento que también entran en la búsqueda, para que buscar
+  // aquí encuentre lo mismo que en Existencias (ver util/busqueda.dart).
+  final String? material;
+  final String? sch;
+  final String? codigoBarras;
   TrozoResumen(
     this.elementoId,
     this.nombre,
@@ -323,6 +338,9 @@ class TrozoResumen {
     this.totalDisp,
     this.totalTrozos, [
     this.ultimaCreacion,
+    this.material,
+    this.sch,
+    this.codigoBarras,
   ]);
 }
 
@@ -857,10 +875,14 @@ class InventarioService {
     final res = await supabase
         .from('aprovechamiento_trozos')
         .select(
-          'elemento_id, longitud_actual, creado_en, elementos(nombre, unidad)',
+          'elemento_id, longitud_actual, creado_en, '
+          'elementos(nombre, unidad, material, sch, codigo_barras)',
         );
     final nombres = <String, String>{};
     final unidades = <String, String>{};
+    final materiales = <String, String?>{};
+    final schs = <String, String?>{};
+    final codigos = <String, String?>{};
     final disp = <String, int>{}; // # con saldo
     final totalDisp = <String, num>{}; // suma de saldos
     final total = <String, int>{}; // # de trozos en total
@@ -871,6 +893,9 @@ class InventarioService {
       final el = m['elementos'] as Map?;
       nombres[id] = (el?['nombre'] ?? '') as String;
       unidades[id] = (el?['unidad'] ?? 'UND') as String;
+      materiales[id] = el?['material'] as String?;
+      schs[id] = el?['sch'] as String?;
+      codigos[id] = el?['codigo_barras'] as String?;
       final saldo = (m['longitud_actual'] ?? 0) as num;
       total[id] = (total[id] ?? 0) + 1;
       if (saldo > 0) {
@@ -892,6 +917,9 @@ class InventarioService {
             totalDisp[id] ?? 0,
             total[id] ?? 0,
             ultima[id],
+            materiales[id],
+            schs[id],
+            codigos[id],
           ),
         )
         .toList();
@@ -917,12 +945,27 @@ class InventarioService {
     final todos = (res as List)
         .map((e) => Elemento.fromMap(e as Map<String, dynamic>))
         .toList();
-    final t = q.trim().toLowerCase();
-    if (t.isEmpty) return todos;
-    final palabras = t.split(RegExp(r'\s+'));
+    // Mismo filtro que el buscador de Existencias: palabras en cualquier
+    // orden, sin importar tildes, y mirando también material, sch y código
+    // de barras. Antes solo miraba el nombre y respetaba las tildes.
     return todos
-        .where((e) => palabras.every((w) => e.nombre.toLowerCase().contains(w)))
+        .where((e) => coincideBusqueda(
+              q,
+              [e.nombre, e.material, e.sch, e.codigoBarras],
+            ))
         .toList();
+  }
+
+  /// Un elemento por su id. Se usa para abrir la pantalla de edición desde
+  /// listas que solo guardan el id (por ejemplo el resumen de trozos).
+  static Future<Elemento?> elementoPorId(String id) async {
+    final res = await supabase
+        .from('elementos')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    if (res == null) return null;
+    return Elemento.fromMap(res);
   }
 
   /// Todos los trozos (de todos los elementos, incluidos los consumidos) para
@@ -930,7 +973,7 @@ class InventarioService {
   static Future<List<Trozo>> todosLosTrozos() async {
     final res = await supabase
         .from('aprovechamiento_trozos')
-        .select('*, elementos(nombre, unidad), bodegas(nombre)')
+        .select('*, elementos(nombre, unidad, material, sch, codigo_barras), bodegas(nombre)')
         .order('creado_en', ascending: false);
     return (res as List)
         .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
@@ -944,7 +987,7 @@ class InventarioService {
   }) async {
     var q = supabase
         .from('aprovechamiento_trozos')
-        .select('*, elementos(nombre, unidad), bodegas(nombre)')
+        .select('*, elementos(nombre, unidad, material, sch, codigo_barras), bodegas(nombre)')
         .eq('elemento_id', elementoId);
     if (soloDisponibles) q = q.gt('longitud_actual', 0);
     // Regla general de históricos: más reciente primero.

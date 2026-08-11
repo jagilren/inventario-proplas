@@ -6,6 +6,7 @@ import '../widgets/selector_recargable.dart';
 import '../reportes.dart';
 import '../util/tiempo.dart';
 import '../util/dialogos.dart';
+import '../util/busqueda.dart';
 import 'editar_elemento_page.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -45,6 +46,9 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   bool _cargando = false;
   bool _puedeEntrada = false;
   bool _puedeExportar = false;
+  // Editar el elemento (su nombre, material, sch…) pide los mismos roles que
+  // en Existencias, para no abrir por aquí una puerta que allá está cerrada.
+  bool _puedeEditar = false;
   bool _mostrarSaldoCero =
       false; // en "Por elemento", ocultar saldo 0 por defecto
   String?
@@ -78,6 +82,8 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
               r.contains(Roles.admin) ||
               r.contains(Roles.coordinador) ||
               r.contains(Roles.exportar);
+          _puedeEditar =
+              r.contains(Roles.admin) || r.contains(Roles.coordinador);
         });
       }
     });
@@ -168,21 +174,30 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
     }
   }
 
+  // Los dos filtros usan coincideBusqueda, el mismo criterio del buscador de
+  // Existencias: palabras en cualquier orden, sin importar tildes, y mirando
+  // material, sch y código de barras además del nombre. Antes era un
+  // `contains` pelado sobre el nombre, que fallaba con las tildes y con las
+  // palabras escritas en otro orden.
   List<TrozoResumen> get _resumenFiltrado {
-    final q = _ctrl.text.trim().toLowerCase();
-    final base = q.isEmpty
-        ? _resumen
-        : _resumen.where((t) => t.nombre.toLowerCase().contains(q)).toList();
+    final q = _ctrl.text;
+    final base = _resumen
+        .where((t) =>
+            coincideBusqueda(q, [t.nombre, t.material, t.sch, t.codigoBarras]))
+        .toList();
     return _ordenarResumen(base);
   }
 
   List<Trozo> get _historicoFiltrado {
-    final q = _ctrl.text.trim().toLowerCase();
-    final base = q.isEmpty
-        ? _historico
-        : _historico
-              .where((t) => t.elementoNombre.toLowerCase().contains(q))
-              .toList();
+    final q = _ctrl.text;
+    final base = _historico
+        .where((t) => coincideBusqueda(q, [
+              t.elementoNombre,
+              t.elementoMaterial,
+              t.elementoSch,
+              t.elementoCodigoBarras,
+            ]))
+        .toList();
     return _ordenarTrozos(base);
   }
 
@@ -357,7 +372,7 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                 controller: _ctrl,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'Buscar elemento…',
+                  hintText: 'Buscar elemento (palabras en cualquier orden)…',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _puedeEntrada
                       ? IconButton(
@@ -411,6 +426,29 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
         ),
       ),
     );
+  }
+
+  /// Abre la MISMA pantalla de edición que usa Existencias, para corregirle el
+  /// nombre (o material, sch, unidad) al elemento del aprovechamiento.
+  /// `forzarAprovechamiento` deja la marca fija: desde aquí no se puede
+  /// convertir un aprovechamiento en elemento del inventario oficial.
+  Future<void> _editarElemento(TrozoResumen t) async {
+    final e = await InventarioService.elementoPorId(t.elementoId);
+    if (!mounted) return;
+    if (e == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se encontró el elemento')),
+      );
+      return;
+    }
+    final cambio = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            EditarElementoPage(elemento: e, forzarAprovechamiento: true),
+      ),
+    );
+    if (cambio == true && mounted) _cargar();
   }
 
   /// Pestaña "Por elemento": elementos con sus trozos disponibles.
@@ -474,7 +512,18 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                                   '${consumidos > 0 ? '  ·  $consumidos en histórico' : ''}'
                             : 'Sin saldo · ${t.totalTrozos} en histórico',
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_puedeEditar)
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 20),
+                              tooltip: 'Editar elemento',
+                              onPressed: () => _editarElemento(t),
+                            ),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
                       onTap: () async {
                         await Navigator.push(
                           context,
@@ -1273,7 +1322,7 @@ class _BuscadorElementoState extends State<_BuscadorElemento> {
                 autofocus: true,
                 onChanged: _buscar,
                 decoration: const InputDecoration(
-                  hintText: 'Buscar artículo de aprovechamiento…',
+                  hintText: 'Buscar aprovechamiento (palabras en cualquier orden)…',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                 ),
