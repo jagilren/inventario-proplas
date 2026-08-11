@@ -137,8 +137,13 @@ class Reportes {
 
   /// 3) Consumo por centro de costo (salidas del período).
   /// El valor se estima al costo promedio ACTUAL del elemento.
-  static Future<void> consumoPorCentro(DateTime desde, DateTime hasta) async {
-    final res = await supabase
+  /// [centroId] null = TODOS los centros de costo.
+  static Future<void> consumoPorCentro(
+    DateTime desde,
+    DateTime hasta, {
+    String? centroId,
+  }) async {
+    var q = supabase
         .from('movimientos')
         .select(
           'fecha, cantidad, costo_unitario, '
@@ -148,8 +153,9 @@ class Reportes {
         .eq('elementos.es_aprovechamiento', false)
         .eq('tipo', 'salida')
         .gte('fecha', desde.toIso8601String())
-        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String())
-        .order('fecha');
+        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());
+    if (centroId != null) q = q.eq('centro_costo_id', centroId);
+    final res = await q.order('fecha');
     // Cada fila es UNA salida, así que lleva su fecha y quién la hizo: sin
     // eso no se puede rastrear un consumo raro hasta el movimiento que lo
     // originó ni saber a quién preguntarle.
@@ -200,7 +206,12 @@ class Reportes {
   /// (`costo_unitario`), no al promedio de hoy: cuando un artículo se agota
   /// su promedio queda en 0, y con el método viejo esas salidas aparecían
   /// costando $0 (medido: subvaloraba el 57% del total).
-  static Future<void> netosPorCentro(DateTime desde, DateTime hasta) async {
+  /// [centroId] null = TODOS los centros de costo.
+  static Future<void> netosPorCentro(
+    DateTime desde,
+    DateTime hasta, {
+    String? centroId,
+  }) async {
     final res = await supabase.rpc(
       'netos_por_centro',
       params: {
@@ -209,6 +220,7 @@ class Reportes {
             .add(const Duration(days: 1))
             .toUtc()
             .toIso8601String(),
+        'p_centro': centroId,
       },
     );
     final filas = <List<dynamic>>[

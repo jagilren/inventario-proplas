@@ -1109,6 +1109,23 @@ class InventarioService {
     revision.value++;
   }
 
+  /// Fecha del movimiento MÁS ANTIGUO de la base.
+  ///
+  /// La usan los informes para el botón "desde el principio": sin este dato
+  /// habría que inventarse una fecha de corte y arriesgarse a dejar
+  /// movimientos por fuera sin que nadie se entere. Devuelve null si todavía
+  /// no hay ningún movimiento.
+  static Future<DateTime?> primeraFechaMovimiento() async {
+    final res = await supabase
+        .from('movimientos')
+        .select('fecha')
+        .order('fecha')
+        .limit(1)
+        .maybeSingle();
+    if (res == null) return null;
+    return DateTime.parse(res['fecha'] as String).toLocal();
+  }
+
   /// Roles del usuario actual (puede tener varios).
   static Future<Set<String>> misRoles() async {
     final uid = supabase.auth.currentUser?.id;
