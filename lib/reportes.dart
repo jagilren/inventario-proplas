@@ -223,6 +223,11 @@ class Reportes {
         'Valor salidas',
         'Valor devoluciones',
         'Valor neto',
+        // Cada fila resume MUCHOS movimientos, así que no hay una fecha ni un
+        // usuario únicos: se da la ventana real y quiénes participaron.
+        'Primera fecha',
+        'Última fecha',
+        'Usuarios',
       ],
     ];
     num totalSal = 0, totalDev = 0, totalNeto = 0;
@@ -247,11 +252,15 @@ class Reportes {
         vSal.round(),
         vDev.round(),
         vNeto.round(),
+        _fecha(m['primera_fecha']),
+        _fecha(m['ultima_fecha']),
+        m['usuarios'] ?? '',
       ]);
     }
     filas.add([
       '', '', '', '', '', '', 'TOTAL',
       totalSal.round(), totalDev.round(), totalNeto.round(),
+      '', '', '',
     ]);
     await _descargar('netos_por_centro', filas);
   }
