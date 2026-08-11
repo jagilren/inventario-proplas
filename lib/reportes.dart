@@ -141,20 +141,27 @@ class Reportes {
     final res = await supabase
         .from('movimientos')
         .select(
-          'cantidad, costo_unitario, elementos!inner(nombre, costo_promedio), '
-          'centros_costo(codigo, descripcion)',
+          'fecha, cantidad, costo_unitario, '
+          'elementos!inner(nombre, costo_promedio), '
+          'centros_costo(codigo, descripcion), profiles(email)',
         )
         .eq('elementos.es_aprovechamiento', false)
         .eq('tipo', 'salida')
         .gte('fecha', desde.toIso8601String())
-        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());
+        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String())
+        .order('fecha');
+    // Cada fila es UNA salida, así que lleva su fecha y quién la hizo: sin
+    // eso no se puede rastrear un consumo raro hasta el movimiento que lo
+    // originó ni saber a quién preguntarle.
     final filas = <List<dynamic>>[
       [
+        'Fecha',
         'Centro de costo',
         'Descripción',
         'Elemento',
         'Cantidad',
         'Valor estimado',
+        'Usuario',
       ],
     ];
     int total = 0;
@@ -171,14 +178,16 @@ class Reportes {
       final val = (cant * costo).round(); // dinero como entero (COP)
       total += val;
       filas.add([
+        _fecha(r['fecha']),
         cc?['codigo'] ?? '(sin centro)',
         cc?['descripcion'] ?? '',
         el?['nombre'] ?? '',
         cant,
         val,
+        (r['profiles'] as Map?)?['email'] ?? '',
       ]);
     }
-    filas.add(['', '', '', 'TOTAL', total]);
+    filas.add(['', '', '', '', 'TOTAL', total, '']);
     await _descargar('consumo_por_centro', filas);
   }
 
