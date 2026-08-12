@@ -415,17 +415,40 @@ class _MovimientoPageState extends State<MovimientoPage> {
                 border: OutlineInputBorder(),
               ),
             ),
-          if (_esSalida)
-            SelectorRecargable<CentroCosto>(
-              // Los centros de costo SIEMPRE con buscador.
-              forzarBuscador: true,
-              etiqueta: 'Centro de costo destino',
-              valor: _cc,
-              opciones: _centros,
-              textoDe: (c) => c.etiqueta,
-              recargando: _recargandoCentros,
-              onRecargar: _recargarCentros,
-              onChanged: (v) => setState(() => _cc = v),
+          // El selector va en LAS DOS: antes solo aparecía en las salidas, y
+          // por eso una devolución (que se registra como entrada) no tenía
+          // dónde indicar de qué centro volvía. Resultado: las 16 entradas de
+          // la base quedaron sin centro, y el informe "Neto por centro de
+          // costo" nunca resto una sola devolución, porque su RPC exige
+          // centro_costo_id no nulo.
+          //
+          // En salida es OBLIGATORIO (a dónde va). En entrada es OPCIONAL:
+          // una compra no viene de ningún centro, una devolución sí.
+          SelectorRecargable<CentroCosto>(
+            // Los centros de costo SIEMPRE con buscador.
+            forzarBuscador: true,
+            etiqueta: _esSalida
+                ? 'Centro de costo destino'
+                : 'Centro de costo de origen (si es devolución)',
+            valor: _cc,
+            opciones: _centros,
+            textoDe: (c) => c.etiqueta,
+            recargando: _recargandoCentros,
+            onRecargar: _recargarCentros,
+            onChanged: (v) => setState(() => _cc = v),
+            textoVacio: _esSalida
+                ? 'No hay centros. Pulsa ↻ para volver a consultar.'
+                : 'Déjalo vacío si es una compra; elígelo si es una devolución.',
+          ),
+          if (!_esSalida)
+            const Padding(
+              padding: EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                'Si esta entrada es una DEVOLUCIÓN, elige el centro de costo '
+                'que devuelve: sin eso, el informe de Neto por centro no la '
+                'descuenta del consumo.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ),
           const SizedBox(height: 8),
           TextField(
