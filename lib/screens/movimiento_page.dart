@@ -405,7 +405,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
             )),
           ],
           const SizedBox(height: 8),
-          if (!_esSalida)
+          if (!_esSalida) ...[
             TextField(
               controller: _costo,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -415,6 +415,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
                 border: OutlineInputBorder(),
               ),
             ),
+            // Antes el selector solo salía en las salidas, así que estos dos
+            // campos nunca coincidían en pantalla y no hacía falta separarlos.
+            // Ahora sí conviven: sin este espacio, la etiqueta flotante del
+            // selector se monta encima del recuadro del costo.
+            const SizedBox(height: 16),
+          ],
           // El selector va en LAS DOS: antes solo aparecía en las salidas, y
           // por eso una devolución (que se registra como entrada) no tenía
           // dónde indicar de qué centro volvía. Resultado: las 16 entradas de
@@ -427,26 +433,23 @@ class _MovimientoPageState extends State<MovimientoPage> {
           SelectorRecargable<CentroCosto>(
             // Los centros de costo SIEMPRE con buscador.
             forzarBuscador: true,
-            etiqueta: _esSalida
-                ? 'Centro de costo destino'
-                : 'Centro de costo de origen (si es devolución)',
+            // Corta, para que no se monte sobre el campo de arriba ni se
+            // recorte en pantallas angostas. El detalle va en la nota de
+            // abajo, no en la etiqueta.
+            etiqueta: _esSalida ? 'Centro de costo destino' : 'Centro de costo',
             valor: _cc,
             opciones: _centros,
             textoDe: (c) => c.etiqueta,
             recargando: _recargandoCentros,
             onRecargar: _recargarCentros,
             onChanged: (v) => setState(() => _cc = v),
-            textoVacio: _esSalida
-                ? 'No hay centros. Pulsa ↻ para volver a consultar.'
-                : 'Déjalo vacío si es una compra; elígelo si es una devolución.',
           ),
           if (!_esSalida)
             const Padding(
-              padding: EdgeInsets.only(top: 6, left: 4),
+              padding: EdgeInsets.only(top: 8, left: 4, right: 4),
               child: Text(
-                'Si esta entrada es una DEVOLUCIÓN, elige el centro de costo '
-                'que devuelve: sin eso, el informe de Neto por centro no la '
-                'descuenta del consumo.',
+                'Solo si es DEVOLUCIÓN: elige el centro que devuelve. '
+                'Déjalo vacío si es una compra.',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
