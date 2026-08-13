@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../util/estado_servidor.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,19 +13,29 @@ class _LoginPageState extends State<LoginPage> {
   final _pass = TextEditingController();
   bool _cargando = false;
   String? _error;
+  FalloEntrada? _fallo;
 
   Future<void> _entrar() async {
-    setState(() { _cargando = true; _error = null; });
+    setState(() { _cargando = true; _error = null; _fallo = null; });
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: _email.text.trim(),
         password: _pass.text,
       );
       // AuthGate cambia solo al detectar la sesión.
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Error de conexión: $e');
+      // Antes cualquier fallo del servidor salía como "Error de conexión: ..."
+      // con el error crudo de la librería, que no le dice a nadie qué hacer.
+      // Lo más importante que hay que distinguir: si la base está pausada por
+      // inactividad, el usuario no puede arreglarlo solo — tiene que avisarle
+      // al administrador para que la reactive.
+      final f = await clasificarFalloEntrada(e);
+      if (mounted) {
+        setState(() {
+          _fallo = f;
+          _error = mensajeFallo(f, detalle: e.toString());
+        });
+      }
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -121,7 +132,53 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                  // El servidor caído se muestra en ámbar y no en rojo: no es
+                  // un error del usuario, no hay nada que corregir en la
+                  // pantalla, y el texto es largo porque explica a quién
+                  // avisar.
+                  Builder(builder: (_) {
+                    final servidor =
+                        _fallo == FalloEntrada.servidorNoDisponible;
+                    final color =
+                        servidor ? Colors.orange.shade900 : Colors.red;
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.08),
+                        border: Border.all(color: color.withValues(alpha: 0.5)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(
+                              servidor
+                                  ? Icons.cloud_off
+                                  : _fallo == FalloEntrada.sinInternet
+                                      ? Icons.wifi_off
+                                      : Icons.error_outline,
+                              color: color,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                tituloFallo(_fallo ?? FalloEntrada.desconocido),
+                                style: TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text(_error!,
+                              style: TextStyle(color: color, fontSize: 13)),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
                 const SizedBox(height: 24),
                 SizedBox(
