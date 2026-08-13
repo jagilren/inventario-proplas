@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../util/estado_servidor.dart';
+import '../config.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,6 +18,26 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _entrar() async {
     setState(() { _cargando = true; _error = null; _fallo = null; });
+
+    // Modo prueba: muestra el mensaje pedido sin llamar al servidor. Sirve
+    // para revisar los textos sin pausar la base ni apagar el wifi. En
+    // producción Config.simularFalloLogin va en null y este bloque no corre.
+    final simulado = Config.simularFalloLogin;
+    if (simulado != null) {
+      final f = switch (simulado) {
+        'servidor' => FalloEntrada.servidorNoDisponible,
+        'sinInternet' => FalloEntrada.sinInternet,
+        'credenciales' => FalloEntrada.credenciales,
+        _ => FalloEntrada.desconocido,
+      };
+      setState(() {
+        _fallo = f;
+        _error = mensajeFallo(f, detalle: 'Simulación de prueba: $simulado');
+        _cargando = false;
+      });
+      return;
+    }
+
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: _email.text.trim(),
