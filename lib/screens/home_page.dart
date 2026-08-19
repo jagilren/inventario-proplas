@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
 import '../ajustes.dart';
 import '../sync_service.dart';
+import '../realtime_service.dart';
 import 'dashboard_page.dart';
 import 'elementos_page.dart';
 import 'movimiento_page.dart';
@@ -48,6 +49,9 @@ class _HomePageState extends State<HomePage> {
     // Ya hay sesión: descargar el catálogo para poder trabajar sin señal
     // y subir lo que hubiera quedado pendiente de una sesión anterior.
     SyncService.alSesionIniciada();
+    // Avisos en vivo: refresca las vistas abiertas cuando OTRO usuario
+    // registra o anula un movimiento.
+    RealtimeService.iniciar();
     Ajustes.cargar(); // config regional de exportaciones del usuario
   }
 

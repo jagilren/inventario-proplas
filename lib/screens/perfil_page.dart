@@ -4,6 +4,7 @@ import '../data.dart';
 import 'gestion_usuarios_page.dart';
 import 'centros_page.dart';
 import 'historial_page.dart';
+import '../realtime_service.dart';
 
 class PerfilPage extends StatefulWidget {
   const PerfilPage({super.key});
@@ -83,6 +84,9 @@ class _PerfilPageState extends State<PerfilPage> {
       ),
     );
     if (confirmar != true) return;
+    // Soltar el canal antes de salir: si no, el socket queda vivo y el
+    // siguiente usuario heredaría la suscripción del anterior.
+    await RealtimeService.detener();
     await Supabase.instance.client.auth.signOut();
     if (!mounted) return;
     Navigator.of(context).popUntil((r) => r.isFirst);

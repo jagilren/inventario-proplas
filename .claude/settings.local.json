@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c \"import openpyxl; print\\('openpyxl', openpyxl.__version__\\)\")",
-      "Bash(python3 -c \"import pandas; print\\('pandas', pandas.__version__\\)\")"
+      "Bash(python3 -c \"import pandas; print\\('pandas', pandas.__version__\\)\")",
+      "Bash(flutter --version)",
+      "Bash(npx wrangler *)",
+      "Bash(wrangler --version)",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")",
+      "Bash(python3)",
+      "Bash(flutter build *)",
+      "Bash(python3 -c \"import openpyxl\")",
+      "Bash(python3 -c \"import pandas\")",
+      "Bash(python3 -c \"import openpyxl; print\\('ok'\\)\")",
+      "Bash(flutter pub *)",
+      "Bash(grep -A6 \"^  flutter_lints:$\" pubspec.lock)",
+      "Bash(flutter analyze *)",
+      "mcp__supabase__execute_sql"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
