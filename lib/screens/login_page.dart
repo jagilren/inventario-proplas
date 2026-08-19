@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../util/estado_servidor.dart';
+import '../config.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +16,36 @@ class _LoginPageState extends State<LoginPage> {
   bool _cargando = false;
   String? _error;
   FalloEntrada? _fallo;
+  bool _verPass = false;
+  bool _recordar = true;
+
+  /// Solo se recuerda el CORREO. La contraseña no se guarda nunca: en un
+  /// equipo compartido (que es el caso en bodega) eso sería entregarle la
+  /// cuenta al siguiente que se siente.
+  static const _claveCorreo = 'login_correo';
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarCorreo();
+  }
+
+  Future<void> _cargarCorreo() async {
+    final p = await SharedPreferences.getInstance();
+    final guardado = p.getString(_claveCorreo);
+    if (guardado != null && guardado.isNotEmpty && mounted) {
+      setState(() => _email.text = guardado);
+    }
+  }
+
+  Future<void> _guardarCorreo() async {
+    final p = await SharedPreferences.getInstance();
+    if (_recordar) {
+      await p.setString(_claveCorreo, _email.text.trim());
+    } else {
+      await p.remove(_claveCorreo);
+    }
+  }
 
   Future<void> _entrar() async {
     setState(() { _cargando = true; _error = null; _fallo = null; });
@@ -23,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
         email: _email.text.trim(),
         password: _pass.text,
       );
+      await _guardarCorreo();
       // AuthGate cambia solo al detectar la sesión.
     } catch (e) {
       // Antes cualquier fallo del servidor salía como "Error de conexión: ..."
@@ -88,8 +121,21 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
     return Scaffold(
-      body: Center(
+      // Degradado muy tenue del color de marca hacia el fondo. Da profundidad
+      // sin competir con el logo ni restarle legibilidad al aviso de error.
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [c.primary.withValues(alpha: 0.12), c.surface],
+          ),
+        ),
+        child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
@@ -97,19 +143,23 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo de los 10 años de RPCI
+                // Logo de los 10 años de RPCI. Antes debajo iba además un
+                // ícono de caja: dos elementos gráficos seguidos diciendo lo
+                // mismo. Se deja solo el logo y se baja un poco su alto, para
+                // hacerle sitio a lo que se agregó abajo.
                 Image.asset(
                   'assets/logo_rpci_10anos.png',
-                  height: 140,
+                  height: 120,
                   fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 20),
-                Icon(Icons.inventory_2, size: 56,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 8),
+                const SizedBox(height: 18),
                 Text('Inventario PROPLAS',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 28),
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('Control de existencias y movimientos',
+                    style: TextStyle(fontSize: 13, color: c.onSurfaceVariant)),
+                const SizedBox(height: 26),
                 TextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
@@ -123,13 +173,34 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _pass,
-                  obscureText: true,
+                  obscureText: !_verPass,
                   onSubmitted: (_) => _entrar(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Contraseña',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_outline),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    // Sin esto no hay forma de saber qué se escribió, y en el
+                    // celular equivocarse es lo normal.
+                    suffixIcon: IconButton(
+                      icon: Icon(_verPass
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      tooltip: _verPass ? 'Ocultar' : 'Mostrar',
+                      onPressed: () => setState(() => _verPass = !_verPass),
+                    ),
                   ),
+                ),
+                CheckboxListTile(
+                  value: _recordar,
+                  onChanged: (v) => setState(() => _recordar = v ?? true),
+                  title: const Text('Recordar mi correo',
+                      style: TextStyle(fontSize: 14)),
+                  subtitle: const Text(
+                      'Solo el correo. La contraseña nunca se guarda.',
+                      style: TextStyle(fontSize: 11)),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
@@ -197,10 +268,16 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _cargando ? null : _recuperar,
                   child: const Text('¿Olvidaste tu contraseña?'),
                 ),
+                const SizedBox(height: 12),
+                // Saber qué versión está corriendo evita la discusión de
+                // "a mí no me aparece" cuando alguien quedó con una vieja.
+                Text('Versión ${Config.versionApp}',
+                    style: TextStyle(fontSize: 11, color: c.outline)),
               ],
             ),
           ),
         ),
+      ),
       ),
     );
   }
