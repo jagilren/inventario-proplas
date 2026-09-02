@@ -176,6 +176,46 @@ class Bodega {
   int get hashCode => id.hashCode;
 }
 
+/// Un material de la tabla maestra `materiales`.
+///
+/// Se llama `MaterialMaestro` y no `Material` porque Flutter ya tiene un
+/// widget con ese nombre y las pantallas importan los dos archivos.
+class MaterialMaestro {
+  final String id;
+  final String nombre;
+  final bool activo;
+  /// Cuántos elementos del catálogo lo usan. Solo lo trae la pantalla de
+  /// gestión (`materialesConUso`); en el desplegable del formulario viene
+  /// en 0 porque allá no hace falta y costaría una consulta de más.
+  final int usos;
+
+  MaterialMaestro.fromMap(Map<String, dynamic> m, {this.usos = 0})
+    : id = m['id'] as String,
+      nombre = m['nombre'] as String,
+      activo = (m['activo'] ?? true) as bool;
+
+  /// Material que un elemento tiene escrito como texto pero que NO está en
+  /// la maestra. Después de la migración v35 no debería quedar ninguno, pero
+  /// una importación masiva puede traer un nombre nuevo: el trigger lo deja
+  /// pasar en vez de tumbar la carga. Sirve para que el desplegable pueda
+  /// mostrar ese valor en lugar de aparecer vacío y perderlo al guardar.
+  const MaterialMaestro.suelto(this.nombre)
+    : id = '',
+      activo = true,
+      usos = 0;
+
+  /// ¿Es uno de esos textos sueltos, sin fila en la maestra?
+  bool get esSuelto => id.isEmpty;
+
+  // Igualdad por id, igual que Bodega y CentroCosto: sin esto el
+  // DropdownButtonFormField pierde la selección al recargar la lista.
+  @override
+  bool operator ==(Object other) => other is MaterialMaestro && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
 class ExistenciaBodega {
   final String bodega;
   final num existencia;
@@ -623,6 +663,88 @@ class InventarioService {
     return (res as List)
         .map((e) => Bodega.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ------------------------- MATERIALES -------------------------
+  // Maestra de materiales (schema_v35). `elementos.material` es texto
+  // derivado de `elementos.material_id`: lo mantiene un trigger, por eso
+  // aquí solo se manda el id y la base se encarga del resto.
+
+  /// Solo los materiales activos, para el desplegable del formulario de
+  /// elementos. Ordenados alfabéticamente.
+  static Future<List<MaterialMaestro>> materialesActivos() async {
+    final res = await supabase
+        .from('materiales')
+        .select()
+        .eq('activo', true)
+        .order('nombre');
+    return (res as List)
+        .map((e) => MaterialMaestro.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Todos los materiales (activos e inactivos) con la cuenta de cuántos
+  /// elementos usa cada uno, para la pantalla de gestión. La cuenta se hace
+  /// en una sola consulta al catálogo en vez de una por material.
+  static Future<List<MaterialMaestro>> materialesConUso() async {
+    final res = await supabase.from('materiales').select().order('nombre');
+    final usados = await supabase
+        .from('elementos')
+        .select('material_id')
+        .not('material_id', 'is', null);
+    final cuenta = <String, int>{};
+    for (final e in (usados as List)) {
+      final id = (e as Map)['material_id'] as String?;
+      if (id != null) cuenta[id] = (cuenta[id] ?? 0) + 1;
+    }
+    return (res as List).map((e) {
+      final m = e as Map<String, dynamic>;
+      return MaterialMaestro.fromMap(m, usos: cuenta[m['id'] as String] ?? 0);
+    }).toList();
+  }
+
+  /// Crea o renombra un material. El índice único de la base (sobre el
+  /// nombre en mayúsculas y sin espacios) es el que impide los duplicados
+  /// tipo "Inox 304" / "INOX 304"; aquí se traduce ese error a un mensaje
+  /// entendible.
+  static Future<void> guardarMaterial({
+    String? id,
+    required String nombre,
+  }) async {
+    final row = {'nombre': nombre.trim()};
+    try {
+      if (id == null) {
+        await supabase.from('materiales').insert(row);
+      } else {
+        await supabase.from('materiales').update(row).eq('id', id);
+      }
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        throw Exception('Ya existe un material con ese nombre.');
+      }
+      rethrow;
+    }
+  }
+
+  /// Baja lógica. No se permite si algún elemento lo está usando: primero
+  /// hay que reasignar esos elementos a otro material.
+  static Future<void> inhabilitarMaterial(String id) async {
+    final usados = await supabase
+        .from('elementos')
+        .select('id')
+        .eq('material_id', id)
+        .limit(1);
+    if ((usados as List).isNotEmpty) {
+      throw Exception(
+        'No se puede inhabilitar: hay elementos del catálogo usando este '
+        'material. Cámbialos primero a otro material.',
+      );
+    }
+    await supabase.from('materiales').update({'activo': false}).eq('id', id);
+  }
+
+  static Future<void> reactivarMaterial(String id) async {
+    await supabase.from('materiales').update({'activo': true}).eq('id', id);
   }
 
   static Future<List<CentroCosto>> centrosTodos() async {

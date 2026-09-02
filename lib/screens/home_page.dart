@@ -11,6 +11,7 @@ import 'alertas_page.dart';
 import 'aprovechamientos_page.dart';
 import 'perfil_page.dart';
 import 'centros_page.dart';
+import 'materiales_page.dart';
 import 'bodegas_page.dart';
 import 'traslados_page.dart';
 import 'reportes_page.dart';
@@ -154,6 +155,12 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Centros de costo'),
                 subtitle: const Text('Crear y editar'),
                 onTap: () => _ir(const CentrosPage()),
+              ),
+              ListTile(
+                leading: const Icon(Icons.category),
+                title: const Text('Materiales'),
+                subtitle: const Text('Lista única del catálogo'),
+                onTap: () => _ir(const MaterialesPage()),
               ),
               if (_admin)
                 ListTile(
