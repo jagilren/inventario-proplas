@@ -204,8 +204,28 @@ class MaterialMaestro {
       activo = true,
       usos = 0;
 
+  /// Opción "Sin material" del desplegable. No es una fila de la maestra:
+  /// es la forma de dejar el elemento sin material desde el selector con
+  /// buscador, que no sabe devolver null.
+  const MaterialMaestro.ninguno()
+    : id = _idNinguno,
+      nombre = 'Sin material',
+      activo = true,
+      usos = 0;
+
+  static const _idNinguno = '__ninguno__';
+
   /// ¿Es uno de esos textos sueltos, sin fila en la maestra?
   bool get esSuelto => id.isEmpty;
+
+  /// ¿Es la opción "Sin material"?
+  bool get esNinguno => id == _idNinguno;
+
+  /// El id que se manda a la base: null si no hay fila real detrás.
+  String? get idParaGuardar => (esSuelto || esNinguno) ? null : id;
+
+  /// El texto que se manda a la base: null si es "Sin material".
+  String? get textoParaGuardar => esNinguno ? null : nombre;
 
   // Igualdad por id, igual que Bodega y CentroCosto: sin esto el
   // DropdownButtonFormField pierde la selección al recargar la lista.

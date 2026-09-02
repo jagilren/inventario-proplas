@@ -10,6 +10,24 @@ import '../util/busqueda.dart';
 ///
 /// Renombrar corrige el catálogo completo de una sola vez: los elementos
 /// apuntan al material por id y la base arrastra el texto.
+/// Abre el formulario de material (crear o editar) como hoja inferior.
+///
+/// Es público para que el formulario de elementos pueda crear un material
+/// con el botón + sin mandar al usuario a otra pantalla y hacerle perder lo
+/// que llevaba escrito.
+///
+/// Devuelve el nombre guardado, o null si se canceló.
+Future<String?> mostrarFormularioMaterial(
+  BuildContext context, {
+  MaterialMaestro? material,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _MaterialForm(material: material),
+  );
+}
+
 class MaterialesPage extends StatefulWidget {
   const MaterialesPage({super.key});
   @override
@@ -38,12 +56,8 @@ class _MaterialesPageState extends State<MaterialesPage> {
       setState(() => _future = InventarioService.materialesConUso());
 
   Future<void> _editar([MaterialMaestro? m]) async {
-    final guardado = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _MaterialForm(material: m),
-    );
-    if (guardado == true) _recargar();
+    final guardado = await mostrarFormularioMaterial(context, material: m);
+    if (guardado != null) _recargar();
   }
 
   @override
@@ -215,11 +229,14 @@ class _MaterialFormState extends State<_MaterialForm> {
     }
     setState(() => _guardando = true);
     try {
+      final nombre = _nombre.text.trim();
       await InventarioService.guardarMaterial(
         id: widget.material?.id,
-        nombre: _nombre.text.trim(),
+        nombre: nombre,
       );
-      if (mounted) Navigator.pop(context, true);
+      // Se devuelve el nombre (no un bool) para que quien lo abrió pueda
+      // dejar seleccionado el material recién creado.
+      if (mounted) Navigator.pop(context, nombre);
     } catch (e) {
       if (mounted) {
         _aviso(e.toString().replaceAll('Exception: ', ''));
@@ -328,7 +345,7 @@ class _MaterialFormState extends State<_MaterialForm> {
     setState(() => _guardando = true);
     try {
       await InventarioService.inhabilitarMaterial(widget.material!.id);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, widget.material!.nombre);
     } catch (e) {
       if (mounted) {
         _aviso(e.toString().replaceAll('Exception: ', ''));
@@ -341,7 +358,7 @@ class _MaterialFormState extends State<_MaterialForm> {
     setState(() => _guardando = true);
     try {
       await InventarioService.reactivarMaterial(widget.material!.id);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, widget.material!.nombre);
     } catch (e) {
       if (mounted) {
         _aviso('Error: $e');

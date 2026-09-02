@@ -4,6 +4,7 @@ import '../data.dart';
 import '../widgets/galeria_elemento.dart';
 import 'escaner_page.dart';
 import 'materiales_page.dart';
+import '../widgets/selector_recargable.dart';
 
 /// Crea o edita un elemento (admin / coordinador).
 /// Si [elemento] es null, es creación. Devuelve true si guardó.
@@ -40,6 +41,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   List<MaterialMaestro> _materiales = [];
   MaterialMaestro? _materialSel;
   bool _cargandoMateriales = true;
+  bool _recargandoMateriales = false;
+  static const _sinMaterial = MaterialMaestro.ninguno();
   late final TextEditingController _sch;
   late final TextEditingController _stockMin;
   late final TextEditingController _codigoBarras;
@@ -116,25 +119,34 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   /// Trae la maestra y preselecciona el material que ya tenía el elemento.
   /// El enganche se hace por nombre porque el texto guardado en el elemento
   /// es exactamente el de la maestra (lo mantiene un trigger en la base).
-  Future<void> _cargarMateriales(String? actual) async {
+  Future<void> _cargarMateriales(String? actual,
+      {List<MaterialMaestro>? yaTraidos}) async {
     try {
-      final lista = await InventarioService.materialesActivos();
+      // `yaTraidos` evita consultar dos veces cuando quien llama ya pidió la
+      // maestra (el botón ↻, que además necesita la lista para avisar
+      // cuántos llegaron nuevos).
+      final lista = yaTraidos ?? await InventarioService.materialesActivos();
       if (!mounted) return;
-      MaterialMaestro? sel;
+      // "Sin material" va de primero: es la forma de dejarlo vacío desde el
+      // buscador, que solo sabe devolver una opción de la lista.
+      lista.insert(0, _sinMaterial);
+      MaterialMaestro sel = _sinMaterial;
       if (actual != null && actual.trim().isNotEmpty) {
         final buscado = actual.trim().toUpperCase();
+        MaterialMaestro? hallado;
         for (final m in lista) {
-          if (m.nombre.trim().toUpperCase() == buscado) {
-            sel = m;
+          if (!m.esNinguno && m.nombre.trim().toUpperCase() == buscado) {
+            hallado = m;
             break;
           }
         }
         // Texto que no está en la maestra (o material inhabilitado): se
         // muestra igual, para no borrarlo sin que nadie se entere.
-        if (sel == null) {
-          sel = MaterialMaestro.suelto(actual.trim());
-          lista.add(sel);
+        if (hallado == null) {
+          hallado = MaterialMaestro.suelto(actual.trim());
+          lista.add(hallado);
         }
+        sel = hallado;
       }
       setState(() {
         _materiales = lista;
@@ -186,11 +198,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // Se manda el id (la maestra manda) y también el nombre, para que
         // al dejarlo vacío el texto se limpie de verdad. Un material suelto
         // (sin fila en la maestra) viaja solo como texto.
-        'material_id':
-            (_materialSel == null || _materialSel!.esSuelto)
-                ? null
-                : _materialSel!.id,
-        'material': _materialSel?.nombre,
+        'material_id': _materialSel?.idParaGuardar,
+        'material': _materialSel?.textoParaGuardar,
         'sch': _sch.text.trim().isEmpty ? null : _sch.text.trim(),
         'unidad': _unidad,
         'stock_minimo': num.tryParse(_stockMin.text.replaceAll(',', '.')) ?? 0,
@@ -214,7 +223,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         elementoCreado = widget.forzarAprovechamiento
             ? await InventarioService.crearElementoAprovechamiento(
                 nombre: _nombre.text.trim(),
-                material: _materialSel?.nombre,
+                material: _materialSel?.textoParaGuardar,
                 sch: _sch.text.trim().isEmpty ? null : _sch.text.trim(),
                 unidad: _unidad,
               )
@@ -599,21 +608,25 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
 
   /// Busca en la maestra ya cargada el material que corresponde a un texto.
   /// Si no está, lo devuelve como suelto para no perderlo.
-  MaterialMaestro? _materialDe(String? texto) {
-    if (texto == null || texto.trim().isEmpty) return null;
+  MaterialMaestro _materialDe(String? texto) {
+    if (texto == null || texto.trim().isEmpty) return _sinMaterial;
     final buscado = texto.trim().toUpperCase();
     for (final m in _materiales) {
-      if (m.nombre.trim().toUpperCase() == buscado) return m;
+      if (!m.esNinguno && m.nombre.trim().toUpperCase() == buscado) return m;
     }
     final suelto = MaterialMaestro.suelto(texto.trim());
     _materiales.add(suelto);
     return suelto;
   }
 
-  /// Desplegable de material. Reemplazó al campo de texto libre: solo deja
-  /// elegir materiales dados de alta en la maestra (menú "Materiales"). El
-  /// botón de al lado lleva allá para crear uno que falte, sin perder lo que
-  /// ya se llevaba escrito en el formulario.
+  /// Selector de material: desplegable con lupita para buscar, botón + para
+  /// crear uno que falte y ↻ para volver a traer la maestra.
+  ///
+  /// Reemplazó al campo de texto libre. Es el mismo `SelectorRecargable` de
+  /// los centros de costo, así que se ve y se comporta igual en toda la app.
+  /// Va con `forzarBuscador`: hoy son 32 materiales y la lista solo crece,
+  /// y es mejor que la forma de elegir no le cambie por debajo al usuario
+  /// el día que pasen de cierto número.
   Widget _selectorMaterial() {
     if (_cargandoMateriales) {
       return const Padding(
@@ -621,6 +634,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         child: InputDecorator(
           decoration: InputDecoration(
             labelText: 'Material',
+            prefixIcon: Icon(Icons.category),
             border: OutlineInputBorder(),
           ),
           child: Row(
@@ -639,57 +653,49 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<MaterialMaestro?>(
-              initialValue: _materialSel,
-              isExpanded: true, // en móvil, que el nombre largo no desborde
-              decoration: const InputDecoration(
-                labelText: 'Material',
-                border: OutlineInputBorder(),
-              ),
-              hint: const Text('Sin material'),
-              items: [
-                const DropdownMenuItem<MaterialMaestro?>(
-                  value: null,
-                  child: Text('Sin material',
-                      style: TextStyle(color: Colors.grey)),
-                ),
-                ..._materiales.map(
-                  (m) => DropdownMenuItem<MaterialMaestro?>(
-                    value: m,
-                    child: Text(
-                      m.esSuelto ? '${m.nombre}  (fuera de la lista)' : m.nombre,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: (v) => setState(() => _materialSel = v),
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            height: 58,
-            child: IconButton(
-              tooltip: 'Administrar materiales',
-              icon: const Icon(Icons.playlist_add),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MaterialesPage()),
-                );
-                // Al volver puede haber materiales nuevos: se recarga la
-                // lista conservando la selección actual.
-                if (mounted) _cargarMateriales(_materialSel?.nombre);
-              },
-            ),
-          ),
-        ],
+      child: SelectorRecargable<MaterialMaestro>(
+        etiqueta: 'Material',
+        icono: Icons.category,
+        valor: _materialSel,
+        opciones: _materiales,
+        textoDe: (m) => m.esSuelto ? '${m.nombre}  (fuera de la lista)' : m.nombre,
+        forzarBuscador: true,
+        recargando: _recargandoMateriales,
+        textoVacio: 'No hay materiales. Pulsa + para crear el primero.',
+        tooltipAgregar: 'Crear un material nuevo',
+        onChanged: (v) => setState(() => _materialSel = v ?? _sinMaterial),
+        onAgregar: _crearMaterial,
+        onRecargar: _refrescarMateriales,
       ),
     );
+  }
+
+  /// + : crea un material sin salir del formulario y lo deja seleccionado.
+  /// Así no se pierde lo que el usuario ya llevaba escrito del elemento.
+  Future<void> _crearMaterial() async {
+    final creado = await mostrarFormularioMaterial(context);
+    if (creado == null || !mounted) return;
+    setState(() => _recargandoMateriales = true);
+    await _cargarMateriales(creado);
+    if (mounted) setState(() => _recargandoMateriales = false);
+  }
+
+  /// ↻ : vuelve a traer la maestra, por si otra persona creó un material
+  /// mientras esta pantalla estaba abierta. Conserva la selección actual.
+  Future<void> _refrescarMateriales() async {
+    setState(() => _recargandoMateriales = true);
+    final antes = _materiales.where((m) => !m.esNinguno && !m.esSuelto).length;
+    final lista = await recargarCatalogo(
+        context, InventarioService.materialesActivos, antes);
+    if (!mounted) return;
+    if (lista != null) {
+      // textoParaGuardar y no nombre: si la selección es "Sin material",
+      // su nombre es un rótulo de pantalla, no un material que buscar en la
+      // maestra (si no, se recreaba como si fuera uno suelto).
+      await _cargarMateriales(_materialSel?.textoParaGuardar,
+          yaTraidos: lista);
+    }
+    if (mounted) setState(() => _recargandoMateriales = false);
   }
 
   Widget _campo(

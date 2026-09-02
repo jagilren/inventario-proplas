@@ -55,6 +55,16 @@ class SelectorRecargable<T> extends StatelessWidget {
   /// la forma de elegir no le cambie por debajo el día que pase de 12.
   final bool forzarBuscador;
 
+  /// Qué hacer al pulsar +. Si es null, el botón no se dibuja.
+  ///
+  /// Para cuando al usuario le falta una opción justo mientras llena el
+  /// formulario: la crea ahí mismo en vez de abandonar lo que llevaba
+  /// escrito, irse a la pantalla de gestión y volver a empezar.
+  final Future<void> Function()? onAgregar;
+
+  /// Texto del botón + (ej. 'Crear un material nuevo').
+  final String tooltipAgregar;
+
   const SelectorRecargable({
     super.key,
     required this.etiqueta,
@@ -68,6 +78,8 @@ class SelectorRecargable<T> extends StatelessWidget {
     this.textoVacio = 'No hay opciones. Pulsa ↻ para volver a consultar.',
     this.umbralBuscador = 12,
     this.forzarBuscador = false,
+    this.onAgregar,
+    this.tooltipAgregar = 'Agregar uno nuevo',
   });
 
   @override
@@ -116,6 +128,22 @@ class SelectorRecargable<T> extends StatelessWidget {
                   onChanged: opciones.isEmpty ? null : onChanged,
                 ),
         ),
+        // Botón +: crear una opción sin salir del formulario. Va primero
+        // porque es el que más se usa cuando falta algo; ↻ es el remedio
+        // para cuando otro usuario ya lo creó desde su aparato.
+        if (onAgregar != null) ...[
+          const SizedBox(width: 2),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: IconButton(
+              onPressed: recargando ? null : onAgregar,
+              tooltip: tooltipAgregar,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ),
+        ],
         const SizedBox(width: 4),
         // Se alinea con el alto del campo, no con el helperText de abajo.
         Padding(
