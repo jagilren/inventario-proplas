@@ -166,6 +166,7 @@ class Reportes {
         'Descripción',
         'Elemento',
         'Cantidad',
+        'Costo unitario',
         'Valor estimado',
         'Usuario',
       ],
@@ -189,11 +190,12 @@ class Reportes {
         cc?['descripcion'] ?? '',
         el?['nombre'] ?? '',
         cant,
+        costo.round(),
         val,
         (r['profiles'] as Map?)?['email'] ?? '',
       ]);
     }
-    filas.add(['', '', '', '', 'TOTAL', total, '']);
+    filas.add(['', '', '', '', 'TOTAL', '', total, '']);
     await _descargar('consumo_por_centro', filas);
   }
 
