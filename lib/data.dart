@@ -260,8 +260,14 @@ class MovKardex {
 
   final String? bodega;
 
+  /// Si esta fila ES una anulación, el id del movimiento que revierte.
+  /// Con esto el kardex sabe qué movimientos ya están anulados sin tener
+  /// que adivinarlo del texto de la referencia.
+  final String? anulaMovimientoId;
+
   MovKardex.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String?,
+      anulaMovimientoId = m['anula_movimiento_id'] as String?,
       fecha = DateTime.parse(m['fecha'] as String),
       tipo = m['tipo'] as String,
       cantidad = (m['cantidad'] ?? 0) as num,
@@ -274,7 +280,8 @@ class MovKardex {
       observacion = m['observacion'] as String?,
       usuarioId = m['usuario_id'] as String?;
 
-  bool get esAnulacion => (referencia ?? '').startsWith('ANULACION');
+  bool get esAnulacion =>
+      anulaMovimientoId != null || (referencia ?? '').startsWith('ANULACION');
 }
 
 /// Archivo adjunto a un movimiento (PDF, XLSX, imagen…).
@@ -933,7 +940,8 @@ class InventarioService {
         .from('movimientos')
         .select(
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
-          'observacion, usuario_id, bodegas(nombre), centros_costo(codigo)',
+          'observacion, usuario_id, anula_movimiento_id, '
+          'bodegas(nombre), centros_costo(codigo)',
         )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)

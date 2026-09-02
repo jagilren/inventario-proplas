@@ -29,6 +29,9 @@ class _KardexPageState extends State<KardexPage> {
   List<ExistenciaBodega> _porBodega = [];
   List<Serie> _series = [];
   late Future<List<MovKardex>> _future;
+  /// True mientras una anulación está en curso. Sin esto, dos toques
+  /// rápidos mandaban dos peticiones antes de que la lista se recargara.
+  bool _anulando = false;
 
   @override
   void initState() {
@@ -122,6 +125,8 @@ class _KardexPageState extends State<KardexPage> {
       ),
     );
     if (ok != true || m.id == null) return;
+    if (_anulando) return;
+    setState(() => _anulando = true);
     try {
       await InventarioService.anularMovimiento(m.id!, motivoCtrl.text.trim());
       if (!mounted) return;
@@ -130,9 +135,25 @@ class _KardexPageState extends State<KardexPage> {
       _recargar();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      // La base manda el mensaje ya redactado ("Ese movimiento ya fue
+      // anulado"). Se muestra tal cual en vez de un error técnico.
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_mensajeError(e))));
+      // Puede haber quedado anulado desde otro aparato: se recarga para
+      // que la fila aparezca marcada y el botón desaparezca.
+      _recargar();
+    } finally {
+      if (mounted) setState(() => _anulando = false);
     }
+  }
+
+  /// Saca el texto útil de un error de Postgres, que llega envuelto en
+  /// ruido técnico ("PostgrestException(message: ..., code: P0001)").
+  static String _mensajeError(Object e) {
+    final texto = e.toString();
+    final m = RegExp(r'message:\s*([^,]+)').firstMatch(texto);
+    if (m != null) return m.group(1)!.trim();
+    return texto.replaceAll('Exception: ', '');
   }
 
   /// Detalle de un movimiento: ver/editar la observación y (a futuro) adjuntar.
@@ -362,11 +383,24 @@ class _KardexPageState extends State<KardexPage> {
                 if (movs.isEmpty) {
                   return const Center(child: Text('Sin movimientos'));
                 }
+                // Qué movimientos YA tienen su anulación. Antes el botón
+                // rojo seguía apareciendo en el original después de
+                // anularlo: la condición miraba si la fila ERA una
+                // anulación, no si ya TENÍA una. Pulsarlo otra vez creaba
+                // una segunda reversa y la existencia quedaba compensada
+                // de más. La base ya lo impide (schema_v36); esto es para
+                // que ni siquiera se ofrezca.
+                final anulados = <String>{
+                  for (final m in movs)
+                    if (m.anulaMovimientoId != null) m.anulaMovimientoId!,
+                };
                 return ListView.separated(
                   itemCount: movs.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, i) {
                     final m = movs[i];
+                    final yaAnulado =
+                        m.id != null && anulados.contains(m.id);
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: _color(m.tipo).withValues(alpha: 0.15),
@@ -375,8 +409,38 @@ class _KardexPageState extends State<KardexPage> {
                           color: _color(m.tipo), size: 20,
                         ),
                       ),
-                      title: Text('${m.tipo.toUpperCase()} · '
-                          '${cantidadConSigno(m.tipo, m.cantidad)} ${e.unidad}'),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${m.tipo.toUpperCase()} · '
+                              '${cantidadConSigno(m.tipo, m.cantidad)} '
+                              '${e.unidad}',
+                              style: yaAnulado
+                                  // Tachado: se ve de un vistazo que ese
+                                  // movimiento ya no cuenta.
+                                  ? const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey)
+                                  : null,
+                            ),
+                          ),
+                          if (yaAnulado)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('ANULADO',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red)),
+                            ),
+                        ],
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -397,11 +461,16 @@ class _KardexPageState extends State<KardexPage> {
                                     fontStyle: FontStyle.italic, fontSize: 11)),
                         ],
                       ),
-                      trailing: (_esAdmin && !m.esAnulacion)
+                      trailing: (_esAdmin && !m.esAnulacion && !yaAnulado)
                           ? IconButton(
-                              icon: const Icon(Icons.block, size: 20, color: Colors.red),
+                              icon: const Icon(Icons.block,
+                                  size: 20, color: Colors.red),
                               tooltip: 'Anular',
-                              onPressed: () => _anular(m),
+                              // _anulando bloquea el doble toque: sin esto
+                              // se alcanzaban a mandar dos peticiones antes
+                              // de que la lista se recargara.
+                              onPressed:
+                                  _anulando ? null : () => _anular(m),
                             )
                           : const Icon(Icons.chevron_right, size: 18),
                       onTap: () => _verDetalle(m),
