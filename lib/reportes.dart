@@ -270,9 +270,18 @@ class Reportes {
     num totalSal = 0, totalDev = 0, totalNeto = 0;
     for (final r in (res as List)) {
       final m = r as Map<String, dynamic>;
-      final vSal = (m['valor_salidas'] ?? 0) as num;
+      // Con el mismo signo que su columna de cantidad vecina: "Valor
+      // salidas" en negativo (como "Salidas") y "Valor neto" en el
+      // signo que corresponda (como "Neto"). Antes solo "Devoluciones"
+      // tenía el mismo signo en cantidad y en plata por casualidad (las
+      // dos ya eran positivas); "Salidas" y "Neto" podían mostrar un
+      // signo en unidades y el contrario en dinero para el mismo
+      // centro. De paso, sumar "Valor salidas" + "Valor devoluciones"
+      // en Excel ahora también da "Valor neto" directo, igual que ya
+      // pasaba con las columnas de cantidad.
+      final vSal = -((m['valor_salidas'] ?? 0) as num);
       final vDev = (m['valor_devoluciones'] ?? 0) as num;
-      final vNeto = (m['valor_neto'] ?? 0) as num;
+      final vNeto = -((m['valor_neto'] ?? 0) as num);
       totalSal += vSal;
       totalDev += vDev;
       totalNeto += vNeto;
