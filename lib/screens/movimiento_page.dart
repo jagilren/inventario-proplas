@@ -476,7 +476,8 @@ class _MovimientoPageState extends State<MovimientoPage> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Esta devolución se reasigna a otro centro',
+              title: const Text(
+                  'Es un movimiento de devolución desde otro C.Costo',
                   style: TextStyle(fontSize: 13.5)),
               subtitle: const Text(
                   'Ej.: Tintexa devuelve, pero el material queda cargado '

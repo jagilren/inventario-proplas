@@ -370,7 +370,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text(
-                  'Esta devolución se reasigna de una vez a otro centro',
+                  'Es un movimiento de devolución desde otro C.Costo',
                   style: TextStyle(fontSize: 13.5)),
               subtitle: const Text(
                   'Ej.: Tintexa devuelve, pero el material queda cargado '
