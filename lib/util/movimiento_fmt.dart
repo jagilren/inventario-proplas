@@ -18,10 +18,11 @@ num cantidadConSigno(String tipo, num cantidad) {
 
 /// Muestra el flujo origen ➡️ destino de un movimiento, con emojis coloridos.
 ///
-/// - **Devolución con reasignación** (schema_v37, `centroCostoOrigen` no
-///   nulo): 🎯 C.Costo origen ➡️ 🎯 C.Costo destino. La bodega física no se
-///   muestra aquí: la reasignación es puramente contable, la bodega ya se
-///   ve en la fila del movimiento.
+/// - **Devolución con reasignación** (schema_v40, `centroCostoDestino` no
+///   nulo): 🎯 C.Costo origen ➡️ 🎯 C.Costo destino (informativo). El
+///   destino NO afecta ningún informe — `centroCosto` (quien devuelve) es
+///   el único que cuenta en "Neto por Centro de Costo", igual que
+///   cualquier devolución normal.
 /// - **Devolución simple** (referencia DEVOLUCION): 🎯 C.Costo origen ➡️ 🏬 Bodega destino
 /// - **Salida**: 🏬 Bodega origen ➡️ 🎯 C.Costo destino
 /// - Otros (entrada normal, inicial, traslado): 🏬 Bodega
@@ -30,19 +31,19 @@ String flujoMovimiento({
   String? referencia,
   String? bodega,
   String? centroCosto,
-  String? centroCostoOrigen,
+  String? centroCostoDestino,
 }) {
   const cc = '🎯';        // centro de costo
   const bod = '🏬';       // bodega
   const flecha = '➡️';    // flecha azul, colorida
   final devolucion = (referencia ?? '').toUpperCase().startsWith('DEVOLUCION');
 
-  // Primero que nada: si tiene centro origen, es una reasignación, sin
+  // Primero que nada: si tiene centro destino, es una reasignación, sin
   // importar la referencia (la Entrada individual no pone 'DEVOLUCION',
   // solo la carga masiva de Devoluciones — el dato que de verdad importa
-  // es que exista un centro origen).
-  if (centroCostoOrigen != null) {
-    return '$cc $centroCostoOrigen $flecha $cc ${centroCosto ?? '—'}';
+  // es que exista un centro destino).
+  if (centroCostoDestino != null) {
+    return '$cc ${centroCosto ?? '—'} $flecha $cc $centroCostoDestino';
   }
   if (devolucion) {
     return '$cc ${centroCosto ?? '—'} $flecha $bod ${bodega ?? '—'}';

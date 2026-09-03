@@ -36,14 +36,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
-  // `_cc` alimenta `centro_costo_id`: en una devolución simple sigue
-  // siendo "quien devuelve" (como siempre), y aparece en POSITIVO. Si se
-  // activa la reasignación, pasa a ser el DESTINO (a quién se le carga),
-  // y `_ccOrigen` (centro_costo_origen_id, schema_v37) es entonces quien
-  // devuelve de verdad — aparece en NEGATIVO en "Neto por centro de costo".
+  // `_cc` alimenta `centro_costo_id`: SIEMPRE "quien devuelve", con o sin
+  // reasignación (schema_v40) — nunca cambia de significado, y siempre
+  // cuenta en "Neto por centro de costo" como una devolución normal.
   CentroCosto? _cc;
+  // Si además se reasigna a otro centro: puramente informativo, no
+  // afecta ningún informe (`centro_costo_destino_id`).
   bool _reasignar = false;
-  CentroCosto? _ccOrigen;
+  CentroCosto? _ccDestino;
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
@@ -241,9 +241,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       return _msg('No hay filas listas para cargar (revisa emparejamientos y cantidades)');
     }
     if (_reasignar) {
-      if (_cc == null) return _msg('Elige el centro de costo destino');
-      if (_ccOrigen == null) return _msg('Elige el centro de costo origen');
-      if (_cc!.id == _ccOrigen!.id) {
+      if (_cc == null) return _msg('Elige el centro de costo que devuelve');
+      if (_ccDestino == null) return _msg('Elige el centro de costo destino');
+      if (_cc!.id == _ccDestino!.id) {
         return _msg('Origen y destino no pueden ser el mismo centro');
       }
     }
@@ -253,8 +253,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         title: const Text('Confirmar carga'),
         content: Text('Se registrarán ${validas.length} entradas de devolución '
             'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'
-            '${_reasignar ? '\n\nSe reasignan de "${_ccOrigen!.etiqueta}" '
-                'a "${_cc!.etiqueta}".' : ''}'),
+            '${_reasignar ? '\n\nSe reasignan de "${_cc!.etiqueta}" '
+                'a "${_ccDestino!.etiqueta}" (informativo).' : ''}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
@@ -275,11 +275,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
-          // `_cc`: a quién se le abona (en devolución simple, quien
-          // devuelve; en reasignación, el destino). `_ccOrigen`: solo con
-          // reasignación, quien devuelve de verdad (aparece en negativo).
+          // `_cc`: quien devuelve, siempre (cuenta en el informe).
+          // `_ccDestino`: solo con reasignación, puramente informativo.
           centroCostoId: _cc?.id,
-          centroCostoOrigenId: _reasignar ? _ccOrigen?.id : null,
+          centroCostoDestinoId: _reasignar ? _ccDestino?.id : null,
           referencia: 'DEVOLUCION',
         );
         cargados++;
@@ -350,9 +349,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
             child: SelectorRecargable<CentroCosto>(
               // Los centros de costo SIEMPRE con buscador.
               forzarBuscador: true,
-              etiqueta: _reasignar
-                  ? 'Centro de costo destino (a quién se le carga)'
-                  : 'Centro de costo de origen (de dónde vuelve)',
+              // Siempre "quien devuelve" — con o sin reasignación, nunca
+              // cambia de significado (schema_v40).
+              etiqueta: 'Centro de costo de origen (de dónde vuelve)',
               icono: Icons.account_tree,
               valor: _cc,
               opciones: _centros,
@@ -373,30 +372,40 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                   'Es un movimiento de devolución desde otro C.Costo',
                   style: TextStyle(fontSize: 13.5)),
               subtitle: const Text(
-                  'Ej.: Tintexa devuelve, pero el material queda cargado '
-                  'a otro centro.',
+                  'Además, indica a qué centro queda reasignado el '
+                  'material (solo para trazabilidad).',
                   style: TextStyle(fontSize: 11.5)),
               onChanged: (v) => setState(() {
                 _reasignar = v ?? false;
-                if (!_reasignar) _ccOrigen = null;
+                if (!_reasignar) _ccDestino = null;
               }),
             ),
           ),
-          if (_reasignar)
+          if (_reasignar) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
               child: SelectorRecargable<CentroCosto>(
                 forzarBuscador: true,
-                icono: Icons.undo,
-                etiqueta: 'Centro de costo origen (quien devuelve)',
-                valor: _ccOrigen,
+                icono: Icons.arrow_forward,
+                etiqueta: 'Centro de costo destino',
+                valor: _ccDestino,
                 opciones: _centros,
                 textoDe: (c) => c.etiqueta,
                 recargando: _recargandoCentros,
                 onRecargar: _recargarCentros,
-                onChanged: (v) => setState(() => _ccOrigen = v),
+                onChanged: (v) => setState(() => _ccDestino = v),
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Text(
+                'Solo informativo: no afecta "Neto por centro de costo". '
+                'Si ese centro luego saca el material de verdad, se '
+                'registra con una salida normal.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey),
+              ),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [

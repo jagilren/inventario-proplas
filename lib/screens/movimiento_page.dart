@@ -24,12 +24,13 @@ class MovimientoPage extends StatefulWidget {
 
 class _MovimientoPageState extends State<MovimientoPage> {
   Elemento? _elemento;
+  // Quien devuelve — SIEMPRE, con o sin reasignación. Nunca cambia de
+  // significado ni deja de contar en "Neto por centro de costo".
   CentroCosto? _cc;
-  // Reasignación de una devolución: además de a quién se le abona (_cc,
-  // que aquí pasa a significar "destino"), de quién vino de verdad.
-  // Aparece en NEGATIVO en "Neto por centro de costo" (schema_v37).
+  // Si además se reasigna a otro centro (schema_v40): puramente
+  // informativo, no afecta ningún informe.
   bool _reasignar = false;
-  CentroCosto? _ccOrigen;
+  CentroCosto? _ccDestino;
   List<CentroCosto> _centros = [];
   Bodega? _bodega;
   List<Bodega> _bodegas = [];
@@ -187,9 +188,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
       if (c == null || c < 0) return _msg('Costo unitario inválido');
     }
     if (_reasignar) {
-      if (_cc == null) return _msg('Selecciona el centro de costo destino');
-      if (_ccOrigen == null) return _msg('Selecciona el centro de costo origen');
-      if (_cc!.id == _ccOrigen!.id) {
+      if (_cc == null) return _msg('Selecciona el centro de costo que devuelve');
+      if (_ccDestino == null) return _msg('Selecciona el centro de costo destino');
+      if (_cc!.id == _ccDestino!.id) {
         return _msg('Origen y destino no pueden ser el mismo centro');
       }
     }
@@ -202,7 +203,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
         bodegaId: _bodega!.id,
         cantidad: cant,
         centroCostoId: _cc?.id,
-        centroCostoOrigenId: _reasignar ? _ccOrigen?.id : null,
+        centroCostoDestinoId: _reasignar ? _ccDestino?.id : null,
         costoUnitario: _esSalida
             ? null
             : num.parse(_costo.text.replaceAll(',', '.')),
@@ -213,7 +214,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
           ? '✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada'
           : '✓ Guardada sin conexión · se subirá al volver el internet');
       setState(() {
-        _elemento = null; _cc = null; _reasignar = false; _ccOrigen = null;
+        _elemento = null; _cc = null; _reasignar = false; _ccDestino = null;
         _cantidad.clear(); _costo.clear(); _obs.clear();
       });
     } catch (e) {
@@ -449,9 +450,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
             // Corta, para que no se monte sobre el campo de arriba ni se
             // recorte en pantallas angostas. El detalle va en la nota de
             // abajo, no en la etiqueta.
-            etiqueta: _esSalida
-                ? 'Centro de costo destino'
-                : (_reasignar ? 'Centro de costo destino' : 'Centro de costo'),
+            //
+            // Este campo SIEMPRE es "quien devuelve" en una entrada — con
+            // o sin reasignación (schema_v40). Es una devolución normal:
+            // suma, resta del consumo de ese centro. No cambia de
+            // significado según la casilla de abajo.
+            etiqueta: _esSalida ? 'Centro de costo destino' : 'Centro de costo',
             valor: _cc,
             opciones: _centros,
             textoDe: (c) => c.etiqueta,
@@ -460,15 +464,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
             onChanged: (v) => setState(() => _cc = v),
           ),
           if (!_esSalida) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+            const Padding(
+              padding: EdgeInsets.only(top: 8, left: 4, right: 4),
               child: Text(
-                _reasignar
-                    ? 'A quién se le carga esta entrada (queda en positivo '
-                      'en "Neto por centro de costo").'
-                    : 'Solo si es DEVOLUCIÓN: elige el centro que devuelve. '
-                      'Déjalo vacío si es una compra.',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                'Solo si es DEVOLUCIÓN: elige el centro que devuelve. '
+                'Déjalo vacío si es una compra.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
             CheckboxListTile(
@@ -480,32 +481,33 @@ class _MovimientoPageState extends State<MovimientoPage> {
                   'Es un movimiento de devolución desde otro C.Costo',
                   style: TextStyle(fontSize: 13.5)),
               subtitle: const Text(
-                  'Ej.: Tintexa devuelve, pero el material queda cargado '
-                  'de una vez a otro centro.',
+                  'Además, indica a qué centro queda reasignado el '
+                  'material (solo para trazabilidad).',
                   style: TextStyle(fontSize: 11.5)),
               onChanged: (v) => setState(() {
                 _reasignar = v ?? false;
-                if (!_reasignar) _ccOrigen = null;
+                if (!_reasignar) _ccDestino = null;
               }),
             ),
             if (_reasignar) ...[
               const SizedBox(height: 4),
               SelectorRecargable<CentroCosto>(
                 forzarBuscador: true,
-                icono: Icons.undo,
-                etiqueta: 'Centro de costo origen (quien devuelve)',
-                valor: _ccOrigen,
+                icono: Icons.arrow_forward,
+                etiqueta: 'Centro de costo destino',
+                valor: _ccDestino,
                 opciones: _centros,
                 textoDe: (c) => c.etiqueta,
                 recargando: _recargandoCentros,
                 onRecargar: _recargarCentros,
-                onChanged: (v) => setState(() => _ccOrigen = v),
+                onChanged: (v) => setState(() => _ccDestino = v),
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 4, left: 4, right: 4),
                 child: Text(
-                  'Aparece en NEGATIVO en "Neto por centro de costo", con '
-                  'el mismo costo de esta entrada.',
+                  'Solo informativo: no afecta "Neto por centro de costo". '
+                  'Si ese centro luego saca el material de verdad, se '
+                  'registra con una salida normal.',
                   style: TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
               ),
