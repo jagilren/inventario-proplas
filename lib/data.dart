@@ -1866,6 +1866,12 @@ class InventarioService {
     required String bodegaId,
     required num cantidad,
     String? centroCostoId,
+    // Solo en 'entrada': cuando una devolución se reasigna de una vez a
+    // otro centro (schema_v37). `centroCostoId` sigue significando "a
+    // quién se le abona" (el destino, en este caso); este campo es el
+    // que resta — aparece en negativo en "Neto por centro de costo",
+    // con el mismo costo de la entrada, sin generar su propia fila.
+    String? centroCostoOrigenId,
     num? costoUnitario,
     String? referencia,
     String? observacion,
@@ -1884,6 +1890,7 @@ class InventarioService {
       'bodega_id': bodegaId,
       'cantidad': cantidad,
       'centro_costo_id': centroCostoId,
+      'centro_costo_origen_id': centroCostoOrigenId,
       'costo_unitario': costoUnitario,
       'referencia': referencia,
       'observacion': observacion,

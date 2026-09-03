@@ -95,6 +95,7 @@ class Reportes {
         .select(
           'fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
           'elementos!inner(nombre), bodegas(nombre), centros_costo(codigo), '
+          'centro_costo_origen:centros_costo!movimientos_centro_costo_origen_id_fkey(codigo), '
           'profiles(email)',
         )
         .eq('elementos.es_aprovechamiento', false)
@@ -110,6 +111,11 @@ class Reportes {
         'Cantidad',
         'Costo unitario',
         'Centro de costo',
+        // Solo llevan algo las entradas que se reasignan de una vez a
+        // otro centro (schema_v37). Aparece en negativo en el informe de
+        // Neto por centro; el 'Centro de costo' de la izquierda es el
+        // destino.
+        'Centro de costo origen',
         'Usuario',
         'Referencia',
         'Observación',
@@ -127,6 +133,7 @@ class Reportes {
             (r['tipo'] ?? '') as String, (r['cantidad'] ?? 0) as num),
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',
+        (r['centro_costo_origen'] as Map?)?['codigo'] ?? '',
         (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '',
         r['observacion'] ?? '',

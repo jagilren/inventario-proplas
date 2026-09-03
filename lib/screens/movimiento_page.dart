@@ -25,6 +25,11 @@ class MovimientoPage extends StatefulWidget {
 class _MovimientoPageState extends State<MovimientoPage> {
   Elemento? _elemento;
   CentroCosto? _cc;
+  // Reasignación de una devolución: además de a quién se le abona (_cc,
+  // que aquí pasa a significar "destino"), de quién vino de verdad.
+  // Aparece en NEGATIVO en "Neto por centro de costo" (schema_v37).
+  bool _reasignar = false;
+  CentroCosto? _ccOrigen;
   List<CentroCosto> _centros = [];
   Bodega? _bodega;
   List<Bodega> _bodegas = [];
@@ -181,6 +186,13 @@ class _MovimientoPageState extends State<MovimientoPage> {
       final c = num.tryParse(_costo.text.replaceAll(',', '.'));
       if (c == null || c < 0) return _msg('Costo unitario inválido');
     }
+    if (_reasignar) {
+      if (_cc == null) return _msg('Selecciona el centro de costo destino');
+      if (_ccOrigen == null) return _msg('Selecciona el centro de costo origen');
+      if (_cc!.id == _ccOrigen!.id) {
+        return _msg('Origen y destino no pueden ser el mismo centro');
+      }
+    }
 
     setState(() => _guardando = true);
     try {
@@ -190,6 +202,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
         bodegaId: _bodega!.id,
         cantidad: cant,
         centroCostoId: _cc?.id,
+        centroCostoOrigenId: _reasignar ? _ccOrigen?.id : null,
         costoUnitario: _esSalida
             ? null
             : num.parse(_costo.text.replaceAll(',', '.')),
@@ -200,7 +213,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
           ? '✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada'
           : '✓ Guardada sin conexión · se subirá al volver el internet');
       setState(() {
-        _elemento = null; _cc = null;
+        _elemento = null; _cc = null; _reasignar = false; _ccOrigen = null;
         _cantidad.clear(); _costo.clear(); _obs.clear();
       });
     } catch (e) {
@@ -436,7 +449,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
             // Corta, para que no se monte sobre el campo de arriba ni se
             // recorte en pantallas angostas. El detalle va en la nota de
             // abajo, no en la etiqueta.
-            etiqueta: _esSalida ? 'Centro de costo destino' : 'Centro de costo',
+            etiqueta: _esSalida
+                ? 'Centro de costo destino'
+                : (_reasignar ? 'Centro de costo destino' : 'Centro de costo'),
             valor: _cc,
             opciones: _centros,
             textoDe: (c) => c.etiqueta,
@@ -444,15 +459,57 @@ class _MovimientoPageState extends State<MovimientoPage> {
             onRecargar: _recargarCentros,
             onChanged: (v) => setState(() => _cc = v),
           ),
-          if (!_esSalida)
-            const Padding(
-              padding: EdgeInsets.only(top: 8, left: 4, right: 4),
+          if (!_esSalida) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
               child: Text(
-                'Solo si es DEVOLUCIÓN: elige el centro que devuelve. '
-                'Déjalo vacío si es una compra.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                _reasignar
+                    ? 'A quién se le carga esta entrada (queda en positivo '
+                      'en "Neto por centro de costo").'
+                    : 'Solo si es DEVOLUCIÓN: elige el centro que devuelve. '
+                      'Déjalo vacío si es una compra.',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
+            CheckboxListTile(
+              value: _reasignar,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Esta devolución se reasigna a otro centro',
+                  style: TextStyle(fontSize: 13.5)),
+              subtitle: const Text(
+                  'Ej.: Tintexa devuelve, pero el material queda cargado '
+                  'de una vez a otro centro.',
+                  style: TextStyle(fontSize: 11.5)),
+              onChanged: (v) => setState(() {
+                _reasignar = v ?? false;
+                if (!_reasignar) _ccOrigen = null;
+              }),
+            ),
+            if (_reasignar) ...[
+              const SizedBox(height: 4),
+              SelectorRecargable<CentroCosto>(
+                forzarBuscador: true,
+                icono: Icons.undo,
+                etiqueta: 'Centro de costo origen (quien devuelve)',
+                valor: _ccOrigen,
+                opciones: _centros,
+                textoDe: (c) => c.etiqueta,
+                recargando: _recargandoCentros,
+                onRecargar: _recargarCentros,
+                onChanged: (v) => setState(() => _ccOrigen = v),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4, left: 4, right: 4),
+                child: Text(
+                  'Aparece en NEGATIVO en "Neto por centro de costo", con '
+                  'el mismo costo de esta entrada.',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 8),
           TextField(
             controller: _obs,
