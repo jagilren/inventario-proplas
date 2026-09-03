@@ -36,14 +36,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
-  // `_cc` alimenta `centro_costo_id`: SIEMPRE "quien devuelve", con o sin
-  // reasignación (schema_v40) — nunca cambia de significado, y siempre
-  // cuenta en "Neto por centro de costo" como una devolución normal.
+  // Centro de costo ORIGEN: de dónde vuelve la mercancía.
   CentroCosto? _cc;
-  // Si además se reasigna a otro centro: puramente informativo, no
-  // afecta ningún informe (`centro_costo_destino_id`).
-  bool _reasignar = false;
-  CentroCosto? _ccDestino;
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
@@ -240,21 +234,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     if (validas.isEmpty) {
       return _msg('No hay filas listas para cargar (revisa emparejamientos y cantidades)');
     }
-    if (_reasignar) {
-      if (_cc == null) return _msg('Elige el centro de costo que devuelve');
-      if (_ccDestino == null) return _msg('Elige el centro de costo destino');
-      if (_cc!.id == _ccDestino!.id) {
-        return _msg('Origen y destino no pueden ser el mismo centro');
-      }
-    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar carga'),
         content: Text('Se registrarán ${validas.length} entradas de devolución '
-            'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'
-            '${_reasignar ? '\n\nSe reasignan de "${_cc!.etiqueta}" '
-                'a "${_ccDestino!.etiqueta}" (informativo).' : ''}'),
+            'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
@@ -275,10 +260,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
-          // `_cc`: quien devuelve, siempre (cuenta en el informe).
-          // `_ccDestino`: solo con reasignación, puramente informativo.
           centroCostoId: _cc?.id,
-          centroCostoDestinoId: _reasignar ? _ccDestino?.id : null,
           referencia: 'DEVOLUCION',
         );
         cargados++;
@@ -349,9 +331,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
             child: SelectorRecargable<CentroCosto>(
               // Los centros de costo SIEMPRE con buscador.
               forzarBuscador: true,
-              // Siempre "quien devuelve" — con o sin reasignación, nunca
-              // cambia de significado (schema_v40).
-              etiqueta: 'Centro de costo de origen (de dónde vuelve)',
+              etiqueta: 'Centro de Costo Origen',
               icono: Icons.account_tree,
               valor: _cc,
               opciones: _centros,
@@ -361,51 +341,6 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               onChanged: (v) => setState(() => _cc = v),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
-            child: CheckboxListTile(
-              value: _reasignar,
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text(
-                  'Es un movimiento de devolución desde otro C.Costo',
-                  style: TextStyle(fontSize: 13.5)),
-              subtitle: const Text(
-                  'Además, indica a qué centro queda reasignado el '
-                  'material (solo para trazabilidad).',
-                  style: TextStyle(fontSize: 11.5)),
-              onChanged: (v) => setState(() {
-                _reasignar = v ?? false;
-                if (!_reasignar) _ccDestino = null;
-              }),
-            ),
-          ),
-          if (_reasignar) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-              child: SelectorRecargable<CentroCosto>(
-                forzarBuscador: true,
-                icono: Icons.arrow_forward,
-                etiqueta: 'Centro de costo destino',
-                valor: _ccDestino,
-                opciones: _centros,
-                textoDe: (c) => c.etiqueta,
-                recargando: _recargandoCentros,
-                onRecargar: _recargarCentros,
-                onChanged: (v) => setState(() => _ccDestino = v),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(12, 0, 12, 4),
-              child: Text(
-                'Solo informativo: no afecta "Neto por centro de costo". '
-                'Si ese centro luego saca el material de verdad, se '
-                'registra con una salida normal.',
-                style: TextStyle(fontSize: 11.5, color: Colors.grey),
-              ),
-            ),
-          ],
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [

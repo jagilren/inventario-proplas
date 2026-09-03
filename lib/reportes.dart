@@ -96,7 +96,6 @@ class Reportes {
           'fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
           'elementos!inner(nombre), bodegas(nombre), '
           'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
-          'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo), '
           'profiles(email)',
         )
         .eq('elementos.es_aprovechamiento', false)
@@ -112,11 +111,6 @@ class Reportes {
         'Cantidad',
         'Costo unitario',
         'Centro de costo',
-        // Solo llevan algo las entradas que se reasignan de una vez a
-        // otro centro (schema_v40). Es puramente informativo: no afecta
-        // ningún informe — 'Centro de costo' de la izquierda es quien
-        // devuelve, y ese es el que sí cuenta en Neto por centro.
-        'Centro de costo destino',
         'Usuario',
         'Referencia',
         'Observación',
@@ -134,7 +128,6 @@ class Reportes {
             (r['tipo'] ?? '') as String, (r['cantidad'] ?? 0) as num),
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',
-        (r['centro_costo_destino'] as Map?)?['codigo'] ?? '',
         (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '',
         r['observacion'] ?? '',

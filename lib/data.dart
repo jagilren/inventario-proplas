@@ -254,11 +254,6 @@ class MovKardex {
   final num cantidad;
   final num? costoUnitario;
   final String? centroCosto;
-  // Solo si esta fila es una entrada con reasignación (schema_v40): a
-  // qué centro se reasignó de una vez el material. Puramente
-  // informativo — `centroCosto` de arriba (quien devuelve) es el que
-  // cuenta en "Neto por centro de costo"; este no afecta ningún informe.
-  final String? centroCostoDestino;
   final String? referencia;
   final String? observacion;
   final String? usuarioId;
@@ -280,8 +275,6 @@ class MovKardex {
       centroCosto =
           ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo'])
               as String?,
-      centroCostoDestino =
-          (m['centro_costo_destino'] as Map?)?['codigo'] as String?,
       bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
       referencia = m['referencia'] as String?,
       observacion = m['observacion'] as String?,
@@ -949,8 +942,7 @@ class InventarioService {
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
           'observacion, usuario_id, anula_movimiento_id, '
           'bodegas(nombre), '
-          'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
-          'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo)',
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo)',
         )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)
@@ -1875,15 +1867,10 @@ class InventarioService {
     required String elementoId,
     required String bodegaId,
     required num cantidad,
+    // En 'entrada': si es una devolución, el centro de costo de ORIGEN
+    // (de dónde viene la mercancía que se suma al inventario). Es
+    // opcional — una compra no viene de ningún centro.
     String? centroCostoId,
-    // Solo en 'entrada': cuando una devolución se reasigna de una vez a
-    // otro centro (schema_v40). `centroCostoId` sigue siendo "quien
-    // devuelve" — SIEMPRE suma, como cualquier devolución normal (nunca
-    // cambia de significado). Este campo es puramente informativo/de
-    // trazabilidad: no afecta "Neto por Centro de Costo" en absoluto,
-    // porque las unidades ya entraron al inventario general de la
-    // bodega con la propia entrada.
-    String? centroCostoDestinoId,
     num? costoUnitario,
     String? referencia,
     String? observacion,
@@ -1902,7 +1889,6 @@ class InventarioService {
       'bodega_id': bodegaId,
       'cantidad': cantidad,
       'centro_costo_id': centroCostoId,
-      'centro_costo_destino_id': centroCostoDestinoId,
       'costo_unitario': costoUnitario,
       'referencia': referencia,
       'observacion': observacion,
