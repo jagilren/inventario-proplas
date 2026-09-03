@@ -143,18 +143,22 @@ class Reportes {
     await _descargar('movimientos', filas);
   }
 
-  /// 3) Consumo por centro de costo (salidas del período).
-  /// El valor se estima al costo promedio ACTUAL del elemento.
+  /// 3) Consumo por centro de costo: una fila POR MOVIMIENTO (cada una con
+  /// su propia fecha, a diferencia de "Neto" que agrupa por elemento), pero
+  /// con salidas Y devoluciones — para que el TOTAL final coincida con el
+  /// de "Neto por centro de costo" en vez de mostrar solo lo bruto que
+  /// salió. Salida en negativo, devolución en positivo (mismo criterio de
+  /// signo que el resto de los informes de centro).
   /// [centroId] null = TODOS los centros de costo.
   static Future<void> consumoPorCentro(
     DateTime desde,
     DateTime hasta, {
     String? centroId,
   }) async {
-    // Salidas que ya fueron anuladas: no fueron consumo real, aunque la
-    // fila siga en la tabla (nunca se borra). Se piden aparte, sin filtro
-    // de fecha, porque la anulación puede haber ocurrido después del
-    // rango que se está consultando.
+    // Movimientos ya anulados: no fueron consumo ni devolución real,
+    // aunque la fila siga en la tabla (nunca se borra). Se piden aparte,
+    // sin filtro de fecha, porque la anulación puede haber ocurrido
+    // después del rango que se está consultando.
     final anuladas = await supabase
         .from('movimientos')
         .select('anula_movimiento_id')
@@ -163,31 +167,47 @@ class Reportes {
         .map((r) => r['anula_movimiento_id'] as String)
         .toSet();
 
-    var q = supabase
-        .from('movimientos')
-        .select(
-          'id, fecha, cantidad, costo_unitario, '
-          'elementos!inner(nombre, costo_promedio), '
-          'centros_costo!movimientos_centro_costo_id_fkey(codigo, descripcion), '
-          'profiles(email)',
-        )
-        .eq('elementos.es_aprovechamiento', false)
-        .eq('tipo', 'salida')
-        .gte('fecha', desde.toIso8601String())
-        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());
-    if (centroId != null) q = q.eq('centro_costo_id', centroId);
-    final res = (await q.order('fecha'))
-        .where((r) => !idsAnulados.contains(r['id']))
-        .toList();
-    // Cada fila es UNA salida, así que lleva su fecha y quién la hizo: sin
-    // eso no se puede rastrear un consumo raro hasta el movimiento que lo
-    // originó ni saber a quién preguntarle.
+    Future<List> pedir(String tipo) async {
+      var q = supabase
+          .from('movimientos')
+          .select(
+            'id, fecha, cantidad, costo_unitario, '
+            'elementos!inner(nombre, costo_promedio), '
+            'centros_costo!movimientos_centro_costo_id_fkey(codigo, descripcion), '
+            'profiles(email)',
+          )
+          .eq('elementos.es_aprovechamiento', false)
+          .eq('tipo', tipo)
+          .gte('fecha', desde.toIso8601String())
+          .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());
+      if (centroId != null) q = q.eq('centro_costo_id', centroId);
+      return (await q.order('fecha'))
+          .where((r) => !idsAnulados.contains(r['id']))
+          .toList();
+    }
+
+    // Salidas y devoluciones por separado (son dos consultas: 'entrada'
+    // aquí SIEMPRE es "quien devuelve", nunca una compra sin centro —
+    // esas quedan fuera porque no tienen centro_costo_id). Cada fila se
+    // etiqueta con su tipo ANTES de mezclarlas, para no tener que
+    // adivinar de cuál lista vino después.
+    final salidas = (await pedir('salida'))
+        .map((r) => {...r, '_esSalida': true});
+    final devoluciones = (await pedir('entrada'))
+        .map((r) => {...r, '_esSalida': false});
+    // Mezcladas y ordenadas por fecha, como si fuera un solo kardex del
+    // centro: así cada movimiento queda en su propia fila, sin agrupar.
+    final res = [...salidas, ...devoluciones]
+      ..sort((a, b) =>
+          (a['fecha'] as String).compareTo(b['fecha'] as String));
+
     final filas = <List<dynamic>>[
       [
         'Fecha',
         'Centro de costo',
         'Descripción',
         'Elemento',
+        'Tipo',
         'Cantidad',
         'Costo unitario',
         'Valor estimado',
@@ -195,30 +215,34 @@ class Reportes {
       ],
     ];
     int total = 0;
-    for (final r in (res as List)) {
+    for (final r in res) {
+      final esSalida = r['_esSalida'] as bool;
       final cc = r['centros_costo'] as Map?;
       final el = r['elementos'] as Map?;
       final cant = (r['cantidad'] ?? 0) as num;
       // El costo con el que SALIÓ de verdad, no el promedio de hoy: cuando
       // un artículo se agota, su promedio queda en 0 y esta salida pasaba a
       // valer $0 retroactivamente. Medido sobre los datos reales, así se
-      // subvaloraba el 57% del consumo (20 salidas aparecían en cero).
+      // subvaloraba el 57% del consumo (20 salidas aparecían en cero). En
+      // una devolución el costo_unitario siempre viene lleno (obligatorio
+      // al registrar la entrada), así que el fallback no hace falta ahí.
       final costo =
           (r['costo_unitario'] ?? el?['costo_promedio'] ?? 0) as num;
-      final val = (cant * costo).round(); // dinero como entero (COP)
+      final val = (cant * costo).round() * (esSalida ? -1 : 1);
       total += val;
       filas.add([
         _fecha(r['fecha']),
         cc?['codigo'] ?? '(sin centro)',
         cc?['descripcion'] ?? '',
         el?['nombre'] ?? '',
-        cant,
+        esSalida ? 'Salida' : 'Devolución',
+        esSalida ? -cant : cant,
         costo.round(),
         val,
         (r['profiles'] as Map?)?['email'] ?? '',
       ]);
     }
-    filas.add(['', '', '', '', 'TOTAL', '', total, '']);
+    filas.add(['', '', '', '', '', 'TOTAL', '', total, '']);
     await _descargar('consumo_por_centro', filas);
   }
 
