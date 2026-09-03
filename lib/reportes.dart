@@ -151,10 +151,22 @@ class Reportes {
     DateTime hasta, {
     String? centroId,
   }) async {
+    // Salidas que ya fueron anuladas: no fueron consumo real, aunque la
+    // fila siga en la tabla (nunca se borra). Se piden aparte, sin filtro
+    // de fecha, porque la anulación puede haber ocurrido después del
+    // rango que se está consultando.
+    final anuladas = await supabase
+        .from('movimientos')
+        .select('anula_movimiento_id')
+        .not('anula_movimiento_id', 'is', null);
+    final idsAnulados = (anuladas as List)
+        .map((r) => r['anula_movimiento_id'] as String)
+        .toSet();
+
     var q = supabase
         .from('movimientos')
         .select(
-          'fecha, cantidad, costo_unitario, '
+          'id, fecha, cantidad, costo_unitario, '
           'elementos!inner(nombre, costo_promedio), '
           'centros_costo!movimientos_centro_costo_id_fkey(codigo, descripcion), '
           'profiles(email)',
@@ -164,7 +176,9 @@ class Reportes {
         .gte('fecha', desde.toIso8601String())
         .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String());
     if (centroId != null) q = q.eq('centro_costo_id', centroId);
-    final res = await q.order('fecha');
+    final res = (await q.order('fecha'))
+        .where((r) => !idsAnulados.contains(r['id']))
+        .toList();
     // Cada fila es UNA salida, así que lleva su fecha y quién la hizo: sin
     // eso no se puede rastrear un consumo raro hasta el movimiento que lo
     // originó ni saber a quién preguntarle.
