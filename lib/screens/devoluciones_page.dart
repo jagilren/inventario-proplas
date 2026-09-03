@@ -36,7 +36,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
-  CentroCosto? _centroOrigen; // centro de costo de origen de la devolución
+  // `_cc` alimenta `centro_costo_id`: en una devolución simple sigue
+  // siendo "quien devuelve" (como siempre), y aparece en POSITIVO. Si se
+  // activa la reasignación, pasa a ser el DESTINO (a quién se le carga),
+  // y `_ccOrigen` (centro_costo_origen_id, schema_v37) es entonces quien
+  // devuelve de verdad — aparece en NEGATIVO en "Neto por centro de costo".
+  CentroCosto? _cc;
+  bool _reasignar = false;
+  CentroCosto? _ccOrigen;
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
@@ -233,12 +240,21 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     if (validas.isEmpty) {
       return _msg('No hay filas listas para cargar (revisa emparejamientos y cantidades)');
     }
+    if (_reasignar) {
+      if (_cc == null) return _msg('Elige el centro de costo destino');
+      if (_ccOrigen == null) return _msg('Elige el centro de costo origen');
+      if (_cc!.id == _ccOrigen!.id) {
+        return _msg('Origen y destino no pueden ser el mismo centro');
+      }
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar carga'),
         content: Text('Se registrarán ${validas.length} entradas de devolución '
-            'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'),
+            'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'
+            '${_reasignar ? '\n\nSe reasignan de "${_ccOrigen!.etiqueta}" '
+                'a "${_cc!.etiqueta}".' : ''}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
@@ -249,7 +265,6 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     );
     if (ok != true) return;
 
-    // Observación con el origen: "código C.Costo ➜ Bodega de ingreso".
     setState(() => _cargando = true);
     int cargados = 0, aCostoCero = 0, errores = 0;
     for (final f in validas) {
@@ -260,9 +275,11 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
-          // Centro de costo de ORIGEN (de dónde vuelve). El flujo se arma solo:
-          // 🎯 C.Costo ➡️ 🏬 Bodega.
-          centroCostoId: _centroOrigen?.id,
+          // `_cc`: a quién se le abona (en devolución simple, quien
+          // devuelve; en reasignación, el destino). `_ccOrigen`: solo con
+          // reasignación, quien devuelve de verdad (aparece en negativo).
+          centroCostoId: _cc?.id,
+          centroCostoOrigenId: _reasignar ? _ccOrigen?.id : null,
           referencia: 'DEVOLUCION',
         );
         cargados++;
@@ -333,16 +350,53 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
             child: SelectorRecargable<CentroCosto>(
               // Los centros de costo SIEMPRE con buscador.
               forzarBuscador: true,
-              etiqueta: 'Centro de costo de origen (de dónde vuelve)',
+              etiqueta: _reasignar
+                  ? 'Centro de costo destino (a quién se le carga)'
+                  : 'Centro de costo de origen (de dónde vuelve)',
               icono: Icons.account_tree,
-              valor: _centroOrigen,
+              valor: _cc,
               opciones: _centros,
               textoDe: (c) => c.etiqueta,
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
-              onChanged: (v) => setState(() => _centroOrigen = v),
+              onChanged: (v) => setState(() => _cc = v),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
+            child: CheckboxListTile(
+              value: _reasignar,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text(
+                  'Esta devolución se reasigna de una vez a otro centro',
+                  style: TextStyle(fontSize: 13.5)),
+              subtitle: const Text(
+                  'Ej.: Tintexa devuelve, pero el material queda cargado '
+                  'a otro centro.',
+                  style: TextStyle(fontSize: 11.5)),
+              onChanged: (v) => setState(() {
+                _reasignar = v ?? false;
+                if (!_reasignar) _ccOrigen = null;
+              }),
+            ),
+          ),
+          if (_reasignar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: SelectorRecargable<CentroCosto>(
+                forzarBuscador: true,
+                icono: Icons.undo,
+                etiqueta: 'Centro de costo origen (quien devuelve)',
+                valor: _ccOrigen,
+                opciones: _centros,
+                textoDe: (c) => c.etiqueta,
+                recargando: _recargandoCentros,
+                onRecargar: _recargarCentros,
+                onChanged: (v) => setState(() => _ccOrigen = v),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [

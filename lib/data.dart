@@ -254,6 +254,11 @@ class MovKardex {
   final num cantidad;
   final num? costoUnitario;
   final String? centroCosto;
+  // Solo si esta fila es una entrada con reasignación (schema_v37): el
+  // centro que de verdad devuelve. En ese caso, `centroCosto` de arriba
+  // es el DESTINO (a quién se le carga), y este es el ORIGEN — aparece
+  // en negativo en "Neto por centro de costo".
+  final String? centroCostoOrigen;
   final String? referencia;
   final String? observacion;
   final String? usuarioId;
@@ -275,6 +280,8 @@ class MovKardex {
       centroCosto =
           ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo'])
               as String?,
+      centroCostoOrigen =
+          (m['centro_costo_origen'] as Map?)?['codigo'] as String?,
       bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
       referencia = m['referencia'] as String?,
       observacion = m['observacion'] as String?,
@@ -941,7 +948,8 @@ class InventarioService {
         .select(
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
           'observacion, usuario_id, anula_movimiento_id, '
-          'bodegas(nombre), centros_costo(codigo)',
+          'bodegas(nombre), centros_costo(codigo), '
+          'centro_costo_origen:centros_costo!movimientos_centro_costo_origen_id_fkey(codigo)',
         )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)

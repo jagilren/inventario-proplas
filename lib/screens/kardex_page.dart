@@ -446,7 +446,8 @@ class _KardexPageState extends State<KardexPage> {
                         children: [
                           Text(
                             flujoMovimiento(tipo: m.tipo, referencia: m.referencia,
-                                bodega: m.bodega, centroCosto: m.centroCosto),
+                                bodega: m.bodega, centroCosto: m.centroCosto,
+                                centroCostoOrigen: m.centroCostoOrigen),
                             style: const TextStyle(fontSize: 12),
                           ),
                           Text([
