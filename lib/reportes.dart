@@ -94,7 +94,8 @@ class Reportes {
         .from('movimientos')
         .select(
           'fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
-          'elementos!inner(nombre), bodegas(nombre), centros_costo(codigo), '
+          'elementos!inner(nombre), bodegas(nombre), '
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
           'centro_costo_origen:centros_costo!movimientos_centro_costo_origen_id_fkey(codigo), '
           'profiles(email)',
         )
@@ -155,7 +156,8 @@ class Reportes {
         .select(
           'fecha, cantidad, costo_unitario, '
           'elementos!inner(nombre, costo_promedio), '
-          'centros_costo(codigo, descripcion), profiles(email)',
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo, descripcion), '
+          'profiles(email)',
         )
         .eq('elementos.es_aprovechamiento', false)
         .eq('tipo', 'salida')

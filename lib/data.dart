@@ -948,7 +948,8 @@ class InventarioService {
         .select(
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
           'observacion, usuario_id, anula_movimiento_id, '
-          'bodegas(nombre), centros_costo(codigo), '
+          'bodegas(nombre), '
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
           'centro_costo_origen:centros_costo!movimientos_centro_costo_origen_id_fkey(codigo)',
         )
         .eq('elemento_id', elementoId)
@@ -1254,7 +1255,8 @@ class InventarioService {
         .select(
           'fecha, tipo, referencia, cantidad, '
           'elementos!inner(nombre, unidad), '
-          'bodegas(nombre), centros_costo(codigo), profiles(email)',
+          'bodegas(nombre), '
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo), profiles(email)',
         )
         .eq('tipo', tipo)
         .eq('elementos.es_aprovechamiento', false)
