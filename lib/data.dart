@@ -83,12 +83,18 @@ class CentroCosto {
   final String? cliente;
 
   final bool activo;
+  // Centro administrativo de la propia RPCI (bodega, general) — a
+  // diferencia de un centro de CLIENTE externo. Decide, por ejemplo,
+  // cuáles centros se ofrecen como "Centro de Costo Destino" al
+  // registrar una entrada.
+  final bool esInterno;
   CentroCosto.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String,
       codigo = m['codigo'] as String,
       descripcion = m['descripcion'] as String?,
       cliente = m['cliente'] as String?,
-      activo = (m['activo'] ?? true) as bool;
+      activo = (m['activo'] ?? true) as bool,
+      esInterno = (m['es_interno'] ?? false) as bool;
 
   String get etiqueta => [
     codigo,
@@ -1402,11 +1408,13 @@ class InventarioService {
     required String codigo,
     String? descripcion,
     String? cliente,
+    bool esInterno = false,
   }) async {
     final row = {
       'codigo': codigo,
       'descripcion': descripcion,
       'cliente': cliente,
+      'es_interno': esInterno,
     };
     if (id == null) {
       await supabase.from('centros_costo').insert(row);

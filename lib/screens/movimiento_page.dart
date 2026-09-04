@@ -48,15 +48,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
   bool get _esSalida => widget.tipoInicial == 'salida';
   bool get _serial => _elemento?.serializado ?? false;
 
-  // El Centro de Costo DESTINO de una entrada, de momento, solo puede ser
-  // uno de los centros internos de RPCI (bodega/general) — no un centro
-  // de cliente externo (esos van como Origen en una devolución, o como
-  // destino de una Salida). Filtra por código; si algún día esto necesita
-  // ser configurable en vez de fijo, aquí es donde cambiarlo.
-  static const _codigosDestinoEntrada = {'G000001', 'G000002'};
-  List<CentroCosto> get _centrosDestinoEntrada => _centros
-      .where((c) => _codigosDestinoEntrada.contains(c.codigo))
-      .toList();
+  // El Centro de Costo DESTINO de una entrada solo puede ser uno interno
+  // de RPCI (bodega/general) — no un centro de cliente externo (esos van
+  // como Origen en una devolución, o como destino de una Salida).
+  // `esInterno` se administra en la maestra de Centros de Costo.
+  List<CentroCosto> get _centrosDestinoEntrada =>
+      _centros.where((c) => c.esInterno).toList();
 
   // Lista paginada de últimos movimientos del tipo (parte inferior).
   final List<MovLista> _recientes = [];

@@ -139,9 +139,11 @@ class _CentrosPageState extends State<CentrosPage> {
                                 style: c.activo
                                     ? null
                                     : const TextStyle(color: Colors.grey)),
-                            subtitle: Text([c.descripcion, c.cliente]
-                                .where((e) => e != null && e.isNotEmpty)
-                                .join(' · ')),
+                            subtitle: Text([
+                              if (c.esInterno) '🏢 Interno RPCI',
+                              c.descripcion,
+                              c.cliente,
+                            ].where((e) => e != null && e.isNotEmpty).join(' · ')),
                             trailing: const Icon(Icons.edit, size: 20),
                             onTap: () => _editar(c),
                           );
@@ -167,6 +169,7 @@ class _CentroFormState extends State<_CentroForm> {
   late final TextEditingController _codigo;
   late final TextEditingController _desc;
   late final TextEditingController _cliente;
+  late bool _esInterno;
   bool _guardando = false;
 
   /// Cuántos movimientos tiene: decide si se puede borrar de verdad o solo
@@ -179,6 +182,7 @@ class _CentroFormState extends State<_CentroForm> {
     _codigo = TextEditingController(text: widget.centro?.codigo ?? '');
     _desc = TextEditingController(text: widget.centro?.descripcion ?? '');
     _cliente = TextEditingController(text: widget.centro?.cliente ?? '');
+    _esInterno = widget.centro?.esInterno ?? false;
     final c = widget.centro;
     if (c != null) {
       InventarioService.movimientosDeCentro(c.id).then((n) {
@@ -202,6 +206,7 @@ class _CentroFormState extends State<_CentroForm> {
         codigo: _codigo.text.trim(),
         descripcion: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
         cliente: _cliente.text.trim().isEmpty ? null : _cliente.text.trim(),
+        esInterno: _esInterno,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -237,6 +242,20 @@ class _CentroFormState extends State<_CentroForm> {
           TextField(controller: _cliente,
             decoration: const InputDecoration(labelText: 'Cliente',
                 border: OutlineInputBorder())),
+          CheckboxListTile(
+            value: _esInterno,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Es C. Costo Interno de RPCI',
+                style: TextStyle(fontSize: 14)),
+            subtitle: const Text(
+                'Administrativo propio (bodega, general) — no un cliente '
+                'externo. Decide cuáles centros se ofrecen como "Centro '
+                'de Costo Destino" al registrar una entrada.',
+                style: TextStyle(fontSize: 11.5)),
+            onChanged: (v) => setState(() => _esInterno = v ?? false),
+          ),
           const SizedBox(height: 16),
           SizedBox(height: 48, child: FilledButton.icon(
             onPressed: _guardando ? null : _guardar,

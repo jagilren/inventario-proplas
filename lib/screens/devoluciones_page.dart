@@ -41,12 +41,11 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   CentroCosto? _cc;
   // Centro de costo DESTINO: a quién queda atribuida la mercancía.
   // Obligatorio siempre en una entrada; informativo, no afecta ningún
-  // informe. De momento, solo centros internos de RPCI.
+  // informe. Solo centros internos de RPCI (`esInterno`, administrado en
+  // la maestra de Centros de Costo).
   CentroCosto? _ccDestino;
-  static const _codigosDestinoEntrada = {'G000001', 'G000002'};
-  List<CentroCosto> get _centrosDestinoEntrada => _centros
-      .where((c) => _codigosDestinoEntrada.contains(c.codigo))
-      .toList();
+  List<CentroCosto> get _centrosDestinoEntrada =>
+      _centros.where((c) => c.esInterno).toList();
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
