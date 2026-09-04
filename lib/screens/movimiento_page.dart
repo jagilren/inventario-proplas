@@ -24,9 +24,13 @@ class MovimientoPage extends StatefulWidget {
 
 class _MovimientoPageState extends State<MovimientoPage> {
   Elemento? _elemento;
-  // En salida: centro destino (obligatorio). En entrada: centro de
-  // costo ORIGEN, de dónde viene la mercancía — solo si es devolución.
+  // En salida: centro destino (obligatorio, único campo). En entrada:
+  // `_cc` es el centro ORIGEN (de dónde viene, solo si es devolución —
+  // SÍ afecta Neto por Centro) y `_ccDestino` es el centro DESTINO
+  // (a quién queda atribuida la mercancía — obligatorio SIEMPRE en
+  // entrada, puramente informativo, no afecta ningún informe).
   CentroCosto? _cc;
+  CentroCosto? _ccDestino;
   bool _esDevolucion = false;
   List<CentroCosto> _centros = [];
   Bodega? _bodega;
@@ -43,6 +47,16 @@ class _MovimientoPageState extends State<MovimientoPage> {
 
   bool get _esSalida => widget.tipoInicial == 'salida';
   bool get _serial => _elemento?.serializado ?? false;
+
+  // El Centro de Costo DESTINO de una entrada, de momento, solo puede ser
+  // uno de los centros internos de RPCI (bodega/general) — no un centro
+  // de cliente externo (esos van como Origen en una devolución, o como
+  // destino de una Salida). Filtra por código; si algún día esto necesita
+  // ser configurable en vez de fijo, aquí es donde cambiarlo.
+  static const _codigosDestinoEntrada = {'G000001', 'G000002'};
+  List<CentroCosto> get _centrosDestinoEntrada => _centros
+      .where((c) => _codigosDestinoEntrada.contains(c.codigo))
+      .toList();
 
   // Lista paginada de últimos movimientos del tipo (parte inferior).
   final List<MovLista> _recientes = [];
@@ -184,6 +198,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
       final c = num.tryParse(_costo.text.replaceAll(',', '.'));
       if (c == null || c < 0) return _msg('Costo unitario inválido');
     }
+    if (!_esSalida && _ccDestino == null) {
+      return _msg('Selecciona el centro de costo destino');
+    }
     if (_esDevolucion && _cc == null) {
       return _msg('Selecciona el centro de costo origen');
     }
@@ -196,6 +213,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
         bodegaId: _bodega!.id,
         cantidad: cant,
         centroCostoId: _cc?.id,
+        centroCostoDestinoId: _esSalida ? null : _ccDestino?.id,
         costoUnitario: _esSalida
             ? null
             : num.parse(_costo.text.replaceAll(',', '.')),
@@ -206,7 +224,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
           ? '✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada'
           : '✓ Guardada sin conexión · se subirá al volver el internet');
       setState(() {
-        _elemento = null; _cc = null; _esDevolucion = false;
+        _elemento = null; _cc = null; _ccDestino = null; _esDevolucion = false;
         _cantidad.clear(); _costo.clear(); _obs.clear();
       });
     } catch (e) {
@@ -224,6 +242,10 @@ class _MovimientoPageState extends State<MovimientoPage> {
       if (_serialesNuevos.isEmpty) return _msg('Ingresa al menos un serial');
       final c = num.tryParse(_costo.text.replaceAll(',', '.'));
       if (c == null || c < 0) return _msg('Costo unitario inválido');
+      if (_ccDestino == null) return _msg('Selecciona el centro de costo destino');
+      if (_esDevolucion && _cc == null) {
+        return _msg('Selecciona el centro de costo origen');
+      }
     }
     setState(() => _guardando = true);
     try {
@@ -232,12 +254,14 @@ class _MovimientoPageState extends State<MovimientoPage> {
         serials: _esSalida ? _serialSel.toList() : List.of(_serialesNuevos),
         costo: _esSalida ? null : num.parse(_costo.text.replaceAll(',', '.')),
         centroCostoId: _cc?.id,
+        centroCostoDestinoId: _esSalida ? null : _ccDestino?.id,
         observacion: _obs.text.trim().isEmpty ? null : _obs.text.trim(),
       );
       if (!mounted) return;
       _msg('✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada');
       setState(() {
-        _elemento = null; _cc = null; _serialesNuevos.clear();
+        _elemento = null; _cc = null; _ccDestino = null;
+        _esDevolucion = false; _serialesNuevos.clear();
         _serialSel.clear(); _disponibles = []; _costo.clear(); _obs.clear();
       });
     } catch (e) {
@@ -427,10 +451,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
             // selector se monta encima del recuadro del costo.
             const SizedBox(height: 16),
           ],
-          // En salida el centro es OBLIGATORIO (a dónde va) y se ve
-          // siempre. En entrada es OPCIONAL y solo aplica a devoluciones
-          // (una compra no viene de ningún centro): por eso ahí queda
-          // detrás de una casilla explícita en vez de mostrarse siempre.
+          // En salida el centro es OBLIGATORIO (a dónde va), único campo.
           if (_esSalida)
             SelectorRecargable<CentroCosto>(
               forzarBuscador: true,
@@ -442,7 +463,32 @@ class _MovimientoPageState extends State<MovimientoPage> {
               onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _cc = v),
             ),
+          // En entrada: el DESTINO es obligatorio SIEMPRE (a quién queda
+          // atribuida la mercancía; informativo, no afecta ningún
+          // informe de valorización). Si además es una devolución, se
+          // suma el ORIGEN (de dónde vuelve; ese sí resta el consumo del
+          // centro en "Neto por Centro de Costo").
           if (!_esSalida) ...[
+            SelectorRecargable<CentroCosto>(
+              // Pocas opciones (solo los centros internos de RPCI): sin
+              // buscador, para que se vea como lo que es, un desplegable
+              // corto, no una lista larga que hay que filtrar.
+              etiqueta: 'Centro de Costo Destino',
+              valor: _ccDestino,
+              opciones: _centrosDestinoEntrada,
+              textoDe: (c) => c.etiqueta,
+              recargando: _recargandoCentros,
+              onRecargar: _recargarCentros,
+              onChanged: (v) => setState(() => _ccDestino = v),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4, left: 4, right: 4, bottom: 8),
+              child: Text(
+                'A quién queda atribuida la mercancía. Informativo: no '
+                'afecta ningún informe de valorización.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey),
+              ),
+            ),
             CheckboxListTile(
               value: _esDevolucion,
               dense: true,

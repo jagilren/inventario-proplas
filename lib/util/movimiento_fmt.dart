@@ -16,54 +16,40 @@ num cantidadConSigno(String tipo, num cantidad) {
   return tipo == 'salida' ? -cantidad.abs() : cantidad.abs();
 }
 
-/// Dice si, en la fila de un informe, el centro de costo que aparece es el
-/// ORIGEN (de dónde viene la mercancía) o el DESTINO (a dónde va) — para
-/// una columna "Rol" explícita, sin tener que deducirlo cruzando con la
-/// columna Tipo. Vacío si la fila no tiene centro (una compra, por ejemplo).
-///
-/// - `salida` → Destino (a qué centro se entrega).
-/// - `entrada`/`inicial` con centro → Origen (de dónde vuelve).
-/// - `ajuste`: hereda el rol de lo que revierte, a partir de su propio
-///   signo — un ajuste positivo deshace una salida (revierte un cargo
-///   "Destino", así que él mismo actúa como Origen); uno negativo deshace
-///   una entrada (revierte un crédito "Origen", así que actúa como
-///   Destino). Mismo signo que ya usa `cantidadConSigno`.
-String rolCentro(String tipo, num cantidad, bool tieneCentro) {
-  if (!tieneCentro) return '';
-  switch (tipo) {
-    case 'salida':
-      return 'Destino';
-    case 'entrada':
-    case 'inicial':
-      return 'Origen';
-    case 'ajuste':
-      return cantidad >= 0 ? 'Origen' : 'Destino';
-    default:
-      return '';
-  }
-}
-
 /// Muestra el flujo origen ➡️ destino de un movimiento, con emojis coloridos.
 ///
-/// - **Devolución** (referencia DEVOLUCION): 🎯 C.Costo origen ➡️ 🏬 Bodega destino
-/// - **Salida**: 🏬 Bodega origen ➡️ 🎯 C.Costo destino
-/// - Otros (entrada normal, inicial, traslado): 🏬 Bodega
+/// - **Entrada con origen Y destino** (devolución con destino informativo):
+///   🎯 C.Costo origen ➡️ 🎯 C.Costo destino.
+/// - **Entrada con origen, sin destino** (devolución, caso raro hoy que el
+///   destino es obligatorio): 🎯 C.Costo origen ➡️ 🏬 Bodega.
+/// - **Entrada solo con destino** (compra, sin devolución): 🏬 Bodega ➡️
+///   🎯 C.Costo destino — el destino es puramente informativo, no una
+///   salida real: no afecta ningún informe de valorización.
+/// - **Salida**: 🏬 Bodega origen ➡️ 🎯 C.Costo destino.
+/// - Otros (inicial, traslado): 🏬 Bodega.
 String flujoMovimiento({
   required String tipo,
   String? referencia,
   String? bodega,
   String? centroCosto,
+  String? centroCostoDestino,
 }) {
   const cc = '🎯';        // centro de costo
   const bod = '🏬';       // bodega
   const flecha = '➡️';    // flecha azul, colorida
   final devolucion = (referencia ?? '').toUpperCase().startsWith('DEVOLUCION');
 
-  if (devolucion) {
+  if (centroCosto != null && centroCostoDestino != null) {
+    return '$cc $centroCosto $flecha $cc $centroCostoDestino';
+  }
+  if (devolucion || (tipo == 'entrada' && centroCosto != null)) {
     return '$cc ${centroCosto ?? '—'} $flecha $bod ${bodega ?? '—'}';
   }
   if (tipo == 'salida') {
     return '$bod ${bodega ?? '—'} $flecha $cc ${centroCosto ?? '—'}';
+  }
+  if (tipo == 'entrada' && centroCostoDestino != null) {
+    return '$bod ${bodega ?? '—'} $flecha $cc $centroCostoDestino';
   }
   return bodega != null ? '$bod $bodega' : '';
 }

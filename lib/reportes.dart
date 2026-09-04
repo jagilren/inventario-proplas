@@ -96,6 +96,7 @@ class Reportes {
           'fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
           'elementos!inner(nombre), bodegas(nombre), '
           'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
+          'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo), '
           'profiles(email)',
         )
         .eq('elementos.es_aprovechamiento', false)
@@ -110,11 +111,14 @@ class Reportes {
         'Bodega',
         'Cantidad',
         'Costo unitario',
-        'Centro de costo',
-        // Dice si el centro de la columna anterior es el ORIGEN (de dónde
-        // vuelve) o el DESTINO (a dónde va), sin tener que cruzarlo con
-        // Tipo — sale vacío si la fila no tiene centro.
-        'Rol',
+        // Solo llevan algo las entradas que son devolución (de dónde
+        // vuelve la mercancía) — SÍ resta el consumo de ese centro en
+        // "Neto por Centro de Costo".
+        'Centro de Costo Origen',
+        // En salida: a dónde va (obligatorio, siempre). En entrada: a
+        // quién queda atribuida la mercancía — obligatorio siempre,
+        // puramente informativo, no afecta ningún informe.
+        'Centro de Costo Destino',
         'Usuario',
         'Referencia',
         'Observación',
@@ -123,7 +127,14 @@ class Reportes {
     for (final r in (res as List)) {
       final tipo = (r['tipo'] ?? '') as String;
       final cant = (r['cantidad'] ?? 0) as num;
-      final centro = (r['centros_costo'] as Map?)?['codigo'] as String?;
+      // Para 'salida', centros_costo (el campo de siempre) ES el destino.
+      // Para 'entrada', ese mismo campo es el origen (si es devolución) y
+      // centro_costo_destino es el destino (si aplica).
+      final String? centroCampo = (r['centros_costo'] as Map?)?['codigo'];
+      final String? destinoCampo =
+          (r['centro_costo_destino'] as Map?)?['codigo'];
+      final origen = tipo == 'entrada' ? centroCampo : null;
+      final destino = tipo == 'salida' ? centroCampo : destinoCampo;
       filas.add([
         _fecha(r['fecha']),
         tipo,
@@ -133,8 +144,8 @@ class Reportes {
         // se puede sumar directo en Excel y da el movimiento neto.
         cantidadConSigno(tipo, cant),
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
-        centro ?? '',
-        rolCentro(tipo, cant, centro != null),
+        origen ?? '',
+        destino ?? '',
         (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '',
         r['observacion'] ?? '',
@@ -174,6 +185,7 @@ class Reportes {
             'id, fecha, cantidad, costo_unitario, '
             'elementos!inner(nombre, costo_promedio), '
             'centros_costo!movimientos_centro_costo_id_fkey(codigo, descripcion), '
+            'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo), '
             'profiles(email)',
           )
           .eq('elementos.es_aprovechamiento', false)
@@ -204,14 +216,15 @@ class Reportes {
     final filas = <List<dynamic>>[
       [
         'Fecha',
-        'Centro de costo',
         'Descripción',
         'Elemento',
         'Tipo',
-        // El mismo dato que Tipo, en el vocabulario de "de dónde viene /
-        // a dónde va" — para que se lea igual que en los otros informes
-        // sin tener que traducir mentalmente Salida=Destino/Devolución=Origen.
-        'Rol',
+        // En una salida, 'centros_costo' (el campo de siempre) ES el
+        // destino: Origen queda vacío. En una devolución, ese mismo
+        // campo es el origen (SÍ resta el consumo del centro); Destino
+        // sale de centro_costo_destino, puramente informativo.
+        'Centro de Costo Origen',
+        'Centro de Costo Destino',
         'Cantidad',
         'Costo unitario',
         'Valor estimado',
@@ -222,6 +235,7 @@ class Reportes {
     for (final r in res) {
       final esSalida = r['_esSalida'] as bool;
       final cc = r['centros_costo'] as Map?;
+      final ccDestino = r['centro_costo_destino'] as Map?;
       final el = r['elementos'] as Map?;
       final cant = (r['cantidad'] ?? 0) as num;
       // El costo con el que SALIÓ de verdad, no el promedio de hoy: cuando
@@ -236,11 +250,11 @@ class Reportes {
       total += val;
       filas.add([
         _fecha(r['fecha']),
-        cc?['codigo'] ?? '(sin centro)',
         cc?['descripcion'] ?? '',
         el?['nombre'] ?? '',
         esSalida ? 'Salida' : 'Devolución',
-        esSalida ? 'Destino' : 'Origen',
+        esSalida ? '' : (cc?['codigo'] ?? ''),
+        esSalida ? (cc?['codigo'] ?? '(sin centro)') : (ccDestino?['codigo'] ?? ''),
         esSalida ? -cant : cant,
         costo.round(),
         val,

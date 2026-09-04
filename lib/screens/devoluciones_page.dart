@@ -36,8 +36,17 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
-  // Centro de costo ORIGEN: de dónde vuelve la mercancía.
+  // Centro de costo ORIGEN: de dónde vuelve la mercancía. Obligatorio —
+  // esta pantalla siempre carga devoluciones.
   CentroCosto? _cc;
+  // Centro de costo DESTINO: a quién queda atribuida la mercancía.
+  // Obligatorio siempre en una entrada; informativo, no afecta ningún
+  // informe. De momento, solo centros internos de RPCI.
+  CentroCosto? _ccDestino;
+  static const _codigosDestinoEntrada = {'G000001', 'G000002'};
+  List<CentroCosto> get _centrosDestinoEntrada => _centros
+      .where((c) => _codigosDestinoEntrada.contains(c.codigo))
+      .toList();
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
@@ -229,6 +238,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   // ---- Cargar (registrar las entradas) ----
   Future<void> _cargar() async {
     if (_bodega == null) return _msg('Elige la bodega física donde entran');
+    if (_cc == null) return _msg('Elige el centro de costo origen');
+    if (_ccDestino == null) return _msg('Elige el centro de costo destino');
     final validas = _filas.where((f) => f.match != null && f.cantidad > 0
         && !(f.match!.serializado)).toList();
     if (validas.isEmpty) {
@@ -261,6 +272,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           cantidad: f.cantidad,
           costoUnitario: f.match!.costoPromedio,
           centroCostoId: _cc?.id,
+          centroCostoDestinoId: _ccDestino?.id,
           referencia: 'DEVOLUCION',
         );
         cargados++;
@@ -339,6 +351,21 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _cc = v),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: SelectorRecargable<CentroCosto>(
+              // Pocas opciones (solo centros internos de RPCI): sin
+              // buscador.
+              etiqueta: 'Centro de Costo Destino',
+              icono: Icons.arrow_forward,
+              valor: _ccDestino,
+              opciones: _centrosDestinoEntrada,
+              textoDe: (c) => c.etiqueta,
+              recargando: _recargandoCentros,
+              onRecargar: _recargarCentros,
+              onChanged: (v) => setState(() => _ccDestino = v),
             ),
           ),
           Padding(

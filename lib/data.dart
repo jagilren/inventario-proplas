@@ -254,6 +254,9 @@ class MovKardex {
   final num cantidad;
   final num? costoUnitario;
   final String? centroCosto;
+  // Solo en 'entrada': el centro DESTINO — informativo, no afecta
+  // ningún informe.
+  final String? centroCostoDestino;
   final String? referencia;
   final String? observacion;
   final String? usuarioId;
@@ -275,6 +278,8 @@ class MovKardex {
       centroCosto =
           ((m['centros_costo'] as Map?)?['codigo'] ?? m['centro_costo'])
               as String?,
+      centroCostoDestino =
+          (m['centro_costo_destino'] as Map?)?['codigo'] as String?,
       bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
       referencia = m['referencia'] as String?,
       observacion = m['observacion'] as String?,
@@ -942,7 +947,8 @@ class InventarioService {
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
           'observacion, usuario_id, anula_movimiento_id, '
           'bodegas(nombre), '
-          'centros_costo!movimientos_centro_costo_id_fkey(codigo)',
+          'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
+          'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo)',
         )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)
@@ -1692,6 +1698,9 @@ class InventarioService {
     required List<String> serials,
     num? costo,
     String? centroCostoId,
+    // En 'entrada': centro DESTINO (a quién queda atribuida la
+    // mercancía). Informativo, no afecta ningún informe.
+    String? centroCostoDestinoId,
     String? observacion,
     String? bodegaDestinoId,
   }) async {
@@ -1707,6 +1716,8 @@ class InventarioService {
             'bodega_id': bodegaId,
             'cantidad': n,
             'costo_unitario': costo ?? 0,
+            'centro_costo_id': centroCostoId,
+            'centro_costo_destino_id': centroCostoDestinoId,
             'observacion': observacion,
             'usuario_id': uid,
             'fecha': ahora,
@@ -1868,9 +1879,13 @@ class InventarioService {
     required String bodegaId,
     required num cantidad,
     // En 'entrada': si es una devolución, el centro de costo de ORIGEN
-    // (de dónde viene la mercancía que se suma al inventario). Es
-    // opcional — una compra no viene de ningún centro.
+    // (de dónde viene la mercancía). SÍ afecta "Neto por Centro de
+    // Costo" — le da crédito al centro, resta su consumo.
     String? centroCostoId,
+    // En 'entrada': el centro de costo DESTINO — a quién queda
+    // atribuida la mercancía que entra. Puramente informativo: no
+    // afecta ningún informe de valorización.
+    String? centroCostoDestinoId,
     num? costoUnitario,
     String? referencia,
     String? observacion,
@@ -1889,6 +1904,7 @@ class InventarioService {
       'bodega_id': bodegaId,
       'cantidad': cantidad,
       'centro_costo_id': centroCostoId,
+      'centro_costo_destino_id': centroCostoDestinoId,
       'costo_unitario': costoUnitario,
       'referencia': referencia,
       'observacion': observacion,
