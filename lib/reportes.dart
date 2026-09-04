@@ -111,23 +111,30 @@ class Reportes {
         'Cantidad',
         'Costo unitario',
         'Centro de costo',
+        // Dice si el centro de la columna anterior es el ORIGEN (de dónde
+        // vuelve) o el DESTINO (a dónde va), sin tener que cruzarlo con
+        // Tipo — sale vacío si la fila no tiene centro.
+        'Rol',
         'Usuario',
         'Referencia',
         'Observación',
       ],
     ];
     for (final r in (res as List)) {
+      final tipo = (r['tipo'] ?? '') as String;
+      final cant = (r['cantidad'] ?? 0) as num;
+      final centro = (r['centros_costo'] as Map?)?['codigo'] as String?;
       filas.add([
         _fecha(r['fecha']),
-        r['tipo'],
+        tipo,
         (r['elementos'] as Map?)?['nombre'] ?? '',
         (r['bodegas'] as Map?)?['nombre'] ?? '',
         // Con signo: lo que sale resta, lo que entra suma. Así la columna
         // se puede sumar directo en Excel y da el movimiento neto.
-        cantidadConSigno(
-            (r['tipo'] ?? '') as String, (r['cantidad'] ?? 0) as num),
+        cantidadConSigno(tipo, cant),
         r['costo_unitario'] != null ? (r['costo_unitario'] as num).round() : '',
-        (r['centros_costo'] as Map?)?['codigo'] ?? '',
+        centro ?? '',
+        rolCentro(tipo, cant, centro != null),
         (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '',
         r['observacion'] ?? '',
@@ -201,6 +208,10 @@ class Reportes {
         'Descripción',
         'Elemento',
         'Tipo',
+        // El mismo dato que Tipo, en el vocabulario de "de dónde viene /
+        // a dónde va" — para que se lea igual que en los otros informes
+        // sin tener que traducir mentalmente Salida=Destino/Devolución=Origen.
+        'Rol',
         'Cantidad',
         'Costo unitario',
         'Valor estimado',
@@ -229,13 +240,14 @@ class Reportes {
         cc?['descripcion'] ?? '',
         el?['nombre'] ?? '',
         esSalida ? 'Salida' : 'Devolución',
+        esSalida ? 'Destino' : 'Origen',
         esSalida ? -cant : cant,
         costo.round(),
         val,
         (r['profiles'] as Map?)?['email'] ?? '',
       ]);
     }
-    filas.add(['', '', '', '', '', 'TOTAL', '', total, '']);
+    filas.add(['', '', '', '', '', '', 'TOTAL', '', total, '']);
     await _descargar('consumo_por_centro', filas);
   }
 

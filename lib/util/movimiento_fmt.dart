@@ -16,6 +16,33 @@ num cantidadConSigno(String tipo, num cantidad) {
   return tipo == 'salida' ? -cantidad.abs() : cantidad.abs();
 }
 
+/// Dice si, en la fila de un informe, el centro de costo que aparece es el
+/// ORIGEN (de dónde viene la mercancía) o el DESTINO (a dónde va) — para
+/// una columna "Rol" explícita, sin tener que deducirlo cruzando con la
+/// columna Tipo. Vacío si la fila no tiene centro (una compra, por ejemplo).
+///
+/// - `salida` → Destino (a qué centro se entrega).
+/// - `entrada`/`inicial` con centro → Origen (de dónde vuelve).
+/// - `ajuste`: hereda el rol de lo que revierte, a partir de su propio
+///   signo — un ajuste positivo deshace una salida (revierte un cargo
+///   "Destino", así que él mismo actúa como Origen); uno negativo deshace
+///   una entrada (revierte un crédito "Origen", así que actúa como
+///   Destino). Mismo signo que ya usa `cantidadConSigno`.
+String rolCentro(String tipo, num cantidad, bool tieneCentro) {
+  if (!tieneCentro) return '';
+  switch (tipo) {
+    case 'salida':
+      return 'Destino';
+    case 'entrada':
+    case 'inicial':
+      return 'Origen';
+    case 'ajuste':
+      return cantidad >= 0 ? 'Origen' : 'Destino';
+    default:
+      return '';
+  }
+}
+
 /// Muestra el flujo origen ➡️ destino de un movimiento, con emojis coloridos.
 ///
 /// - **Devolución** (referencia DEVOLUCION): 🎯 C.Costo origen ➡️ 🏬 Bodega destino
