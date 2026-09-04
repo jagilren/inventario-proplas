@@ -50,6 +50,10 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   List<CentroCosto> _centros = [];
+  // Una salida va a un centro EXTERNO (quien consume de verdad) — nunca
+  // a un centro interno de RPCI (bodega/general).
+  List<CentroCosto> get _centrosSalida =>
+      _centros.where((c) => !c.esInterno).toList();
   CentroCosto? _centro;
   EmparejadorCatalogo? _emparejador;
   bool _consultandoIA = false;
@@ -647,7 +651,7 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
               etiqueta: 'Centro de costo destino',
               icono: Icons.account_tree,
               valor: _centro,
-              opciones: _centros,
+              opciones: _centrosSalida,
               textoDe: (c) => c.etiqueta,
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,

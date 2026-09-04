@@ -55,6 +55,11 @@ class _MovimientoPageState extends State<MovimientoPage> {
   List<CentroCosto> get _centrosDestinoEntrada =>
       _centros.where((c) => c.esInterno).toList();
 
+  // Una salida va a un centro EXTERNO (quien consume de verdad) — nunca a
+  // un centro interno de RPCI. Es el filtro contrario al de arriba.
+  List<CentroCosto> get _centrosSalida =>
+      _centros.where((c) => !c.esInterno).toList();
+
   // Lista paginada de últimos movimientos del tipo (parte inferior).
   final List<MovLista> _recientes = [];
   int _offset = 0;
@@ -454,7 +459,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
               forzarBuscador: true,
               etiqueta: 'Centro de costo destino',
               valor: _cc,
-              opciones: _centros,
+              opciones: _centrosSalida,
               textoDe: (c) => c.etiqueta,
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
