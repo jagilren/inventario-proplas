@@ -55,9 +55,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
   List<CentroCosto> get _centrosDestinoEntrada =>
       _centros.where((c) => c.esInterno).toList();
 
-  // Una salida va a un centro EXTERNO (quien consume de verdad) — nunca a
-  // un centro interno de RPCI. Es el filtro contrario al de arriba.
-  List<CentroCosto> get _centrosSalida =>
+  // Centros EXTERNOS (nunca internos de RPCI): a dónde va una salida, y
+  // de quién vuelve una devolución. Es el filtro contrario al de arriba.
+  List<CentroCosto> get _centrosExternos =>
       _centros.where((c) => !c.esInterno).toList();
 
   // Lista paginada de últimos movimientos del tipo (parte inferior).
@@ -459,7 +459,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
               forzarBuscador: true,
               etiqueta: 'Centro de costo destino',
               valor: _cc,
-              opciones: _centrosSalida,
+              opciones: _centrosExternos,
               textoDe: (c) => c.etiqueta,
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
@@ -514,7 +514,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
                 icono: Icons.undo,
                 etiqueta: 'Centro de Costo Origen',
                 valor: _cc,
-                opciones: _centros,
+                opciones: _centrosExternos,
                 textoDe: (c) => c.etiqueta,
                 recargando: _recargandoCentros,
                 onRecargar: _recargarCentros,

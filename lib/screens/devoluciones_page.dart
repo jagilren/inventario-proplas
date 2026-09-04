@@ -46,6 +46,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   CentroCosto? _ccDestino;
   List<CentroCosto> get _centrosDestinoEntrada =>
       _centros.where((c) => c.esInterno).toList();
+  // Centro de costo ORIGEN: nunca interno de RPCI (de quién vuelve de
+  // verdad, siempre un cliente externo).
+  List<CentroCosto> get _centrosExternos =>
+      _centros.where((c) => !c.esInterno).toList();
   /// Emparejador compartido con Salida y Compra masiva. Antes esta pantalla
   /// tenía su propia copia del algoritmo, y por eso se quedó sin el arreglo
   /// de las medidas (1/2" vs 2-1/2") cuando se corrigió en el módulo común.
@@ -345,7 +349,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               etiqueta: 'Centro de Costo Origen',
               icono: Icons.account_tree,
               valor: _cc,
-              opciones: _centros,
+              opciones: _centrosExternos,
               textoDe: (c) => c.etiqueta,
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
