@@ -65,6 +65,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   List<_FilaDev> _filas = [];
   bool _leyendo = false;
   bool _cargando = false;
+  // True apenas se intenta cargar con Bodega/Centro de Costo vacíos:
+  // sombrea esos campos en rojo pálido hasta que se elijan.
+  bool _mostrarErrores = false;
   String? _archivo;
   bool _recargandoBodegas = false;
   bool _recargandoCentros = false;
@@ -273,6 +276,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
   // ---- Cargar (registrar las entradas) ----
   Future<void> _cargar() async {
+    if (_bodega == null || _cc == null || _ccDestino == null) {
+      setState(() => _mostrarErrores = true);
+    }
     if (_bodega == null) return _msg('Elige la bodega física donde entran');
     if (_cc == null) return _msg('Elige el centro de costo origen');
     if (_ccDestino == null) return _msg('Elige el centro de costo destino');
@@ -403,6 +409,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               recargando: _recargandoBodegas,
               onRecargar: _recargarBodegas,
               onChanged: (v) => setState(() => _bodega = v),
+              error: _mostrarErrores && _bodega == null,
             ),
           ),
           Padding(
@@ -418,6 +425,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _cc = v),
+              error: _mostrarErrores && _cc == null,
             ),
           ),
           Padding(
@@ -433,6 +441,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _ccDestino = v),
+              error: _mostrarErrores && _ccDestino == null,
             ),
           ),
           const Padding(

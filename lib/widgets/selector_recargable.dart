@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'campo_obligatorio.dart';
 
 /// Desplegable de catálogo (centros de costo, bodegas…) con un botón para
 /// volver a pedirlo al servidor sin salir de la pantalla.
@@ -65,6 +66,12 @@ class SelectorRecargable<T> extends StatelessWidget {
   /// Texto del botón + (ej. 'Crear un material nuevo').
   final String tooltipAgregar;
 
+  /// True si la pantalla intentó guardar/cargar con este campo obligatorio
+  /// vacío: lo sombrea en rojo pálido hasta que se elija algo. Como se
+  /// recalcula en cada build a partir de [valor], apenas se elige una
+  /// opción vuelve solo a su color de siempre.
+  final bool error;
+
   const SelectorRecargable({
     super.key,
     required this.etiqueta,
@@ -80,6 +87,7 @@ class SelectorRecargable<T> extends StatelessWidget {
     this.forzarBuscador = false,
     this.onAgregar,
     this.tooltipAgregar = 'Agregar uno nuevo',
+    this.error = false,
   });
 
   @override
@@ -105,17 +113,18 @@ class SelectorRecargable<T> extends StatelessWidget {
                   opciones: opciones,
                   textoDe: textoDe,
                   onChanged: onChanged,
+                  error: error,
                 )
               : DropdownButtonFormField<T>(
                   initialValue: seleccion,
                   isExpanded: true, // etiquetas largas: recorta, no desborda
-                  decoration: InputDecoration(
+                  decoration: marcarError(InputDecoration(
                     labelText: etiqueta,
                     prefixIcon: icono == null ? null : Icon(icono),
                     border: const OutlineInputBorder(),
                     helperText: opciones.isEmpty ? textoVacio : null,
                     helperMaxLines: 2,
-                  ),
+                  ), error),
                   items: opciones
                       .map((o) => DropdownMenuItem<T>(
                             value: o,
@@ -222,6 +231,7 @@ class _CampoConBuscador<T> extends StatelessWidget {
   final List<T> opciones;
   final String Function(T) textoDe;
   final ValueChanged<T?> onChanged;
+  final bool error;
 
   const _CampoConBuscador({
     required this.etiqueta,
@@ -230,6 +240,7 @@ class _CampoConBuscador<T> extends StatelessWidget {
     required this.opciones,
     required this.textoDe,
     required this.onChanged,
+    this.error = false,
   });
 
   @override
@@ -250,14 +261,14 @@ class _CampoConBuscador<T> extends StatelessWidget {
         if (sel != null) onChanged(sel);
       },
       child: InputDecorator(
-        decoration: InputDecoration(
+        decoration: marcarError(InputDecoration(
           labelText: etiqueta,
           prefixIcon: icono == null ? null : Icon(icono),
           border: const OutlineInputBorder(),
           suffixIcon: const Icon(Icons.search),
           // Se avisa que son muchas, para que no extrañe que no despliegue.
           helperText: '${opciones.length} opciones · toca para buscar',
-        ),
+        ), error),
         child: Text(
           v == null ? 'Seleccionar…' : textoDe(v),
           overflow: TextOverflow.ellipsis,

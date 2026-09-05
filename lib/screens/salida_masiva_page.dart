@@ -61,6 +61,9 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
   List<_FilaSal> _filas = [];
   bool _leyendo = false;
   bool _cargando = false;
+  // True apenas se intenta cargar con Bodega/Centro de Costo vacíos:
+  // sombrea esos campos en rojo pálido hasta que se elijan.
+  bool _mostrarErrores = false;
   bool _recargandoBodegas = false;
   bool _recargandoCentros = false;
   String? _archivo;
@@ -429,6 +432,9 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
 
   // ---- Revisión de saldos y carga ------------------------------------
   Future<void> _revisarYCargar() async {
+    if (_bodega == null || _centro == null) {
+      setState(() => _mostrarErrores = true);
+    }
     if (_bodega == null) return _msg('Elige la bodega de donde sale');
     if (_centro == null) return _msg('Elige el centro de costo destino');
     final validas = _validas;
@@ -641,6 +647,7 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
                 setState(() => _bodega = v);
                 _revisarSaldos(); // otra bodega, otros saldos
               },
+              error: _mostrarErrores && _bodega == null,
             ),
           ),
           Padding(
@@ -656,6 +663,7 @@ class _SalidaMasivaPageState extends State<SalidaMasivaPage> {
               recargando: _recargandoCentros,
               onRecargar: _recargarCentros,
               onChanged: (v) => setState(() => _centro = v),
+              error: _mostrarErrores && _centro == null,
             ),
           ),
           Padding(

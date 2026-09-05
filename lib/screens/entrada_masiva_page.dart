@@ -53,6 +53,9 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
   final _proveedor = TextEditingController();
   bool _leyendo = false;
   bool _cargando = false;
+  // True apenas se intenta cargar con la Bodega vacía: la sombrea en rojo
+  // pálido hasta que se elija.
+  bool _mostrarErrores = false;
   bool _recargandoBodegas = false;
   bool _consultandoIA = false;
   bool _emparejadoConIA = false;
@@ -350,7 +353,10 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
 
   // ---- Carga ----------------------------------------------------------
   Future<void> _cargar() async {
-    if (_bodega == null) return _msg('Elige la bodega donde entra la mercancía');
+    if (_bodega == null) {
+      setState(() => _mostrarErrores = true);
+      return _msg('Elige la bodega donde entra la mercancía');
+    }
     final validas = _validas;
     if (validas.isEmpty) {
       return _msg('No hay líneas listas (revisa emparejamientos y costos)');
@@ -512,6 +518,7 @@ class _EntradaMasivaPageState extends State<EntradaMasivaPage> {
               recargando: _recargandoBodegas,
               onRecargar: _recargarBodegas,
               onChanged: (v) => setState(() => _bodega = v),
+              error: _mostrarErrores && _bodega == null,
             ),
           ),
           Padding(
