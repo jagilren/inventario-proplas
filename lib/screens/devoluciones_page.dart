@@ -549,7 +549,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           ),
         ),
       ),
-      title: Text(f.textoOriginal),
+      title: Text(f.match?.nombre ?? f.textoOriginal),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
