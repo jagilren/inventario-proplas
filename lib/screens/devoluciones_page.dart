@@ -19,7 +19,15 @@ class _FilaDev {
   num cantidad;               // editable antes de cargar
   Elemento? match; // EMPAREJAMIENTO con la BD
   double score; // qué tan seguro es el emparejamiento (0..1)
+  // Costo unitario asignado a mano, solo cuando el costo promedio del
+  // elemento es $0 (típicamente porque su existencia llegó a cero). Sin
+  // esto la devolución se registraba igual, valorizada en $0 — le restaba
+  // $0 de consumo al centro de costo aunque físicamente sí volvieron
+  // unidades. `null` = usar el costo promedio del elemento, sin tocar.
+  num? costoManual;
   _FilaDev(this.textoOriginal, this.cantidad, {this.match, this.score = 0});
+
+  num get costoEfectivo => costoManual ?? (match?.costoPromedio ?? 0);
 }
 
 /// Carga masiva de DEVOLUCIONES: sube un Excel/CSV con columnas
@@ -190,43 +198,68 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   }
 
   // ---- Corrección manual del emparejamiento ----
-  /// Edita la cantidad de una fila antes de cargar.
-  Future<void> _editarCantidad(_FilaDev fila) async {
-    final ctrl = TextEditingController(text: fila.cantidad.toString());
-    final cant = await showDialog<num>(
+  /// Edita la cantidad y, si hace falta, el costo unitario de una fila
+  /// antes de cargar. El campo de costo solo se muestra cuando el costo
+  /// promedio del elemento es $0 — en el caso normal la devolución se
+  /// valoriza sola, sin que el usuario tenga que saber ni tocar el costo.
+  Future<void> _editarLinea(_FilaDev fila) async {
+    final cantCtrl = TextEditingController(text: fila.cantidad.toString());
+    final sinCosto = (fila.match?.costoPromedio ?? 0) == 0;
+    final costoCtrl = TextEditingController(
+        text: fila.costoManual == null ? '' : fila.costoManual.toString());
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(fila.match?.nombre ?? fila.textoOriginal),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-              labelText: 'Cantidad', border: OutlineInputBorder()),
-          onSubmitted: (_) {
-            final c = num.tryParse(ctrl.text.replaceAll(',', '.'));
-            if (c != null && c > 0) Navigator.pop(ctx, c);
-          },
-        ),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: cantCtrl,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+                labelText: 'Cantidad', border: OutlineInputBorder()),
+          ),
+          if (sinCosto) ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: costoCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Costo unitario',
+                helperText: 'Este elemento está en \$0 · sin esto la '
+                    'devolución no resta consumo del centro de costo',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           FilledButton(
             onPressed: () {
-              final c = num.tryParse(ctrl.text.replaceAll(',', '.'));
+              final c = num.tryParse(cantCtrl.text.replaceAll(',', '.'));
               if (c == null || c <= 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                     const SnackBar(content: Text('Cantidad inválida')));
                 return;
               }
-              Navigator.pop(ctx, c);
+              Navigator.pop(ctx, true);
             },
             child: const Text('Aceptar'),
           ),
         ],
       ),
     );
-    if (cant != null && mounted) setState(() => fila.cantidad = cant);
+    if (ok == true && mounted) {
+      setState(() {
+        fila.cantidad = num.tryParse(cantCtrl.text.replaceAll(',', '.')) ?? fila.cantidad;
+        if (sinCosto) {
+          final c = num.tryParse(costoCtrl.text.replaceAll(',', '.'));
+          fila.costoManual = (c != null && c > 0) ? c : null;
+        }
+      });
+    }
   }
 
   Future<void> _corregir(_FilaDev fila) async {
@@ -244,16 +277,25 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     if (_cc == null) return _msg('Elige el centro de costo origen');
     if (_ccDestino == null) return _msg('Elige el centro de costo destino');
     final validas = _filas.where((f) => f.match != null && f.cantidad > 0
-        && !(f.match!.serializado)).toList();
+        && f.costoEfectivo > 0 && !(f.match!.serializado)).toList();
     if (validas.isEmpty) {
-      return _msg('No hay filas listas para cargar (revisa emparejamientos y cantidades)');
+      return _msg('No hay filas listas para cargar (revisa emparejamientos, cantidades y costos)');
     }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar carga'),
-        content: Text('Se registrarán ${validas.length} entradas de devolución '
-            'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'),
+        content: Column(mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Se registrarán ${validas.length} entradas de devolución '
+                'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'),
+            if (_sinCosto > 0) ...[
+              const SizedBox(height: 8),
+              Text('Se omiten $_sinCosto línea(s) en \$0: asígnales un costo '
+                  'para poder cargarlas.',
+                  style: const TextStyle(color: Colors.red)),
+            ],
+          ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
@@ -265,7 +307,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     if (ok != true) return;
 
     setState(() => _cargando = true);
-    int cargados = 0, aCostoCero = 0, errores = 0;
+    int cargados = 0, errores = 0;
     for (final f in validas) {
       try {
         await InventarioService.registrarMovimiento(
@@ -273,19 +315,19 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           elementoId: f.match!.id,
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
-          costoUnitario: f.match!.costoPromedio,
+          costoUnitario: f.costoEfectivo,
           centroCostoId: _cc?.id,
           centroCostoDestinoId: _ccDestino?.id,
           referencia: 'DEVOLUCION',
         );
         cargados++;
-        if (f.match!.costoPromedio == 0) aCostoCero++;
       } catch (_) {
         errores++;
       }
     }
     final sinEmparejar = _filas.where((f) => f.match == null).length;
     final serializados = _filas.where((f) => f.match?.serializado ?? false).length;
+    final omitidosPorCosto = _sinCosto;
     if (!mounted) return;
     setState(() { _cargando = false; _filas = []; _archivo = null; });
     await showDialog<void>(
@@ -295,7 +337,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         content: Column(mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('✓ Cargados: $cargados'),
-            if (aCostoCero > 0) Text('• A costo 0 (revisa Alertas): $aCostoCero'),
+            if (omitidosPorCosto > 0)
+              Text('• Sin costo (omitidos, no cargados): $omitidosPorCosto'),
             if (sinEmparejar > 0) Text('• Sin emparejar (omitidos): $sinEmparejar'),
             if (serializados > 0) Text('• Serializados (omitidos): $serializados'),
             if (errores > 0) Text('• Con error: $errores'),
@@ -312,7 +355,17 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   int get _listas => _filas.where((f) =>
-      f.match != null && f.cantidad > 0 && !(f.match!.serializado)).length;
+      f.match != null && f.cantidad > 0 && f.costoEfectivo > 0
+      && !(f.match!.serializado)).length;
+
+  /// Emparejadas, con cantidad y sin serializar, pero SIN costo (costo
+  /// promedio del elemento en $0 y sin costo manual asignado todavía): no
+  /// se pueden cargar hasta que alguien les asigne un costo a mano — de lo
+  /// contrario la devolución entraría valorizada en $0 y no restaría nada
+  /// del consumo del centro de costo en los informes.
+  int get _sinCosto => _filas.where((f) =>
+      f.match != null && f.cantidad > 0 && !(f.match!.serializado)
+      && f.costoEfectivo <= 0).length;
 
   @override
   Widget build(BuildContext context) {
@@ -371,6 +424,15 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               onChanged: (v) => setState(() => _ccDestino = v),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Text(
+              'Estos dos centros aplican a TODO el archivo que subas abajo: '
+              'el Excel/CSV solo trae elemento y cantidad, no lleva centro '
+              'de costo por fila.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
@@ -408,7 +470,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('${_filas.length} filas · $_listas listas para cargar',
+                child: Text('${_filas.length} filas · $_listas listas para cargar'
+                    '${_sinCosto > 0 ? ' · $_sinCosto sin costo' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
@@ -459,13 +522,15 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
   Widget _filaWidget(_FilaDev f) {
     final m = f.match;
+    final sinCosto = m != null && !m.serializado && f.costoEfectivo <= 0;
     final Color color = m == null
         ? Colors.red
         : (f.match!.serializado ? Colors.purple
-            : (f.score >= 0.82 ? Colors.green : Colors.orange));
+            : (sinCosto ? Colors.red
+                : (f.score >= 0.82 ? Colors.green : Colors.orange)));
     return ListTile(
       leading: InkWell(
-        onTap: () => _editarCantidad(f),
+        onTap: () => _editarLinea(f),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -492,7 +557,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           Row(children: [
             Icon(m == null ? Icons.help_outline
                 : (f.match!.serializado ? Icons.tag
-                    : (f.score >= 0.82 ? Icons.check_circle : Icons.rule)),
+                    : (sinCosto ? Icons.money_off
+                        : (f.score >= 0.82 ? Icons.check_circle : Icons.rule))),
                 size: 15, color: color),
             const SizedBox(width: 4),
             Expanded(
@@ -501,8 +567,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                     ? 'Sin emparejar — toca para elegir'
                     : (m.serializado
                         ? '${m.nombre} (serializado: no se carga por cantidad)'
-                        : '${m.nombre} · ${_money.format(m.costoPromedio)}'
-                            '${m.costoPromedio == 0 ? ' ⚠ costo 0' : ''}'),
+                        : sinCosto
+                            ? '${m.nombre} · \$0 — toca la cantidad para asignar un costo'
+                            : '${m.nombre} · ${_money.format(f.costoEfectivo)}'
+                                '${f.costoManual != null ? ' (manual)' : ''}'),
                 style: TextStyle(color: color,
                     fontWeight: FontWeight.w600, fontSize: 13),
               ),
