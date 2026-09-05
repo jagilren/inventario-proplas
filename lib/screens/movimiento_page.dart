@@ -60,6 +60,15 @@ class _MovimientoPageState extends State<MovimientoPage> {
   List<CentroCosto> get _centrosExternos =>
       _centros.where((c) => !c.esInterno).toList();
 
+  // Por defecto, toda entrada queda atribuida a la bodega de almacén
+  // (G000002) salvo que el usuario elija otra manualmente.
+  CentroCosto? get _destinoPorDefecto {
+    for (final c in _centros) {
+      if (c.codigo == 'G000002') return c;
+    }
+    return null;
+  }
+
   // Lista paginada de últimos movimientos del tipo (parte inferior).
   final List<MovLista> _recientes = [];
   int _offset = 0;
@@ -110,7 +119,12 @@ class _MovimientoPageState extends State<MovimientoPage> {
   void initState() {
     super.initState();
     InventarioService.centrosCosto().then((c) {
-      if (mounted) setState(() => _centros = c);
+      if (mounted) {
+        setState(() {
+          _centros = c;
+          if (!_esSalida) _ccDestino = _destinoPorDefecto;
+        });
+      }
     });
     InventarioService.bodegas().then((b) {
       if (mounted) {
@@ -226,7 +240,9 @@ class _MovimientoPageState extends State<MovimientoPage> {
           ? '✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada'
           : '✓ Guardada sin conexión · se subirá al volver el internet');
       setState(() {
-        _elemento = null; _cc = null; _ccDestino = null; _esDevolucion = false;
+        _elemento = null; _cc = null;
+        _ccDestino = _esSalida ? null : _destinoPorDefecto;
+        _esDevolucion = false;
         _cantidad.clear(); _costo.clear(); _obs.clear();
       });
     } catch (e) {
@@ -262,7 +278,8 @@ class _MovimientoPageState extends State<MovimientoPage> {
       if (!mounted) return;
       _msg('✓ ${_esSalida ? 'Salida' : 'Entrada'} registrada');
       setState(() {
-        _elemento = null; _cc = null; _ccDestino = null;
+        _elemento = null; _cc = null;
+        _ccDestino = _esSalida ? null : _destinoPorDefecto;
         _esDevolucion = false; _serialesNuevos.clear();
         _serialSel.clear(); _disponibles = []; _costo.clear(); _obs.clear();
       });
