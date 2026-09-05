@@ -946,7 +946,13 @@ class InventarioService {
         .toList();
   }
 
-  static Future<List<MovKardex>> kardex(String elementoId) async {
+  /// Paginado: un elemento puede acumular años de movimientos, así que
+  /// nunca se trae todo de una vez (antes lo hacía — con un historial de
+  /// millones de filas esa sola consulta habría sido carísima). Se pide de
+  /// a [limit] (10 por defecto), más reciente primero, con [offset] para
+  /// "Cargar más".
+  static Future<List<MovKardex>> kardex(String elementoId,
+      {int offset = 0, int limit = 10}) async {
     final res = await supabase
         .from('movimientos')
         .select(
@@ -958,10 +964,26 @@ class InventarioService {
         )
         .eq('elemento_id', elementoId)
         .order('fecha', ascending: false)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
     return (res as List)
         .map((e) => MovKardex.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Ids de movimientos YA anulados de un elemento (para marcar "ANULADO"
+  /// en el kardex). Va aparte del kardex paginado: es una proyección
+  /// liviana (una sola columna) y así la marca es correcta sin importar en
+  /// qué página quedó el original o su reversa.
+  static Future<Set<String>> idsAnuladosDeElemento(String elementoId) async {
+    final res = await supabase
+        .from('movimientos')
+        .select('anula_movimiento_id')
+        .eq('elemento_id', elementoId)
+        .not('anula_movimiento_id', 'is', null);
+    return (res as List)
+        .map((r) => r['anula_movimiento_id'] as String)
+        .toSet();
   }
 
   /// Id del usuario autenticado (para saber si es autor de un movimiento).

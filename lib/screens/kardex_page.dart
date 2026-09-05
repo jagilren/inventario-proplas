@@ -28,7 +28,14 @@ class _KardexPageState extends State<KardexPage> {
   List<ImagenElem> _fotos = [];
   List<ExistenciaBodega> _porBodega = [];
   List<Serie> _series = [];
-  late Future<List<MovKardex>> _future;
+  // Kardex paginado: un elemento puede acumular años de movimientos, así
+  // que nunca se trae todo de una sola vez (ver InventarioService.kardex).
+  final List<MovKardex> _movs = [];
+  Set<String> _anulados = {};
+  int _offset = 0;
+  bool _hayMas = true;
+  bool _cargando = true;    // primera carga
+  bool _cargandoMas = false; // "Cargar más"
   /// True mientras una anulación está en curso. Sin esto, dos toques
   /// rápidos mandaban dos peticiones antes de que la lista se recargara.
   bool _anulando = false;
@@ -37,7 +44,7 @@ class _KardexPageState extends State<KardexPage> {
   void initState() {
     super.initState();
     _elemento = widget.elemento;
-    _future = InventarioService.kardex(_elemento.id);
+    _cargarMovs(reset: true);
     _cargarFotos();
     _cargarBodegas();
     if (_elemento.serializado) _cargarSeries();
@@ -49,6 +56,40 @@ class _KardexPageState extends State<KardexPage> {
         });
       }
     });
+  }
+
+  Future<void> _cargarMovs({bool reset = false}) async {
+    if (_cargandoMas) return;
+    setState(() {
+      if (reset) {
+        _offset = 0; _hayMas = true; _movs.clear();
+        _cargando = true;
+      } else {
+        _cargandoMas = true;
+      }
+    });
+    try {
+      if (reset) {
+        // Los ids anulados van aparte (proyección liviana, sin paginar):
+        // así la marca "ANULADO" sale bien sin importar en qué página
+        // quede el original o su reversa.
+        InventarioService.idsAnuladosDeElemento(_elemento.id).then((a) {
+          if (mounted) setState(() => _anulados = a);
+        });
+      }
+      final r = await InventarioService.kardex(_elemento.id,
+          offset: _offset, limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _movs.addAll(r);
+        _offset += r.length;
+        if (r.length < 10) _hayMas = false;
+      });
+    } catch (_) {
+      // sin red: la lista simplemente no avanza
+    } finally {
+      if (mounted) setState(() { _cargando = false; _cargandoMas = false; });
+    }
   }
 
   Future<void> _cargarFotos() async {
@@ -80,10 +121,8 @@ class _KardexPageState extends State<KardexPage> {
     // vuelve a leer existencia/costo actualizados
     final actualizado = await InventarioService.buscar(_elemento.nombre);
     final match = actualizado.where((e) => e.id == _elemento.id);
-    setState(() {
-      if (match.isNotEmpty) _elemento = match.first;
-      _future = InventarioService.kardex(_elemento.id);
-    });
+    if (match.isNotEmpty) setState(() => _elemento = match.first);
+    await _cargarMovs(reset: true);
     await _cargarFotos();
     await _cargarBodegas();
     if (_elemento.serializado) await _cargarSeries();
@@ -370,37 +409,53 @@ class _KardexPageState extends State<KardexPage> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<MovKardex>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
+            child: Builder(
+              builder: (context) {
+                if (_cargando) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (snap.hasError) {
-                  return Center(child: Text('Error: ${snap.error}'));
-                }
-                final movs = snap.data ?? [];
-                if (movs.isEmpty) {
+                if (_movs.isEmpty) {
                   return const Center(child: Text('Sin movimientos'));
                 }
-                // Qué movimientos YA tienen su anulación. Antes el botón
-                // rojo seguía apareciendo en el original después de
-                // anularlo: la condición miraba si la fila ERA una
-                // anulación, no si ya TENÍA una. Pulsarlo otra vez creaba
-                // una segunda reversa y la existencia quedaba compensada
-                // de más. La base ya lo impide (schema_v36); esto es para
-                // que ni siquiera se ofrezca.
-                final anulados = <String>{
-                  for (final m in movs)
-                    if (m.anulaMovimientoId != null) m.anulaMovimientoId!,
-                };
                 return ListView.separated(
-                  itemCount: movs.length,
+                  itemCount: _movs.length + 1, // +1: pie de "Cargar más"
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, i) {
-                    final m = movs[i];
+                    if (i == _movs.length) {
+                      // Pie de la lista: siguiente página, fin, o cargando.
+                      if (_cargandoMas) {
+                        return const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (_hayMas) {
+                        return Center(
+                          child: TextButton.icon(
+                            onPressed: () => _cargarMovs(),
+                            icon: const Icon(Icons.expand_more, size: 18),
+                            label: const Text('Cargar más'),
+                          ),
+                        );
+                      }
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Center(
+                          child: Text('— No hay más —',
+                              style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ),
+                      );
+                    }
+                    final m = _movs[i];
+                    // Qué movimientos YA tienen su anulación. Antes el botón
+                    // rojo seguía apareciendo en el original después de
+                    // anularlo: la condición miraba si la fila ERA una
+                    // anulación, no si ya TENÍA una. Pulsarlo otra vez creaba
+                    // una segunda reversa y la existencia quedaba compensada
+                    // de más. La base ya lo impide (schema_v36); esto es para
+                    // que ni siquiera se ofrezca.
                     final yaAnulado =
-                        m.id != null && anulados.contains(m.id);
+                        m.id != null && _anulados.contains(m.id);
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: _color(m.tipo).withValues(alpha: 0.15),
