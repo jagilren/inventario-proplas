@@ -5,6 +5,7 @@ import '../widgets/galeria_elemento.dart';
 import 'escaner_page.dart';
 import 'materiales_page.dart';
 import '../widgets/selector_recargable.dart';
+import '../widgets/campo_obligatorio.dart';
 
 /// Crea o edita un elemento (admin / coordinador).
 /// Si [elemento] es null, es creación. Devuelve true si guardó.
@@ -59,6 +60,9 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   late bool _serializado;
   bool _esAprovechamiento = false; // solo al crear; false por defecto
   bool _guardando = false;
+  // True apenas se intenta guardar con un campo obligatorio vacío: lo
+  // sombrea en rojo pálido hasta que se llene.
+  bool _mostrarErrores = false;
 
   // Fotos elegidas antes de que el elemento exista (solo al crear).
   List<Uint8List> _fotosPendientes = [];
@@ -169,6 +173,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
 
   Future<void> _guardar() async {
     if (_nombre.text.trim().isEmpty) {
+      setState(() => _mostrarErrores = true);
       _msg('El nombre es obligatorio');
       return;
     }
@@ -182,10 +187,12 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
       final cantS = int.tryParse(_cantIni.text.trim()) ?? 0;
       if (cantS > 0) {
         if (_bodegaIni == null) {
+          setState(() => _mostrarErrores = true);
           _msg('Elige a qué bodega entran las unidades iniciales');
           return;
         }
         if (_serialesIni.length != cantS) {
+          setState(() => _mostrarErrores = true);
           _msg('Debes agregar $cantS seriales (llevas ${_serialesIni.length})');
           return;
         }
@@ -369,7 +376,8 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             onPendientes: (fotos) => _fotosPendientes = fotos,
           ),
           const Divider(height: 28),
-          _campo(_nombre, 'Nombre *'),
+          _campo(_nombre, 'Nombre *',
+              error: _mostrarErrores && _nombre.text.trim().isEmpty),
           _selectorMaterial(),
           _campo(_sch, 'SCH'),
           DropdownButtonFormField<String>(
@@ -495,11 +503,12 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             DropdownButtonFormField<Bodega>(
               initialValue: _bodegaIni,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: marcarError(const InputDecoration(
                 labelText: 'Bodega de las unidades',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.warehouse),
-              ),
+              ), _mostrarErrores && _bodegaIni == null
+                  && (int.tryParse(_cantIni.text.trim()) ?? 0) > 0),
               items: _bodegas
                   .map(
                     (b) => DropdownMenuItem(
@@ -703,17 +712,19 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     String label, {
     TextInputType? teclado,
     String? hint,
+    bool error = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
         controller: c,
         keyboardType: teclado,
-        decoration: InputDecoration(
+        onChanged: (_) => setState(() {}),
+        decoration: marcarError(InputDecoration(
           labelText: label,
           hintText: hint,
           border: const OutlineInputBorder(),
-        ),
+        ), error),
       ),
     );
   }

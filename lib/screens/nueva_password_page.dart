@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/campo_obligatorio.dart';
 
 /// Se muestra cuando el usuario llega por el enlace de "Olvidé mi contraseña".
 class NuevaPasswordPage extends StatefulWidget {
@@ -59,11 +60,12 @@ class _NuevaPasswordPageState extends State<NuevaPasswordPage> {
                   controller: _pass,
                   obscureText: true,
                   onSubmitted: (_) => _guardar(),
-                  decoration: const InputDecoration(
+                  onChanged: (_) => setState(() {}),
+                  decoration: marcarError(const InputDecoration(
                     labelText: 'Nueva contraseña (mín. 6)',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.lock_outline),
-                  ),
+                  ), _error != null && _pass.text.length < 6),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),

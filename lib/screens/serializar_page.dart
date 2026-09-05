@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
+import '../widgets/campo_obligatorio.dart';
 
 /// Convierte un elemento a serializado: se registran los seriales de las
 /// unidades que ya tiene en stock (uno por unidad, con su bodega y costo).
@@ -17,6 +18,9 @@ class _SerializarPageState extends State<SerializarPage> {
   final _costo = TextEditingController();
   final List<Map<String, dynamic>> _items = []; // {bodega_id, bodega, serial, costo}
   bool _guardando = false;
+  // True apenas se intenta agregar un serial con bodega o serial vacíos:
+  // los sombrea en rojo pálido hasta que se llenen.
+  bool _mostrarErrores = false;
 
   @override
   void initState() {
@@ -29,7 +33,10 @@ class _SerializarPageState extends State<SerializarPage> {
   void _agregar() {
     final s = _serial.text.trim();
     final c = num.tryParse(_costo.text.replaceAll(',', '.')) ?? 0;
-    if (_bodega == null || s.isEmpty) return;
+    if (_bodega == null || s.isEmpty) {
+      setState(() => _mostrarErrores = true);
+      return;
+    }
     if (_items.any((i) => i['serial'] == s)) return;
     setState(() {
       _items.add({'bodega_id': _bodega!.id, 'bodega': _bodega!.nombre,
@@ -74,8 +81,9 @@ class _SerializarPageState extends State<SerializarPage> {
             const SizedBox(height: 10),
             DropdownButtonFormField<Bodega>(
               initialValue: _bodega, isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Bodega',
+              decoration: marcarError(const InputDecoration(labelText: 'Bodega',
                   border: OutlineInputBorder(), prefixIcon: Icon(Icons.warehouse)),
+                  _mostrarErrores && _bodega == null),
               items: _bodegas.map((b) => DropdownMenuItem(value: b,
                   child: Text(b.nombre, overflow: TextOverflow.ellipsis))).toList(),
               onChanged: (v) => setState(() => _bodega = v),
@@ -84,8 +92,10 @@ class _SerializarPageState extends State<SerializarPage> {
             Row(children: [
               Expanded(flex: 2, child: TextField(controller: _serial,
                   onSubmitted: (_) => _agregar(),
-                  decoration: const InputDecoration(labelText: 'Serial',
-                      border: OutlineInputBorder()))),
+                  onChanged: (_) => setState(() {}),
+                  decoration: marcarError(const InputDecoration(labelText: 'Serial',
+                      border: OutlineInputBorder()),
+                      _mostrarErrores && _serial.text.trim().isEmpty))),
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: _costo,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),

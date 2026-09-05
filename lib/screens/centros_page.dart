@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
+import '../widgets/campo_obligatorio.dart';
 
 class CentrosPage extends StatefulWidget {
   const CentrosPage({super.key});
@@ -171,6 +172,9 @@ class _CentroFormState extends State<_CentroForm> {
   late final TextEditingController _cliente;
   late bool _esInterno;
   bool _guardando = false;
+  // True apenas se intenta guardar con el código vacío: lo sombrea en
+  // rojo pálido hasta que se llene.
+  bool _mostrarErrores = false;
 
   /// Cuántos movimientos tiene: decide si se puede borrar de verdad o solo
   /// desactivar. null = todavía se está consultando.
@@ -195,6 +199,7 @@ class _CentroFormState extends State<_CentroForm> {
 
   Future<void> _guardar() async {
     if (_codigo.text.trim().isEmpty) {
+      setState(() => _mostrarErrores = true);
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El código es obligatorio')));
       return;
@@ -232,8 +237,11 @@ class _CentroFormState extends State<_CentroForm> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
           TextField(controller: _codigo,
-            decoration: const InputDecoration(labelText: 'Código (ej. NP00034)',
-                border: OutlineInputBorder())),
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(const InputDecoration(
+                labelText: 'Código (ej. NP00034)',
+                border: OutlineInputBorder()),
+                _mostrarErrores && _codigo.text.trim().isEmpty)),
           const SizedBox(height: 10),
           TextField(controller: _desc,
             decoration: const InputDecoration(labelText: 'Descripción',

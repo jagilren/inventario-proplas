@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data.dart';
 import '../widgets/selector_recargable.dart';
+import '../widgets/campo_obligatorio.dart';
 import '../reportes.dart';
 import '../util/tiempo.dart';
 import '../util/dialogos.dart';
@@ -1145,6 +1146,9 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
   List<Bodega> _bodegas = [];
   Bodega? _bodega;
   bool _guardando = false;
+  // True apenas se intenta guardar con elemento o longitud vacíos: los
+  // sombrea en rojo pálido hasta que se llenen.
+  bool _mostrarErrores = false;
 
   @override
   void initState() {
@@ -1178,6 +1182,9 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
 
   Future<void> _guardar() async {
     final l = num.tryParse(_longitud.text.replaceAll(',', '.'));
+    if (_elementoId == null || l == null || l <= 0) {
+      setState(() => _mostrarErrores = true);
+    }
     if (_elementoId == null) return _msg('Elige el elemento');
     if (l == null || l <= 0) return _msg('Longitud inválida');
     setState(() => _guardando = true);
@@ -1217,6 +1224,8 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
           ),
           const SizedBox(height: 12),
           Card(
+            color: (_mostrarErrores && _elementoId == null)
+                ? Colors.red.shade50 : null,
             child: ListTile(
               leading: const Icon(Icons.inventory_2),
               title: Text(_nombre ?? 'Elegir elemento…'),
@@ -1229,10 +1238,13 @@ class _IngresarTrozoSheetState extends State<_IngresarTrozoSheet> {
           TextField(
             controller: _longitud,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(InputDecoration(
               labelText: 'Longitud del tramo ($_unidad)',
               border: const OutlineInputBorder(),
-            ),
+            ), _mostrarErrores &&
+                (num.tryParse(_longitud.text.replaceAll(',', '.')) == null
+                    || num.tryParse(_longitud.text.replaceAll(',', '.'))! <= 0)),
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<Bodega>(

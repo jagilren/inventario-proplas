@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
 import '../util/busqueda.dart';
+import '../widgets/campo_obligatorio.dart';
 
 /// Maestra de materiales (schema_v35).
 ///
@@ -206,6 +207,9 @@ class _MaterialForm extends StatefulWidget {
 class _MaterialFormState extends State<_MaterialForm> {
   late final TextEditingController _nombre;
   bool _guardando = false;
+  // True apenas se intenta guardar con el nombre vacío: lo sombrea en
+  // rojo pálido hasta que se llene.
+  bool _mostrarErrores = false;
 
   @override
   void initState() {
@@ -224,6 +228,7 @@ class _MaterialFormState extends State<_MaterialForm> {
 
   Future<void> _guardar() async {
     if (_nombre.text.trim().isEmpty) {
+      setState(() => _mostrarErrores = true);
       _aviso('El nombre es obligatorio');
       return;
     }
@@ -267,10 +272,11 @@ class _MaterialFormState extends State<_MaterialForm> {
             controller: _nombre,
             autofocus: true,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(const InputDecoration(
               labelText: 'Nombre del material',
               border: OutlineInputBorder(),
-            ),
+            ), _mostrarErrores && _nombre.text.trim().isEmpty),
             onSubmitted: (_) => _guardando ? null : _guardar(),
           ),
           // Renombrar arrastra el catálogo: conviene decirlo antes, no

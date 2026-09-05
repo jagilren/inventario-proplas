@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
 import '../widgets/selector_recargable.dart';
+import '../widgets/campo_obligatorio.dart';
 
 /// Traslado de stock de una bodega a otra (admin / coordinador).
 class TrasladosPage extends StatefulWidget {
@@ -20,6 +21,9 @@ class _TrasladosPageState extends State<TrasladosPage> {
   bool _guardando = false;
   List<Serie> _dispon = [];
   final Set<String> _serialSel = {};
+  // True apenas se intenta trasladar con algún campo obligatorio vacío:
+  // sombrea esos campos en rojo pálido hasta que se llenen.
+  bool _mostrarErrores = false;
   bool get _serial => _elemento?.serializado ?? false;
 
   Future<void> _cargarDispon() async {
@@ -77,12 +81,15 @@ class _TrasladosPageState extends State<TrasladosPage> {
   Future<void> _trasladar() async {
     final el = _elemento;
     final cant = num.tryParse(_cantidad.text.replaceAll(',', '.'));
-    if (el == null) return _msg('Selecciona un elemento');
-    if (_origen == null) return _msg('Selecciona la bodega de origen');
-    if (_destino == null) return _msg('Selecciona la bodega de destino');
+    if (el == null) { setState(() => _mostrarErrores = true); return _msg('Selecciona un elemento'); }
+    if (_origen == null) { setState(() => _mostrarErrores = true); return _msg('Selecciona la bodega de origen'); }
+    if (_destino == null) { setState(() => _mostrarErrores = true); return _msg('Selecciona la bodega de destino'); }
     if (_origen!.id == _destino!.id) return _msg('Origen y destino no pueden ser iguales');
     if (_serial) {
-      if (_serialSel.isEmpty) return _msg('Selecciona al menos un serial');
+      if (_serialSel.isEmpty) {
+        setState(() => _mostrarErrores = true);
+        return _msg('Selecciona al menos un serial');
+      }
       setState(() => _guardando = true);
       try {
         await InventarioService.moverSerie(tipo: 'traslado', elementoId: el.id,
@@ -93,7 +100,8 @@ class _TrasladosPageState extends State<TrasladosPage> {
         _msg('✓ Traslado registrado');
         final b = await InventarioService.existenciasPorBodega(el.id);
         final d = await InventarioService.seriesDisponibles(el.id, _origen!.id);
-        setState(() { _porBodega = b; _dispon = d; _serialSel.clear(); _obs.clear(); });
+        setState(() { _porBodega = b; _dispon = d; _serialSel.clear();
+          _obs.clear(); _mostrarErrores = false; });
       } catch (e) {
         _msg('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
       } finally {
@@ -101,7 +109,10 @@ class _TrasladosPageState extends State<TrasladosPage> {
       }
       return;
     }
-    if (cant == null || cant <= 0) return _msg('Cantidad inválida');
+    if (cant == null || cant <= 0) {
+      setState(() => _mostrarErrores = true);
+      return _msg('Cantidad inválida');
+    }
     if (cant > _existenciaEn(_origen)) {
       return _msg('No hay tanto en la bodega de origen (hay ${_existenciaEn(_origen)})');
     }
@@ -118,7 +129,7 @@ class _TrasladosPageState extends State<TrasladosPage> {
       final b = await InventarioService.existenciasPorBodega(el.id);
       setState(() {
         _porBodega = b;
-        _cantidad.clear(); _obs.clear();
+        _cantidad.clear(); _obs.clear(); _mostrarErrores = false;
       });
     } catch (e) {
       _msg('Error: ${e.toString().replaceAll('PostgrestException(message: ', '')}');
@@ -141,6 +152,7 @@ class _TrasladosPageState extends State<TrasladosPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
+              color: (_mostrarErrores && el == null) ? Colors.red.shade50 : null,
               child: ListTile(
                 leading: const Icon(Icons.inventory_2),
                 title: Text(el?.nombre ?? 'Seleccionar elemento…'),
@@ -170,6 +182,7 @@ class _TrasladosPageState extends State<TrasladosPage> {
               recargando: _recargandoBodegas,
               onRecargar: _recargarBodegas,
               onChanged: (v) { setState(() => _origen = v); _cargarDispon(); },
+              error: _mostrarErrores && _origen == null,
             ),
             const SizedBox(height: 10),
             SelectorRecargable<Bodega>(
@@ -181,35 +194,45 @@ class _TrasladosPageState extends State<TrasladosPage> {
               recargando: _recargandoBodegas,
               onRecargar: _recargarBodegas,
               onChanged: (v) => setState(() => _destino = v),
+              error: _mostrarErrores && _destino == null,
             ),
             const SizedBox(height: 10),
             if (!_serial)
               TextField(
                 controller: _cantidad,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
+                onChanged: (_) => setState(() {}),
+                decoration: marcarError(InputDecoration(
                   labelText: 'Cantidad${el != null ? ' (${el.unidad})' : ''}',
                   border: const OutlineInputBorder(),
+                ), _mostrarErrores &&
+                    (num.tryParse(_cantidad.text.replaceAll(',', '.')) == null
+                        || num.tryParse(_cantidad.text.replaceAll(',', '.'))! <= 0)),
+              ),
+            if (_serial)
+              conMarcaError(
+                error: _mostrarErrores && _serialSel.isEmpty,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Align(alignment: Alignment.centerLeft,
+                        child: Text('Seriales a trasladar (en el origen):',
+                            style: TextStyle(fontWeight: FontWeight.bold))),
+                    if (_origen == null)
+                      const Text('Elige la bodega de origen.',
+                          style: TextStyle(color: Colors.grey)),
+                    if (_origen != null && _dispon.isEmpty)
+                      const Text('No hay seriales disponibles en el origen.',
+                          style: TextStyle(color: Colors.grey)),
+                    ..._dispon.map((s) => CheckboxListTile(
+                      dense: true, contentPadding: EdgeInsets.zero,
+                      title: Text(s.serial),
+                      value: _serialSel.contains(s.serial),
+                      onChanged: (v) => setState(() => v == true
+                          ? _serialSel.add(s.serial) : _serialSel.remove(s.serial)),
+                    )),
+                  ],
                 ),
               ),
-            if (_serial) ...[
-              const Align(alignment: Alignment.centerLeft,
-                  child: Text('Seriales a trasladar (en el origen):',
-                      style: TextStyle(fontWeight: FontWeight.bold))),
-              if (_origen == null)
-                const Text('Elige la bodega de origen.',
-                    style: TextStyle(color: Colors.grey)),
-              if (_origen != null && _dispon.isEmpty)
-                const Text('No hay seriales disponibles en el origen.',
-                    style: TextStyle(color: Colors.grey)),
-              ..._dispon.map((s) => CheckboxListTile(
-                dense: true, contentPadding: EdgeInsets.zero,
-                title: Text(s.serial),
-                value: _serialSel.contains(s.serial),
-                onChanged: (v) => setState(() => v == true
-                    ? _serialSel.add(s.serial) : _serialSel.remove(s.serial)),
-              )),
-            ],
             const SizedBox(height: 10),
             TextField(
               controller: _obs,

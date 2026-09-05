@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
+import '../widgets/campo_obligatorio.dart';
 
 class GestionUsuariosPage extends StatefulWidget {
   const GestionUsuariosPage({super.key});
@@ -245,9 +246,13 @@ class _NuevoUsuarioFormState extends State<_NuevoUsuarioForm> {
   final _pass = TextEditingController();
   final Set<String> _roles = {};
   bool _guardando = false;
+  // True apenas se intenta crear con correo o contraseña inválidos: los
+  // sombrea en rojo pálido hasta que queden bien.
+  bool _mostrarErrores = false;
 
   Future<void> _crear() async {
     if (_email.text.trim().isEmpty || _pass.text.length < 6) {
+      setState(() => _mostrarErrores = true);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Correo válido y contraseña de 6+ caracteres')));
       return;
@@ -284,16 +289,20 @@ class _NuevoUsuarioFormState extends State<_NuevoUsuarioForm> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
           TextField(controller: _email, keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'Correo',
-                border: OutlineInputBorder())),
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(const InputDecoration(labelText: 'Correo',
+                border: OutlineInputBorder()),
+                _mostrarErrores && _email.text.trim().isEmpty)),
           const SizedBox(height: 10),
           TextField(controller: _nombre,
             decoration: const InputDecoration(labelText: 'Nombre (opcional)',
                 border: OutlineInputBorder())),
           const SizedBox(height: 10),
           TextField(controller: _pass, obscureText: true,
-            decoration: const InputDecoration(labelText: 'Contraseña',
-                border: OutlineInputBorder())),
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(const InputDecoration(labelText: 'Contraseña',
+                border: OutlineInputBorder()),
+                _mostrarErrores && _pass.text.length < 6)),
           const SizedBox(height: 14),
           const Align(alignment: Alignment.centerLeft,
               child: Text('Roles:', style: TextStyle(fontWeight: FontWeight.bold))),

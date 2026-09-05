@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
+import '../widgets/campo_obligatorio.dart';
 
 class BodegasPage extends StatefulWidget {
   const BodegasPage({super.key});
@@ -78,6 +79,9 @@ class _BodegaFormState extends State<_BodegaForm> {
   late final TextEditingController _nombre;
   late final TextEditingController _codigo;
   bool _guardando = false;
+  // True apenas se intenta guardar con el nombre vacío: lo sombrea en
+  // rojo pálido hasta que se llene.
+  bool _mostrarErrores = false;
 
   @override
   void initState() {
@@ -88,6 +92,7 @@ class _BodegaFormState extends State<_BodegaForm> {
 
   Future<void> _guardar() async {
     if (_nombre.text.trim().isEmpty) {
+      setState(() => _mostrarErrores = true);
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('El nombre es obligatorio')));
       return;
@@ -123,8 +128,10 @@ class _BodegaFormState extends State<_BodegaForm> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
           TextField(controller: _nombre,
-            decoration: const InputDecoration(labelText: 'Nombre',
-                border: OutlineInputBorder())),
+            onChanged: (_) => setState(() {}),
+            decoration: marcarError(const InputDecoration(labelText: 'Nombre',
+                border: OutlineInputBorder()),
+                _mostrarErrores && _nombre.text.trim().isEmpty)),
           const SizedBox(height: 10),
           TextField(controller: _codigo,
             decoration: const InputDecoration(labelText: 'Código (opcional)',
