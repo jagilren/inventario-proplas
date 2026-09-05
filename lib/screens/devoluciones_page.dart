@@ -289,6 +289,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Se registrarán ${validas.length} entradas de devolución '
                 'en "${_bodega!.nombre}", valorizadas al costo promedio actual.'),
+            if (_sinEmparejar > 0) ...[
+              const SizedBox(height: 8),
+              Text('Se omiten $_sinEmparejar línea(s) sin emparejar: el '
+                  'sistema no reconoce ese artículo, elígelo con el buscador.',
+                  style: const TextStyle(color: Colors.red)),
+            ],
             if (_sinCosto > 0) ...[
               const SizedBox(height: 8),
               Text('Se omiten $_sinCosto línea(s) en \$0: asígnales un costo '
@@ -325,7 +331,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         errores++;
       }
     }
-    final sinEmparejar = _filas.where((f) => f.match == null).length;
+    final sinEmparejar = _sinEmparejar;
     final serializados = _filas.where((f) => f.match?.serializado ?? false).length;
     final omitidosPorCosto = _sinCosto;
     if (!mounted) return;
@@ -357,6 +363,11 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   int get _listas => _filas.where((f) =>
       f.match != null && f.cantidad > 0 && f.costoEfectivo > 0
       && !(f.match!.serializado)).length;
+
+  /// El nombre de la columna ELEMENTO no encontró nada parecido en el
+  /// catálogo: la app no sabe qué artículo es, así que no puede cargarlo
+  /// hasta que alguien lo elija a mano con el buscador.
+  int get _sinEmparejar => _filas.where((f) => f.match == null).length;
 
   /// Emparejadas, con cantidad y sin serializar, pero SIN costo (costo
   /// promedio del elemento en $0 y sin costo manual asignado todavía): no
@@ -470,11 +481,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('${_filas.length} filas · $_listas listas para cargar'
-                    '${_sinCosto > 0 ? ' · $_sinCosto sin costo' : ''}',
+                child: Text('${_filas.length} filas · $_listas listas para cargar',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
+          // Aviso visible ANTES de tocar "Cargar": antes solo se enteraba
+          // de cuántas líneas quedaban por fuera hasta después de cargar
+          // (o si notaba el renglón en rojo al desplazarse por la lista).
+          if (_sinEmparejar > 0 || _sinCosto > 0) _avisoCalidad(),
           Expanded(
             child: _filas.isEmpty
                 ? const Center(
@@ -517,6 +531,45 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                 ),
               ),
             ),
+    );
+  }
+
+  /// Aviso agrupado de líneas que no se van a cargar: sin emparejar (el
+  /// sistema no reconoce el artículo) y/o con costo promedio en $0. Antes
+  /// esto solo se sabía DESPUÉS de darle a "Cargar", o si el usuario
+  /// notaba el renglón en rojo al desplazarse por una lista larga.
+  Widget _avisoCalidad() {
+    final partes = [
+      if (_sinEmparejar > 0)
+        '$_sinEmparejar artículo(s) no reconocido(s) (el sistema no '
+            'encontró con qué emparejarlos)',
+      if (_sinCosto > 0) '$_sinCosto artículo(s) con costo promedio en \$0',
+    ];
+    final mensaje = '${partes.join(' · ')} — no se cargarán hasta corregirlos.';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.red, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(mensaje,
+                  style: TextStyle(
+                      color: Colors.red.shade900, fontSize: 12.5)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
