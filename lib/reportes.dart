@@ -90,10 +90,26 @@ class Reportes {
 
   /// 2) Movimientos por rango de fechas.
   static Future<void> movimientos(DateTime desde, DateTime hasta) async {
+    // Un movimiento anulado no se borra ni se edita (la tabla es
+    // inmutable): sigue apareciendo tal cual, junto a la fila 'ajuste' que
+    // lo revierte. Sin marcar ninguna de las dos, en el Excel se veían
+    // como movimientos normales cualquiera, indistinguibles de los que
+    // nunca se tocaron. Se piden los anulados aparte (sin filtro de
+    // fecha), porque la anulación puede haber ocurrido fuera del rango
+    // que se está consultando.
+    final anuladas = await supabase
+        .from('movimientos')
+        .select('anula_movimiento_id')
+        .not('anula_movimiento_id', 'is', null);
+    final idsAnulados = (anuladas as List)
+        .map((r) => r['anula_movimiento_id'] as String)
+        .toSet();
+
     final res = await supabase
         .from('movimientos')
         .select(
-          'fecha, tipo, cantidad, costo_unitario, referencia, observacion, '
+          'id, fecha, tipo, cantidad, costo_unitario, referencia, '
+          'observacion, anula_movimiento_id, '
           'elementos!inner(nombre), bodegas(nombre), '
           'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
           'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo), '
@@ -122,6 +138,7 @@ class Reportes {
         'Usuario',
         'Referencia',
         'Observación',
+        'Estado',
       ],
     ];
     for (final r in (res as List)) {
@@ -135,6 +152,12 @@ class Reportes {
           (r['centro_costo_destino'] as Map?)?['codigo'];
       final origen = tipo == 'entrada' ? centroCampo : null;
       final destino = tipo == 'salida' ? centroCampo : destinoCampo;
+      // 'ajuste' con anula_movimiento_id = ES la reversión; el propio
+      // movimiento cuyo id aparece como anula_movimiento_id de OTRA fila
+      // fue el que se anuló.
+      final estado = r['anula_movimiento_id'] != null
+          ? 'ANULACIÓN'
+          : (idsAnulados.contains(r['id']) ? 'ANULADO' : '');
       filas.add([
         _fecha(r['fecha']),
         tipo,
@@ -149,6 +172,7 @@ class Reportes {
         (r['profiles'] as Map?)?['email'] ?? '',
         r['referencia'] ?? '',
         r['observacion'] ?? '',
+        estado,
       ]);
     }
     await _descargar('movimientos', filas);
