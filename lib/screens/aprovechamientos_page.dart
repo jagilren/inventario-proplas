@@ -696,77 +696,88 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
     CentroCosto? cc;
     final obs = TextEditingController();
     final cant = TextEditingController(text: t.longitudActual.toString());
+    // Antes el diálogo se cerraba apenas se pulsaba "Usar" y la cantidad se
+    // validaba DESPUÉS, ya sin diálogo a la vista: un aviso suelto (SnackBar)
+    // era la única pista de qué falló. Ahora valida antes de cerrar y
+    // sombrea el campo en rojo pálido, igual que el resto de la app.
+    bool mostrarErrores = false;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          title: Text(
-            'Usar del tramo · quedan '
-            '${_qty.format(t.longitudActual)} ${widget.unidad}',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: cant,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+        builder: (ctx, setD) {
+          final c = num.tryParse(cant.text.replaceAll(',', '.'));
+          final cantInvalida =
+              mostrarErrores && (c == null || c <= 0 || c > t.longitudActual);
+          return AlertDialog(
+            title: Text(
+              'Usar del tramo · quedan '
+              '${_qty.format(t.longitudActual)} ${widget.unidad}',
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: cant,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (_) => setD(() {}),
+                  decoration: marcarError(InputDecoration(
+                    labelText: 'Cantidad a usar (${widget.unidad})',
+                    helperText: (mostrarErrores && c != null && c > t.longitudActual)
+                        ? 'No puedes usar más de lo que queda '
+                            '(${_qty.format(t.longitudActual)} ${widget.unidad})'
+                        : 'Puede ser parcial; el resto queda disponible',
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                  ), cantInvalida),
                 ),
-                decoration: InputDecoration(
-                  labelText: 'Cantidad a usar (${widget.unidad})',
-                  helperText: 'Puede ser parcial; el resto queda disponible',
-                  border: const OutlineInputBorder(),
+                const SizedBox(height: 10),
+                // Con buscador, igual que en el resto de la app. Aquí la lista
+                // se vuelve a pedir cada vez que se abre el diálogo, así que no
+                // necesita el botón ↻ (por eso onRecargar no hace nada).
+                SelectorRecargable<CentroCosto>(
+                  etiqueta: 'Centro de costo',
+                  forzarBuscador: true,
+                  valor: cc,
+                  opciones: centros,
+                  textoDe: (c) => c.etiqueta,
+                  onRecargar: () async {},
+                  onChanged: (v) => setD(() => cc = v),
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: obs,
+                  decoration: const InputDecoration(
+                    labelText: 'Observación (opcional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
               ),
-              const SizedBox(height: 10),
-              // Con buscador, igual que en el resto de la app. Aquí la lista
-              // se vuelve a pedir cada vez que se abre el diálogo, así que no
-              // necesita el botón ↻ (por eso onRecargar no hace nada).
-              SelectorRecargable<CentroCosto>(
-                etiqueta: 'Centro de costo',
-                forzarBuscador: true,
-                valor: cc,
-                opciones: centros,
-                textoDe: (c) => c.etiqueta,
-                onRecargar: () async {},
-                onChanged: (v) => setD(() => cc = v),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: obs,
-                decoration: const InputDecoration(
-                  labelText: 'Observación (opcional)',
-                  border: OutlineInputBorder(),
-                ),
+              FilledButton(
+                onPressed: () {
+                  final c2 = num.tryParse(cant.text.replaceAll(',', '.'));
+                  if (c2 == null || c2 <= 0 || c2 > t.longitudActual) {
+                    setD(() => mostrarErrores = true);
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Usar'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Usar'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
     if (ok != true) return;
-    final c = num.tryParse(cant.text.replaceAll(',', '.'));
-    if (c == null || c <= 0) {
-      _snack('Cantidad inválida');
-      return;
-    }
-    if (c > t.longitudActual) {
-      _snack(
-        'No puedes usar más de lo que queda '
-        '(${_qty.format(t.longitudActual)} ${widget.unidad})',
-      );
-      return;
-    }
+    final c = num.tryParse(cant.text.replaceAll(',', '.'))!;
     try {
       await InventarioService.sacarDeTrozo(
         t.id,

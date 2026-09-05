@@ -5,6 +5,7 @@ import 'gestion_usuarios_page.dart';
 import 'centros_page.dart';
 import 'historial_page.dart';
 import '../realtime_service.dart';
+import '../widgets/campo_obligatorio.dart';
 
 class PerfilPage extends StatefulWidget {
   const PerfilPage({super.key});
@@ -28,31 +29,44 @@ class _PerfilPageState extends State<PerfilPage> {
 
   Future<void> _cambiarPassword() async {
     final ctrl = TextEditingController();
+    // Antes el diálogo se cerraba apenas se pulsaba "Cambiar" y la longitud
+    // se validaba DESPUÉS, ya sin diálogo a la vista: un SnackBar suelto era
+    // la única pista. Ahora valida antes de cerrar y sombrea el campo,
+    // igual que el resto de la app.
+    bool mostrarErrores = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nueva contraseña'),
-        content: TextField(
-          controller: ctrl,
-          obscureText: true,
-          decoration: const InputDecoration(
-            hintText: 'Mínimo 6 caracteres',
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Nueva contraseña'),
+          content: TextField(
+            controller: ctrl,
+            obscureText: true,
+            autofocus: true,
+            onChanged: (_) => setD(() {}),
+            decoration: marcarError(const InputDecoration(
+              hintText: 'Mínimo 6 caracteres',
+              border: OutlineInputBorder(),
+            ), mostrarErrores && ctrl.text.length < 6),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                if (ctrl.text.length < 6) {
+                  setD(() => mostrarErrores = true);
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Cambiar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Cambiar')),
-        ],
       ),
     );
     if (ok != true) return;
-    if (ctrl.text.length < 6) {
-      _msg('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
     try {
       await InventarioService.cambiarPassword(ctrl.text);
       _msg('✓ Contraseña actualizada');
