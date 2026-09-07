@@ -221,6 +221,7 @@ class _KardexPageState extends State<KardexPage> {
                 if (m.bodega != null) m.bodega!,
                 if (m.costoUnitario != null) _money.format(m.costoUnitario),
                 if (m.centroCosto != null) m.centroCosto!,
+                if (m.usuarioEmail != null) m.usuarioEmail!,
               ].join(' · '), style: const TextStyle(color: Colors.grey)),
               const Divider(height: 24),
               TextField(
@@ -508,6 +509,7 @@ class _KardexPageState extends State<KardexPage> {
                           Text([
                             _fecha.format(horaColombia(m.fecha)),
                             if (m.costoUnitario != null) _money.format(m.costoUnitario),
+                            if (m.usuarioEmail != null) m.usuarioEmail!,
                             if (m.esAnulacion) m.referencia!,
                           ].join(' · '),
                               style: const TextStyle(fontSize: 11, color: Colors.grey)),

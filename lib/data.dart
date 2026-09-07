@@ -266,6 +266,7 @@ class MovKardex {
   final String? referencia;
   final String? observacion;
   final String? usuarioId;
+  final String? usuarioEmail;
 
   final String? bodega;
 
@@ -289,7 +290,8 @@ class MovKardex {
       bodega = (m['bodegas'] as Map?)?['nombre'] as String?,
       referencia = m['referencia'] as String?,
       observacion = m['observacion'] as String?,
-      usuarioId = m['usuario_id'] as String?;
+      usuarioId = m['usuario_id'] as String?,
+      usuarioEmail = (m['profiles'] as Map?)?['email'] as String?;
 
   bool get esAnulacion =>
       anulaMovimientoId != null || (referencia ?? '').startsWith('ANULACION');
@@ -958,7 +960,7 @@ class InventarioService {
         .select(
           'id, fecha, tipo, cantidad, costo_unitario, referencia, '
           'observacion, usuario_id, anula_movimiento_id, '
-          'bodegas(nombre), '
+          'bodegas(nombre), profiles(email), '
           'centros_costo!movimientos_centro_costo_id_fkey(codigo), '
           'centro_costo_destino:centros_costo!movimientos_centro_costo_destino_id_fkey(codigo)',
         )
