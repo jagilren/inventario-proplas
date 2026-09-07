@@ -43,7 +43,13 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   late final TabController _tab;
   int _ultimoIndiceTab = 0;
   List<TrozoResumen> _resumen = [];
-  List<Trozo> _historico = [];
+  // Histórico global paginado: es el historial de tramos de TODA la
+  // empresa desde siempre, así que nunca se trae de una sola vez (ver
+  // InventarioService.todosLosTrozos).
+  final List<Trozo> _historico = [];
+  int _histOffset = 0;
+  bool _histHayMas = true;
+  bool _histCargandoMas = false;
   bool _cargando = false;
   bool _puedeEntrada = false;
   bool _puedeExportar = false;
@@ -163,15 +169,36 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
   Future<void> _cargar() async {
     setState(() => _cargando = true);
     try {
+      // El resumen ya agrega en Postgres (schema_v44): trae una fila por
+      // elemento, no una por trozo, así que traerlo entero es seguro.
       final r = await InventarioService.aprovechamientosResumen();
-      final h = await InventarioService.todosLosTrozos();
-      if (mounted)
-        setState(() {
-          _resumen = r;
-          _historico = h;
-        });
+      if (mounted) setState(() => _resumen = r);
+      await _cargarHistorico(reset: true);
     } finally {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  /// Página del histórico global (10 en 10, más reciente primero). Mismo
+  /// patrón "Cargar más" ya usado en Kardex y en Entrada/Salida.
+  Future<void> _cargarHistorico({bool reset = false}) async {
+    if (_histCargandoMas) return;
+    if (reset) {
+      setState(() { _histOffset = 0; _histHayMas = true; _historico.clear(); });
+    } else {
+      setState(() => _histCargandoMas = true);
+    }
+    try {
+      final h = await InventarioService.todosLosTrozos(
+          offset: _histOffset, limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _historico.addAll(h);
+        _histOffset += h.length;
+        if (h.length < 10) _histHayMas = false;
+      });
+    } finally {
+      if (mounted) setState(() => _histCargandoMas = false);
     }
   }
 
@@ -375,6 +402,15 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
                 decoration: InputDecoration(
                   hintText: 'Buscar elemento (palabras en cualquier orden)…',
                   prefixIcon: const Icon(Icons.search),
+                  // El histórico global es paginado (puede tener años de
+                  // tramos): la búsqueda aquí solo mira lo ya cargado, no
+                  // hace falta aclararlo en "Por elemento" porque ese
+                  // resumen siempre está completo.
+                  helperText: _tab.index == 1
+                      ? 'Busca solo en lo ya cargado. Usa "Cargar más" para '
+                          'ampliar.'
+                      : null,
+                  helperMaxLines: 2,
                   suffixIcon: _puedeEntrada
                       ? IconButton(
                           icon: const Icon(Icons.add_box, color: Colors.teal),
@@ -555,9 +591,33 @@ class _AprovechamientosPageState extends State<AprovechamientosPage>
       return const Center(child: Text('Aún no hay tramos registrados'));
     }
     return ListView.separated(
-      itemCount: items.length,
+      itemCount: items.length + 1, // +1: pie de "Cargar más"
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
+        if (i == items.length) {
+          if (_histCargandoMas) {
+            return const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (_histHayMas) {
+            return Center(
+              child: TextButton.icon(
+                onPressed: () => _cargarHistorico(),
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: const Text('Cargar más'),
+              ),
+            );
+          }
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Center(
+              child: Text('— No hay más —',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+          );
+        }
         final t = items[i];
         final abierto = _trozoExpandido == t.id;
         return Column(
@@ -643,11 +703,18 @@ class TrozosElementoPage extends StatefulWidget {
 }
 
 class _TrozosElementoPageState extends State<TrozosElementoPage> {
-  List<Trozo> _todos = [];
+  // "Disponibles" nunca se pagina: está acotado por el saldo físico real
+  // de este artículo (no por su historial), así que traerlo completo es
+  // seguro y necesario — es un selector operativo, hay que verlos todos.
+  List<Trozo> _disponibles = [];
+  // "Histórico" (incluye consumidos) SÍ puede crecer sin límite con los
+  // años, así que se pagina igual que el histórico global del módulo.
+  final List<Trozo> _historico = [];
+  int _histOffset = 0;
+  bool _histHayMas = true;
+  bool _histCargandoMas = false;
   bool _cargando = false;
   bool _puedeEntrada = false, _puedeSalida = false, _puedeBorrar = false;
-
-  List<Trozo> get _disponibles => _todos.where((t) => t.disponible).toList();
 
   @override
   void initState() {
@@ -670,14 +737,38 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
   Future<void> _cargar() async {
     setState(() => _cargando = true);
     try {
-      // Trae TODOS (incluye consumidos) para la pestaña de histórico.
-      final t = await InventarioService.trozosDeElemento(
-        widget.elementoId,
-        soloDisponibles: false,
-      );
-      if (mounted) setState(() => _todos = t);
+      final d = await InventarioService.trozosDeElemento(widget.elementoId);
+      if (mounted) setState(() => _disponibles = d);
+      await _cargarHistorico(reset: true);
     } finally {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  /// Página del histórico de ESTE elemento (10 en 10, incluidos los
+  /// consumidos). Mismo patrón "Cargar más" que el resto de la app.
+  Future<void> _cargarHistorico({bool reset = false}) async {
+    if (_histCargandoMas) return;
+    if (reset) {
+      setState(() { _histOffset = 0; _histHayMas = true; _historico.clear(); });
+    } else {
+      setState(() => _histCargandoMas = true);
+    }
+    try {
+      final h = await InventarioService.trozosDeElemento(
+        widget.elementoId,
+        soloDisponibles: false,
+        offset: _histOffset,
+        limit: 10,
+      );
+      if (!mounted) return;
+      setState(() {
+        _historico.addAll(h);
+        _histOffset += h.length;
+        if (h.length < 10) _histHayMas = false;
+      });
+    } finally {
+      if (mounted) setState(() => _histCargandoMas = false);
     }
   }
 
@@ -873,7 +964,7 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
             : TabBarView(
                 children: [
                   _lista(_disponibles, historico: false),
-                  _lista(_todos, historico: true),
+                  _lista(_historico, historico: true),
                 ],
               ),
       ),
@@ -890,11 +981,37 @@ class _TrozosElementoPageState extends State<TrozosElementoPage> {
         ),
       );
     }
+    // Solo "Histórico" pagina: "Disponibles" siempre trae todo lo que hay
+    // (acotado por el saldo físico real, no por historial).
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 80),
-      itemCount: items.length,
+      itemCount: items.length + (historico ? 1 : 0),
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
+        if (historico && i == items.length) {
+          if (_histCargandoMas) {
+            return const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (_histHayMas) {
+            return Center(
+              child: TextButton.icon(
+                onPressed: () => _cargarHistorico(),
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: const Text('Cargar más'),
+              ),
+            );
+          }
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Center(
+              child: Text('— No hay más —',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+          );
+        }
         final t = items[i];
         final consumido = !t.disponible;
         return ListTile(

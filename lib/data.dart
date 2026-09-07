@@ -1063,58 +1063,33 @@ class InventarioService {
 
   /// Resumen por elemento de TODOS sus trozos (incluye los ya consumidos, para
   /// que se pueda ver su histórico). Trae disponibles + total.
+  ///
+  /// Antes esto bajaba CADA trozo de la historia completa (todos los
+  /// elementos, incluidos los consumidos) y sumaba en Dart — y se repetía
+  /// en cada movimiento de cualquier usuario en toda la app, porque esta
+  /// pantalla escucha el aviso en vivo global. Con años de uso eso habría
+  /// sido una descarga carísima varias veces por minuto. Ahora la suma la
+  /// hace Postgres (`aprovechamientos_resumen()`, schema_v44): el cliente
+  /// solo recibe una fila por elemento, nunca una por trozo.
   static Future<List<TrozoResumen>> aprovechamientosResumen() async {
-    final res = await supabase
-        .from('aprovechamiento_trozos')
-        .select(
-          'elemento_id, longitud_actual, creado_en, '
-          'elementos(nombre, unidad, material, sch, codigo_barras)',
-        );
-    final nombres = <String, String>{};
-    final unidades = <String, String>{};
-    final materiales = <String, String?>{};
-    final schs = <String, String?>{};
-    final codigos = <String, String?>{};
-    final disp = <String, int>{}; // # con saldo
-    final totalDisp = <String, num>{}; // suma de saldos
-    final total = <String, int>{}; // # de trozos en total
-    final ultima = <String, DateTime>{}; // creación más reciente por elemento
-    for (final e in (res as List)) {
+    final res = await supabase.rpc('aprovechamientos_resumen');
+    final out = (res as List).map((e) {
       final m = e as Map<String, dynamic>;
-      final id = m['elemento_id'] as String;
-      final el = m['elementos'] as Map?;
-      nombres[id] = (el?['nombre'] ?? '') as String;
-      unidades[id] = (el?['unidad'] ?? 'UND') as String;
-      materiales[id] = el?['material'] as String?;
-      schs[id] = el?['sch'] as String?;
-      codigos[id] = el?['codigo_barras'] as String?;
-      final saldo = (m['longitud_actual'] ?? 0) as num;
-      total[id] = (total[id] ?? 0) + 1;
-      if (saldo > 0) {
-        disp[id] = (disp[id] ?? 0) + 1;
-        totalDisp[id] = (totalDisp[id] ?? 0) + saldo;
-      }
-      if (m['creado_en'] != null) {
-        final f = DateTime.parse(m['creado_en'] as String);
-        if (ultima[id] == null || f.isAfter(ultima[id]!)) ultima[id] = f;
-      }
-    }
-    final out = total.keys
-        .map(
-          (id) => TrozoResumen(
-            id,
-            nombres[id] ?? '',
-            unidades[id] ?? 'UND',
-            disp[id] ?? 0,
-            totalDisp[id] ?? 0,
-            total[id] ?? 0,
-            ultima[id],
-            materiales[id],
-            schs[id],
-            codigos[id],
-          ),
-        )
-        .toList();
+      return TrozoResumen(
+        m['elemento_id'] as String,
+        (m['nombre'] ?? '') as String,
+        (m['unidad'] ?? 'UND') as String,
+        ((m['disponibles'] ?? 0) as num).toInt(),
+        (m['total_disponible'] ?? 0) as num,
+        ((m['total_trozos'] ?? 0) as num).toInt(),
+        m['ultima_creacion'] == null
+            ? null
+            : DateTime.parse(m['ultima_creacion'] as String),
+        m['material'] as String?,
+        m['sch'] as String?,
+        m['codigo_barras'] as String?,
+      );
+    }).toList();
     // Primero los que tienen saldo, luego alfabético.
     out.sort((a, b) {
       if ((a.disponibles > 0) != (b.disponibles > 0)) {
@@ -1162,20 +1137,35 @@ class InventarioService {
 
   /// Todos los trozos (de todos los elementos, incluidos los consumidos) para
   /// el histórico global del módulo. Más reciente primero.
-  static Future<List<Trozo>> todosLosTrozos() async {
+  ///
+  /// Paginado: es el histórico de TODA la empresa desde siempre, así que
+  /// nunca se trae de una sola vez (antes lo hacía). Mismo patrón que
+  /// InventarioService.kardex(): de a [limit] (10 por defecto), con
+  /// [offset] para "Cargar más".
+  static Future<List<Trozo>> todosLosTrozos(
+      {int offset = 0, int limit = 10}) async {
     final res = await supabase
         .from('aprovechamiento_trozos')
         .select('*, elementos(nombre, unidad, material, sch, codigo_barras), bodegas(nombre)')
-        .order('creado_en', ascending: false);
+        .order('creado_en', ascending: false)
+        .range(offset, offset + limit - 1);
     return (res as List)
         .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
         .toList();
   }
 
-  /// Trozos de un elemento (por defecto solo los que tienen saldo disponible).
+  /// Trozos de un elemento.
+  ///
+  /// Con [soloDisponibles] (por defecto) nunca hace falta paginar: está
+  /// acotado por el saldo físico real de ese artículo, no por su historial.
+  /// Con `soloDisponibles: false` (para ver también los ya consumidos) SÍ
+  /// puede crecer sin límite con los años, así que ahí [limit] paginará —
+  /// pasar `limit: null` (o dejarlo así con soloDisponibles:true) trae todo.
   static Future<List<Trozo>> trozosDeElemento(
     String elementoId, {
     bool soloDisponibles = true,
+    int offset = 0,
+    int? limit,
   }) async {
     var q = supabase
         .from('aprovechamiento_trozos')
@@ -1183,7 +1173,10 @@ class InventarioService {
         .eq('elemento_id', elementoId);
     if (soloDisponibles) q = q.gt('longitud_actual', 0);
     // Regla general de históricos: más reciente primero.
-    final res = await q.order('creado_en', ascending: false);
+    final ordenado = q.order('creado_en', ascending: false);
+    final res = limit == null
+        ? await ordenado
+        : await ordenado.range(offset, offset + limit - 1);
     return (res as List)
         .map((e) => Trozo.fromMap(e as Map<String, dynamic>))
         .toList();
