@@ -1,4 +1,4 @@
-name: CI/CD
+name: Inventario PROPLAS CI/CD
 
 # CI (analyze + test) corre en cada push y cada PR contra main.
 # CD (deploy web a Cloudflare + Release con el APK) SOLO corre cuando el
