@@ -1,0 +1,86 @@
+name: CI/CD
+
+# CI (analyze + test) corre en cada push y cada PR contra main.
+# CD (deploy web a Cloudflare + Release con el APK) SOLO corre cuando el
+# push llega directo a main, y solo si el CI pasó primero (needs: ci).
+#
+# Fijamos versión exacta de Flutter y de Wrangler a propósito: sin esto,
+# una actualización de cualquiera de los dos puede romper el pipeline un
+# día cualquiera sin que nadie haya tocado el código de la app.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  FLUTTER_VERSION: '3.44.6'
+  WRANGLER_VERSION: '4.129.1'
+
+jobs:
+  ci:
+    name: Analyze + Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - run: flutter pub get
+      # --no-fatal-infos: hoy hay ~29 avisos de estilo (info) ya aceptados
+      # a propósito en el proyecto (ver flutter analyze en local). Solo
+      # warnings y errors deben tumbar el CI.
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  deploy-web:
+    name: Deploy web a Cloudflare Pages
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build web --release
+      - name: Deploy con Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          command: pages deploy build/web --project-name=inventario-proplas --commit-dirty=true
+
+  build-apk:
+    name: Compilar APK y publicar Release
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # necesario para crear el Release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - name: Publicar Release con el APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "Inventario PROPLAS — build #${{ github.run_number }}"
+          body: |
+            APK compilado automáticamente desde el commit ${{ github.sha }}.
+            Descarga `app-release.apk` de abajo e instálala en la tablet.
+          files: build/app/outputs/flutter-apk/app-release.apk
