@@ -332,6 +332,10 @@ class Reportes {
         'Primera fecha',
         'Última fecha',
         'Usuarios',
+        // Igual que Usuarios: no hay UNA observación por fila, así que se
+        // concatena la de cada movimiento del grupo, más reciente primero,
+        // cada una con su fecha entre paréntesis y separadas por "||".
+        'Comentarios',
       ],
     ];
     num totalSal = 0, totalDev = 0, totalNeto = 0;
@@ -368,12 +372,13 @@ class Reportes {
         _fecha(m['primera_fecha']),
         _fecha(m['ultima_fecha']),
         m['usuarios'] ?? '',
+        m['observaciones'] ?? '',
       ]);
     }
     filas.add([
       '', '', '', '', '', '', 'TOTAL',
       totalSal.round(), totalDev.round(), totalNeto.round(),
-      '', '', '',
+      '', '', '', '',
     ]);
     await _descargar('netos_por_centro', filas);
   }
