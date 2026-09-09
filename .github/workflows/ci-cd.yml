@@ -23,11 +23,14 @@ jobs:
     name: Analyze + Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          # Guarda el SDK entre corridas: descargarlo costaba ~1 minuto en
+          # CADA uno de los tres trabajos.
+          cache: true
       - run: flutter pub get
       # --no-fatal-infos: hoy hay ~29 avisos de estilo (info) ya aceptados
       # a propósito en el proyecto (ver flutter analyze en local). Solo
@@ -41,11 +44,14 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          # Guarda el SDK entre corridas: descargarlo costaba ~1 minuto en
+          # CADA uno de los tres trabajos.
+          cache: true
       - run: flutter pub get
       - run: flutter build web --release
       - name: Deploy con Wrangler
@@ -64,15 +70,29 @@ jobs:
     permissions:
       contents: write   # necesario para crear el Release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          # Guarda el SDK entre corridas: descargarlo costaba ~1 minuto en
+          # CADA uno de los tres trabajos.
+          cache: true
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+      # Gradle se baja las dependencias de Android en cada compilación. Al
+      # guardarlas, la APK deja de partir de cero. La clave incluye los
+      # archivos de Gradle: si cambian, se rehace el caché.
+      - name: Caché de Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
       - run: flutter pub get
       - run: flutter build apk --release
       - name: Publicar Release con el APK
