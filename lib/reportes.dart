@@ -537,4 +537,160 @@ class Reportes {
     }
     await _descargar('aprovechamientos_existencias', filas);
   }
+
+  // =====================================================================
+  //  Módulo de EQUIPOS — familia propia de informes (sección 9 del plan).
+  //  No se mezclan con los de Inventario: son datos de otra naturaleza.
+  // =====================================================================
+
+  /// Movimientos de equipos por rango de fechas: entradas y salidas juntas.
+  /// Calcado de [movimientos], incluida la marca ANULADO/ANULACIÓN — sin
+  /// ella, en el Excel una reversión se vería como un movimiento normal.
+  static Future<void> movimientosEquipos(DateTime desde, DateTime hasta) async {
+    // Los anulados se piden aparte y sin filtro de fecha: la anulación pudo
+    // ocurrir fuera del rango consultado.
+    final anuladas = await supabase
+        .from('activo_movimientos')
+        .select('anula_movimiento_id')
+        .not('anula_movimiento_id', 'is', null);
+    final idsAnulados = (anuladas as List)
+        .map((r) => r['anula_movimiento_id'] as String)
+        .toSet();
+
+    final res = await supabase
+        .from('activo_movimientos')
+        .select(
+          'id, fecha, tipo, condicion, usable, valor, observacion, '
+          'usuario_email, anula_movimiento_id, '
+          'activos!inner(serial, activo_referencias(nombre)), '
+          'bodegas(nombre), '
+          'centros_costo!activo_movimientos_centro_costo_id_fkey(codigo), '
+          'centro_costo_destino:centros_costo!activo_movimientos_centro_costo_destino_id_fkey(codigo)',
+        )
+        .gte('fecha', desde.toIso8601String())
+        .lte('fecha', hasta.add(const Duration(days: 1)).toIso8601String())
+        .order('fecha');
+
+    final filas = <List<dynamic>>[
+      [
+        'Fecha',
+        'Tipo',
+        'Referencia',
+        'Serial',
+        // En una salida este campo es a quién se entrega; en una entrada,
+        // de dónde viene el equipo.
+        'Centro de Costo Origen',
+        'Centro de Costo Destino',
+        'Bodega',
+        'Condición',
+        'Usable',
+        'Valor',
+        'Usuario',
+        'Observación',
+        'Estado',
+      ],
+    ];
+    for (final r in (res as List)) {
+      final tipo = (r['tipo'] ?? '') as String;
+      final activo = r['activos'] as Map?;
+      final usable = r['usable'] as bool?;
+      final estado = r['anula_movimiento_id'] != null
+          ? 'ANULACIÓN'
+          : (idsAnulados.contains(r['id']) ? 'ANULADO' : '');
+      filas.add([
+        _fecha(r['fecha']),
+        tipo,
+        (activo?['activo_referencias'] as Map?)?['nombre'] ?? '',
+        activo?['serial'] ?? '',
+        (r['centros_costo'] as Map?)?['codigo'] ?? '',
+        (r['centro_costo_destino'] as Map?)?['codigo'] ?? '',
+        (r['bodegas'] as Map?)?['nombre'] ?? '',
+        r['condicion'] ?? '',
+        usable == null ? '' : (usable ? 'Sí' : 'No'),
+        ((r['valor'] ?? 0) as num).round(),
+        r['usuario_email'] ?? '',
+        r['observacion'] ?? '',
+        estado,
+      ]);
+    }
+    await _descargar('equipos_movimientos', filas);
+  }
+
+  /// Valorización de activos: foto del estado actual, una fila por equipo.
+  /// Se lee de la vista `activos_disponibilidad` para traer la ubicación
+  /// vigente y el "disponible" ya calculado, sin recalcularlo en Dart.
+  static Future<void> valorizacionActivos() async {
+    // La vista llega a `bodegas` por dos caminos (bodega dueña y bodega de
+    // la ubicación vigente), así que hay que calificar cada FK: sin eso
+    // PostgREST responde PGRST201 por ambigüedad. De paso, calificarlas
+    // permite traer la ubicación actual en la misma consulta.
+    final res = await supabase
+        .from('activos_disponibilidad')
+        .select(
+          '*, activo_referencias(nombre), '
+          'bodegas!activos_bodega_id_fkey(nombre), '
+          'ubicacion_bodega:bodegas!activo_ubicaciones_bodega_id_fkey(nombre), '
+          'activo_terceros(nombre)',
+        )
+        .order('serial');
+
+    final filas = <List<dynamic>>[
+      [
+        'Referencia',
+        'Serial',
+        'Condición',
+        'Estado',
+        'Bodega dueña',
+        'Ubicación actual',
+        'Valor nuevo',
+        '%',
+        'Valor actual',
+        'Disponible',
+      ],
+    ];
+    int total = 0;
+    for (final r in (res as List)) {
+      final valorActual = ((r['valor_actual'] ?? 0) as num).round();
+      total += valorActual;
+      // La ubicación vigente es una bodega propia O un tercero, nunca las
+      // dos (lo garantiza un CHECK en la tabla).
+      final ubicacion = (r['ubicacion_bodega'] as Map?)?['nombre'] ??
+          (r['activo_terceros'] as Map?)?['nombre'] ??
+          '';
+      filas.add([
+        (r['activo_referencias'] as Map?)?['nombre'] ?? '',
+        r['serial'] ?? '',
+        r['condicion'] ?? '',
+        r['estado'] ?? '',
+        (r['bodegas'] as Map?)?['nombre'] ?? '',
+        ubicacion,
+        ((r['valor_nuevo'] ?? 0) as num).round(),
+        (r['porcentaje_valor'] ?? 0) as num,
+        valorActual,
+        (r['disponible'] ?? false) == true ? 'Sí' : 'No',
+      ]);
+    }
+    filas.add(['', '', '', '', '', '', '', '', 'TOTAL', total]);
+    await _descargar('equipos_valorizacion', filas);
+  }
+
+  /// Valorizado total por bodega: inventario + equipos. La única excepción
+  /// a "los dos módulos no se mezclan" (sección 9.1). La suma la hace la
+  /// base con dos agregaciones independientes, nunca uniendo filas crudas.
+  static Future<void> valorizadoTotalPorBodega() async {
+    final res = await supabase.rpc('valorizado_total_por_bodega');
+    final filas = <List<dynamic>>[
+      ['Bodega', 'Inventario', 'Equipos', 'Total'],
+    ];
+    int totalInv = 0, totalEq = 0;
+    for (final r in (res as List)) {
+      final inv = ((r['valorizado_inventario'] ?? 0) as num).round();
+      final eq = ((r['valorizado_equipos'] ?? 0) as num).round();
+      totalInv += inv;
+      totalEq += eq;
+      filas.add([r['bodega'] ?? '', inv, eq, inv + eq]);
+    }
+    filas.add(['TOTAL', totalInv, totalEq, totalInv + totalEq]);
+    await _descargar('valorizado_total_por_bodega', filas);
+  }
 }

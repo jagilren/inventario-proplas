@@ -204,6 +204,7 @@ class ActivoMovimiento {
   final String activoId;
   final String tipo; // entrada | salida | ajuste
   final String? anulaMovimientoId;
+  final String? centroCostoId;
   final String? centroCosto;
   final String? centroCostoDestino;
   final String? bodega;
@@ -219,6 +220,7 @@ class ActivoMovimiento {
       activoId = m['activo_id'] as String,
       tipo = m['tipo'] as String,
       anulaMovimientoId = m['anula_movimiento_id'] as String?,
+      centroCostoId = m['centro_costo_id'] as String?,
       centroCosto = (m['centros_costo'] as Map?)?['codigo'] as String?,
       centroCostoDestino =
           (m['centro_costo_destino'] as Map?)?['codigo'] as String?,
@@ -234,6 +236,47 @@ class ActivoMovimiento {
   bool get esAnulacion => anulaMovimientoId != null;
 }
 
+/// Valorizado de una bodega, sumando los dos módulos. La suma la hace la
+/// base con dos agregaciones independientes (sección 9.1 del plan).
+class ValorizadoBodega {
+  final String bodega;
+  final num inventario;
+  final num equipos;
+  final num total;
+
+  ValorizadoBodega.fromMap(Map<String, dynamic> m)
+    : bodega = (m['bodega'] ?? '') as String,
+      inventario = (m['valorizado_inventario'] ?? 0) as num,
+      equipos = (m['valorizado_equipos'] ?? 0) as num,
+      total = (m['valorizado_total'] ?? 0) as num;
+}
+
+/// Fila del Nivel 1: un modelo con sus contadores, agregados en la base.
+class ResumenReferencia {
+  final String referenciaId;
+  final String nombre;
+  final String? marca;
+  final String? modelo;
+  final int total;
+  final int disponibles;
+
+  ResumenReferencia.fromMap(Map<String, dynamic> m)
+    : referenciaId = m['referencia_id'] as String,
+      nombre = m['nombre'] as String,
+      marca = m['marca'] as String?,
+      modelo = m['modelo'] as String?,
+      total = ((m['total'] ?? 0) as num).toInt(),
+      disponibles = ((m['disponibles'] ?? 0) as num).toInt();
+
+  int get noDisponibles => total - disponibles;
+
+  String get etiqueta => [
+    nombre,
+    marca,
+    modelo,
+  ].where((e) => e != null && e.isNotEmpty).join(' · ');
+}
+
 class ActivosService {
   /// Mismo patrón que InventarioService.revision: las pantallas que lo
   /// escuchan se recargan solas tras un alta/movimiento/cambio de ubicación.
@@ -241,7 +284,7 @@ class ActivosService {
 
   static const _selectMovimiento =
       'id, activo_id, tipo, anula_movimiento_id, condicion, usable, valor, '
-      'observacion, usuario_email, fecha, '
+      'centro_costo_id, observacion, usuario_email, fecha, '
       'bodegas(nombre), '
       'centros_costo!activo_movimientos_centro_costo_id_fkey(codigo), '
       'centro_costo_destino:centros_costo!activo_movimientos_centro_costo_destino_id_fkey(codigo)';
@@ -349,6 +392,22 @@ class ActivosService {
   // Activos (equipos individuales)
   // ---------------------------------------------------------------------
 
+  /// Valorizado por bodega, inventario + equipos.
+  static Future<List<ValorizadoBodega>> valorizadoPorBodega() async {
+    final res = await supabase.rpc('valorizado_total_por_bodega');
+    return (res as List)
+        .map((e) => ValorizadoBodega.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Nivel 1: resumen por modelo, contado en la base.
+  static Future<List<ResumenReferencia>> resumenPorReferencia() async {
+    final res = await supabase.rpc('activos_resumen_por_referencia');
+    return (res as List)
+        .map((e) => ResumenReferencia.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
   static const _selectActivo =
       '*, activo_referencias(nombre), bodegas(nombre)';
 
@@ -396,18 +455,29 @@ class ActivosService {
     return Activo.fromMap(res);
   }
 
-  /// Disponibles: `estado='operativo'` y con ubicación vigente en una
-  /// bodega propia (vista `activos_disponibilidad`, regla derivada).
+  /// Consulta la vista `activos_disponibilidad`, donde "disponible" es una
+  /// regla derivada (`estado='operativo'` + ubicación vigente en bodega
+  /// propia), nunca un campo manual.
+  ///
+  /// [disponible] en null trae todos; en true/false filtra.
   static Future<List<ActivoDisponibilidad>> disponibles({
     int offset = 0,
     int limit = 50,
+    bool? disponible = true,
     String? bodegaId,
+    String? referenciaId,
   }) async {
+    // OJO: la vista llega a `bodegas` por DOS caminos (la bodega dueña y la
+    // de la ubicación vigente), así que hay que calificar la FK o PostgREST
+    // responde PGRST201 — el mismo error que ya nos mordió con los centros
+    // de costo. Aquí se quiere la bodega DUEÑA.
     var q = supabase
         .from('activos_disponibilidad')
-        .select('*, activo_referencias(nombre), bodegas(nombre)')
-        .eq('disponible', true);
+        .select('*, activo_referencias(nombre), '
+            'bodegas!activos_bodega_id_fkey(nombre)');
+    if (disponible != null) q = q.eq('disponible', disponible);
     if (bodegaId != null) q = q.eq('ubicacion_actual_bodega_id', bodegaId);
+    if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
     final res = await q.order('serial').range(offset, offset + limit - 1);
     return (res as List)
         .map((e) => ActivoDisponibilidad.fromMap(e as Map<String, dynamic>))
@@ -481,6 +551,32 @@ class ActivosService {
     });
     revision.value++;
     return activo;
+  }
+
+  /// Ajusta la valorización de un equipo. `valor_actual` es una columna
+  /// generada, así que se recalcula sola.
+  static Future<void> actualizarValor(
+    String activoId, {
+    num? valorNuevo,
+    num? porcentajeValor,
+  }) async {
+    final cambios = <String, dynamic>{};
+    if (valorNuevo != null) cambios['valor_nuevo'] = valorNuevo;
+    if (porcentajeValor != null) cambios['porcentaje_valor'] = porcentajeValor;
+    if (cambios.isEmpty) return;
+    await supabase.from('activos').update(cambios).eq('id', activoId);
+    revision.value++;
+  }
+
+  /// Cambia la condición de un equipo (por ejemplo, reclasificarlo a
+  /// 'repuestos'). Es una decisión manual posterior, nunca parte de un
+  /// movimiento.
+  static Future<void> cambiarCondicion(String activoId, String condicion) async {
+    await supabase
+        .from('activos')
+        .update({'condicion': condicion})
+        .eq('id', activoId);
+    revision.value++;
   }
 
   /// Reingreso de un equipo existente (vuelve de mantenimiento externo, de
@@ -559,6 +655,19 @@ class ActivosService {
     return (res as List)
         .map((e) => ActivoMovimiento.fromMap(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Fecha del primer movimiento de equipos que existe. Sirve para el
+  /// "desde el principio de los tiempos" de los informes: se pregunta la
+  /// fecha real en vez de barrer años vacíos.
+  static Future<DateTime?> primeraFechaMovimiento() async {
+    final res = await supabase
+        .from('activo_movimientos')
+        .select('fecha')
+        .order('fecha')
+        .limit(1)
+        .maybeSingle();
+    return res == null ? null : DateTime.parse(res['fecha'] as String);
   }
 
   /// Ids de movimientos ya anulados de un equipo (para marcar "ANULADO" sin

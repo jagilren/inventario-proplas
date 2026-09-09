@@ -646,11 +646,16 @@ create function public.valorizado_total_por_bodega()
 returns table(bodega text, valorizado_inventario numeric, valorizado_equipos numeric, valorizado_total numeric)
 language sql stable as $$
   with inv as (
+    -- CORREGIDO al implementar (2026-09-09): la exclusión de aprovechamientos
+    -- va en un FILTER, NO en el ON del left join. Puesta en el ON, la fila de
+    -- `existencias` sobrevive igual al left join (con `e` en null) y se
+    -- terminaba sumando — justo lo contrario de lo que se buscaba.
     select b.id, b.nombre,
-      coalesce(sum(x.existencia * x.costo_promedio), 0) as valor
+      coalesce(sum(x.existencia * x.costo_promedio)
+               filter (where not coalesce(e.es_aprovechamiento, false)), 0) as valor
     from bodegas b
     left join existencias x on x.bodega_id = b.id
-    left join elementos e on e.id = x.elemento_id and not coalesce(e.es_aprovechamiento, false)
+    left join elementos e on e.id = x.elemento_id
     where b.activo
     group by b.id, b.nombre
   ),
@@ -758,10 +763,45 @@ listo para pasar a la Fase 1 (SQL) cuando se confirme.
    formularios, son la Fase 4. Se prefirió eso antes que dejar pestañas vacías.
    El resumen "PROPLAS: $X · RPCI: $Y" del selector (sección 8.0.4) tampoco se incluyó:
    depende de `valorizado_total_por_bodega()`, que es Fase 5.
-4. **Pantallas del módulo** — los 3 niveles de listado, detalle de equipo, formularios
-   de entrada/salida/ubicación/mantenimiento.
-5. **Informes** — los 2 de la sección 9 (Movimientos de Equipos, Valorización de
-   Activos).
+4. ~~**Pantallas del módulo** — los 3 niveles de listado, detalle de equipo, formularios
+   de entrada/salida/ubicación/mantenimiento.~~ **COMPLETADA 2026-09-09.** Pantallas
+   nuevas: `activo_referencias_page.dart`, `activo_terceros_page.dart`,
+   `activo_alta_page.dart`, `activo_detalle_page.dart` (4 pestañas: ficha, piezas,
+   mantenimiento, movimientos), `activo_movimiento_page.dart`,
+   `activos_de_referencia_page.dart` (Nivel 2), y `equipos_home_page.dart` rehecha con
+   las 4 pestañas de la sección 7.0. Se agregó la función SQL
+   `activos_resumen_por_referencia()` (migración `schema_v47`) para que el Nivel 1
+   cuente en la base y no bajando todas las unidades a Dart.
+   Verificado con un recorrido completo en transacción revertida contra la base real,
+   pasando por RLS como usuario autenticado: alta por compra → disponible; resumen del
+   Nivel 1; piezas; mantenimiento; préstamo a un tercero → deja de contar como
+   disponible **sin** cambiar el estado ni tocar inventario; regreso a bodega → vuelve a
+   estar disponible; salida → entregado con el valorizado estampado; reingreso usado y
+   no usable → mantenimiento interno con el valor recalculado al 60%; y anulación.
+   **Pendiente de Fase 5:** reclasificar un equipo a condición `repuestos` desde la
+   ficha (hay `ActivosService.cambiarCondicion()` pero todavía no se expone en la UI).
+5. ~~**Informes** — los 2 de la sección 9 (Movimientos de Equipos, Valorización de
+   Activos).~~ **COMPLETADA 2026-09-09.** Quedaron **3**: los 2 previstos más
+   "Valorizado total por bodega" (sección 9.1), que se implementó ya y no más adelante
+   porque el selector de módulos lo necesitaba para su resumen. Archivos:
+   `screens/equipos_reportes_page.dart` (nuevo, con rango de fechas y "desde el
+   principio de los tiempos"), 3 métodos nuevos en `reportes.dart`, enlace "Informes" en
+   el Drawer del módulo, y el resumen "Valorizado en bodega" en `ModuloSelectorPage`.
+   Migración `schema_v48_valorizado_total_por_bodega`.
+
+   **Dos errores encontrados y corregidos al implementar:**
+   - El SQL que estaba escrito en la sección 9.1 de este documento tenía un bug: excluía
+     los aprovechamientos en el `ON` del `LEFT JOIN`, donde **no** los excluye (la fila
+     de `existencias` sobrevive igual y se suma). Va en un `FILTER`. Ya está corregido
+     arriba, y el resultado se verificó contra el cálculo directo del informe
+     "Existencias valorizadas" que ya existía: da exactamente el mismo número.
+   - **PGRST201 en la vista `activos_disponibilidad`**: la vista llega a `bodegas` por
+     DOS caminos (la bodega dueña vía `activos_bodega_id_fkey` y la de la ubicación
+     vigente vía `activo_ubicaciones_bodega_id_fkey`), así que un `bodegas(nombre)` sin
+     calificar rompe con HTTP 300. Mismo error que ya documenta
+     `pgrst201-doble-fk-centros-costo.md`, ahora en la vista nueva. **Lección: las
+     pruebas SQL en transacción NO detectan esto, porque no pasan por PostgREST.** Se
+     verificaron con `curl` contra la API real las 11 consultas del módulo, todas 200.
 6. **Pruebas y despliegue** — `flutter analyze` + `flutter test`; con el CI/CD ya
    armado, el deploy a Cloudflare y el Release del APK salen solos al mezclar a `main`.
 

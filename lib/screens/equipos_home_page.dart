@@ -3,6 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import 'perfil_page.dart';
+import 'activo_referencias_page.dart';
+import 'activo_terceros_page.dart';
+import 'activo_alta_page.dart';
+import 'activo_detalle_page.dart';
+import 'activo_movimiento_page.dart';
+import 'activos_de_referencia_page.dart';
+import 'equipos_reportes_page.dart';
 import 'centros_page.dart';
 import 'bodegas_page.dart';
 import 'configuracion_page.dart';
@@ -10,11 +17,12 @@ import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
 
-/// Pantalla principal del Módulo de Equipos.
+/// Pantalla principal del Módulo de Equipos, con las 4 pestañas de la
+/// sección 7.0 del plan.
 ///
-/// Fase 3 (navegación): entra con el listado real de equipos y el Drawer del
-/// módulo. La estructura de 4 pestañas de la sección 7.0 del plan y los
-/// formularios de alta/entrada/salida son la Fase 4.
+/// No hay botones separados "Entrada"/"Salida" como en Inventario a
+/// propósito: un equipo no es fungible, así que primero se busca la unidad y
+/// el tipo de movimiento lo decide su estado actual.
 class EquiposHomePage extends StatefulWidget {
   const EquiposHomePage({super.key});
   @override
@@ -22,13 +30,15 @@ class EquiposHomePage extends StatefulWidget {
 }
 
 class _EquiposHomePageState extends State<EquiposHomePage> {
-  static const _porPagina = 50;
-
-  final _buscador = TextEditingController();
-  List<Activo> _equipos = [];
+  int _idx = 0;
   Set<String> _roles = {};
-  bool _cargando = true;
-  String? _error;
+
+  static const _titulos = [
+    'Por referencia',
+    'Movimiento',
+    'Disponibles',
+    'En mantenimiento',
+  ];
 
   @override
   void initState() {
@@ -36,32 +46,10 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
     InventarioService.misRoles().then((r) {
       if (mounted) setState(() => _roles = r);
     });
-    _cargar();
-  }
-
-  @override
-  void dispose() {
-    _buscador.dispose();
-    super.dispose();
   }
 
   bool get _admin => _roles.contains(Roles.admin);
   bool get _gestiona => _admin || _roles.contains(Roles.coordinador);
-
-  Future<void> _cargar() async {
-    setState(() { _cargando = true; _error = null; });
-    try {
-      final res = await ActivosService.listar(
-        limit: _porPagina,
-        serial: _buscador.text.trim().isEmpty ? null : _buscador.text.trim(),
-      );
-      if (!mounted) return;
-      setState(() { _equipos = res; _cargando = false; });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
-    }
-  }
 
   void _ir(Widget pagina) {
     Navigator.pop(context); // cerrar el menú
@@ -73,7 +61,8 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
     final email = Supabase.instance.client.auth.currentUser?.email ?? '';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Equipos'),
+        title: Text('Equipos · ${_titulos[_idx]}',
+            overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: const Icon(Icons.swap_horiz),
@@ -104,8 +93,28 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
                 ],
               ),
             ),
-            // Ítems COMPARTIDOS con el Drawer de Inventario (sección 8.3 del
-            // plan): administran catálogos que usan los dos módulos.
+            ListTile(
+              leading: const Icon(Icons.download_for_offline),
+              title: const Text('Informes'),
+              subtitle: const Text('Descargar en Excel/CSV'),
+              onTap: () => _ir(const EquiposReportesPage()),
+            ),
+            const Divider(),
+            // Catálogos propios del módulo.
+            ListTile(
+              leading: const Icon(Icons.list_alt),
+              title: const Text('Referencias'),
+              subtitle: const Text('Catálogo de modelos de equipo'),
+              onTap: () => _ir(const ActivoReferenciasPage()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.store),
+              title: const Text('Terceros'),
+              subtitle: const Text('Talleres, clientes y proveedores'),
+              onTap: () => _ir(const ActivoTercerosPage()),
+            ),
+            const Divider(),
+            // Ítems COMPARTIDOS con el Drawer de Inventario (sección 8.3).
             if (_gestiona) ...[
               ListTile(
                 leading: const Icon(Icons.warehouse),
@@ -155,38 +164,425 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _buscador,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _cargar(),
-              decoration: InputDecoration(
-                hintText: 'Buscar por serial…',
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.arrow_forward),
-                  tooltip: 'Buscar',
-                  onPressed: _cargar,
-                ),
-              ),
-            ),
-          ),
-          Expanded(child: _lista()),
+      // El alta solo se ofrece desde el Nivel 1: un equipo nuevo todavía no
+      // existe, así que no tiene sentido buscarlo en las otras pestañas.
+      floatingActionButton: _idx == 0
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final creado = await Navigator.push<bool>(context,
+                    MaterialPageRoute(builder: (_) => const ActivoAltaPage()));
+                if (creado == true) setState(() {});
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo equipo'),
+            )
+          : null,
+      body: IndexedStack(
+        index: _idx,
+        children: const [
+          _PorReferencia(),
+          _BuscadorMovimiento(),
+          _ListaDisponibilidad(disponible: true),
+          _EnMantenimiento(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _idx,
+        onDestinationSelected: (i) => setState(() => _idx = i),
+        destinations: const [
+          NavigationDestination(
+              icon: Icon(Icons.inventory_2), label: 'Referencias'),
+          NavigationDestination(
+              icon: Icon(Icons.swap_vert), label: 'Movimiento'),
+          NavigationDestination(
+              icon: Icon(Icons.check_circle), label: 'Disponibles'),
+          NavigationDestination(
+              icon: Icon(Icons.build), label: 'Mantenim.'),
         ],
       ),
     );
   }
+}
 
-  Widget _lista() {
-    if (_cargando) {
-      return const Center(child: CircularProgressIndicator());
+// ---------------------------------------------------------------------
+// Pestaña 1 — Nivel 1: resumen por referencia
+// ---------------------------------------------------------------------
+
+class _PorReferencia extends StatefulWidget {
+  const _PorReferencia();
+  @override
+  State<_PorReferencia> createState() => _PorReferenciaState();
+}
+
+class _PorReferenciaState extends State<_PorReferencia> {
+  List<ResumenReferencia> _filas = [];
+  bool _cargando = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+    // Al registrar un alta o un movimiento, este contador cambia.
+    ActivosService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    ActivosService.revision.removeListener(_cargar);
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    if (!mounted) return;
+    setState(() { _cargando = true; _error = null; });
+    try {
+      final res = await ActivosService.resumenPorReferencia();
+      if (!mounted) return;
+      setState(() { _filas = res; _cargando = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = '$e'; _cargando = false; });
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return _MensajeError(error: _error!, onReintentar: _cargar);
+    if (_filas.isEmpty) {
+      return const _Vacio(
+        texto: 'Todavía no hay equipos registrados.\n'
+            'Crea el primero con el botón "Nuevo equipo".',
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView.separated(
+        padding: const EdgeInsets.only(bottom: 88),
+        itemCount: _filas.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final f = _filas[i];
+          return ListTile(
+            title: Text(f.etiqueta),
+            subtitle: Text(
+                '${f.disponibles} disponibles · ${f.noDisponibles} no disponibles'),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('${f.total}',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('unidades', style: TextStyle(fontSize: 10)),
+              ],
+            ),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ActivosDeReferenciaPage(
+                  referenciaId: f.referenciaId,
+                  titulo: f.etiqueta,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Pestaña 2 — Movimiento: buscar el equipo y dejar que su estado decida
+// ---------------------------------------------------------------------
+
+class _BuscadorMovimiento extends StatefulWidget {
+  const _BuscadorMovimiento();
+  @override
+  State<_BuscadorMovimiento> createState() => _BuscadorMovimientoState();
+}
+
+class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
+  final _buscador = TextEditingController();
+  List<Activo> _resultados = [];
+  bool _cargando = false;
+  bool _buscado = false;
+
+  @override
+  void dispose() {
+    _buscador.dispose();
+    super.dispose();
+  }
+
+  Future<void> _buscar() async {
+    setState(() { _cargando = true; _buscado = true; });
+    try {
+      final res = await ActivosService.listar(
+        serial: _buscador.text.trim().isEmpty ? null : _buscador.text.trim(),
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() { _resultados = res; _cargando = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo buscar: $e')));
+    }
+  }
+
+  /// El estado del equipo decide a dónde lleva tocarlo (sección 7.0.1):
+  /// entregado → reingreso, operativo → salida, cualquier otro → su ficha,
+  /// porque ahí no aplica una entrada o salida directa.
+  Future<void> _abrir(Activo a) async {
+    final destino = (a.estado == 'entregado' || a.estado == 'operativo')
+        ? ActivoMovimientoPage(activo: a)
+        : ActivoDetallePage(activoId: a.id) as Widget;
+    final hecho = await Navigator.push<bool>(
+        context, MaterialPageRoute(builder: (_) => destino));
+    if (hecho == true) _buscar();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: TextField(
+            controller: _buscador,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _buscar(),
+            decoration: InputDecoration(
+              hintText: 'Buscar por serial…',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.arrow_forward),
+                tooltip: 'Buscar',
+                onPressed: _buscar,
+              ),
+            ),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'Toca un equipo y la app decide sola si corresponde una entrada '
+            'o una salida, según cómo esté.',
+            style: TextStyle(fontSize: 11.5, color: Colors.grey),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _cargando
+              ? const Center(child: CircularProgressIndicator())
+              : !_buscado
+                  ? const _Vacio(
+                      texto: 'Busca un equipo por su serial para registrarle '
+                          'un movimiento.')
+                  : _resultados.isEmpty
+                      ? const _Vacio(texto: 'Ningún equipo coincide.')
+                      : ListView.separated(
+                          itemCount: _resultados.length,
+                          separatorBuilder: (_, _) =>
+                              const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final a = _resultados[i];
+                            return ListTile(
+                              title: Text(a.serial),
+                              subtitle: Text(a.referenciaNombre ?? '—'),
+                              trailing: Text(a.estadoEtiqueta,
+                                  style: const TextStyle(fontSize: 12)),
+                              onTap: () => _abrir(a),
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Pestaña 3 — Nivel 3: disponibles ahora (vista global)
+// ---------------------------------------------------------------------
+
+class _ListaDisponibilidad extends StatefulWidget {
+  final bool disponible;
+  const _ListaDisponibilidad({required this.disponible});
+  @override
+  State<_ListaDisponibilidad> createState() => _ListaDisponibilidadState();
+}
+
+class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
+  List<ActivoDisponibilidad> _filas = [];
+  bool _cargando = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+    ActivosService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    ActivosService.revision.removeListener(_cargar);
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    if (!mounted) return;
+    setState(() { _cargando = true; _error = null; });
+    try {
+      final res = await ActivosService.disponibles(
+          disponible: widget.disponible, limit: 100);
+      if (!mounted) return;
+      setState(() { _filas = res; _cargando = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = '$e'; _cargando = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(
+      return _MensajeError(error: _error!, onReintentar: _cargar);
+    }
+    if (_filas.isEmpty) {
+      return const _Vacio(texto: 'No hay equipos disponibles ahora mismo.');
+    }
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView.separated(
+        itemCount: _filas.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final d = _filas[i];
+          return ListTile(
+            title: Text(d.activo.serial),
+            subtitle: Text(
+                '${d.activo.referenciaNombre ?? '—'} · ${d.activo.bodegaNombre ?? '—'}'),
+            trailing: Text('\$${d.activo.valorActual.toStringAsFixed(0)}',
+                style: const TextStyle(fontSize: 12)),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Pestaña 4 — En mantenimiento
+// ---------------------------------------------------------------------
+
+class _EnMantenimiento extends StatefulWidget {
+  const _EnMantenimiento();
+  @override
+  State<_EnMantenimiento> createState() => _EnMantenimientoState();
+}
+
+class _EnMantenimientoState extends State<_EnMantenimiento> {
+  List<Activo> _filas = [];
+  bool _cargando = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+    ActivosService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    ActivosService.revision.removeListener(_cargar);
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    if (!mounted) return;
+    setState(() { _cargando = true; _error = null; });
+    try {
+      final res = await ActivosService.enMantenimiento(limit: 100);
+      if (!mounted) return;
+      setState(() { _filas = res; _cargando = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = '$e'; _cargando = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return _MensajeError(error: _error!, onReintentar: _cargar);
+    }
+    if (_filas.isEmpty) {
+      return const _Vacio(texto: 'Ningún equipo está en mantenimiento.');
+    }
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView.separated(
+        itemCount: _filas.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final a = _filas[i];
+          return ListTile(
+            leading: const Icon(Icons.build, color: Colors.orange),
+            title: Text(a.serial),
+            subtitle: Text([
+              a.referenciaNombre ?? '—',
+              a.estadoEtiqueta,
+              if (a.mantenimientoActor != null &&
+                  a.mantenimientoActor!.isNotEmpty)
+                a.mantenimientoActor!,
+            ].join(' · ')),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ActivoDetallePage(activoId: a.id)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// Piezas compartidas por las pestañas
+// ---------------------------------------------------------------------
+
+class _Vacio extends StatelessWidget {
+  final String texto;
+  const _Vacio({required this.texto});
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(texto, textAlign: TextAlign.center),
+        ),
+      );
+}
+
+class _MensajeError extends StatelessWidget {
+  final String error;
+  final Future<void> Function() onReintentar;
+  const _MensajeError({required this.error, required this.onReintentar});
+  @override
+  Widget build(BuildContext context) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -194,44 +590,12 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
             children: [
               const Icon(Icons.error_outline, size: 40, color: Colors.red),
               const SizedBox(height: 12),
-              Text('No se pudo cargar la lista de equipos.\n$_error',
-                  textAlign: TextAlign.center),
+              Text('No se pudo cargar.\n$error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _cargar, child: const Text('Reintentar')),
+              FilledButton(
+                  onPressed: onReintentar, child: const Text('Reintentar')),
             ],
           ),
         ),
       );
-    }
-    if (_equipos.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Todavía no hay equipos registrados.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _cargar,
-      child: ListView.separated(
-        itemCount: _equipos.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) {
-          final e = _equipos[i];
-          return ListTile(
-            title: Text(e.serial),
-            subtitle: Text(
-              '${e.referenciaNombre ?? '—'} · ${e.condicionEtiqueta}'
-              '${e.bodegaNombre == null ? '' : ' · ${e.bodegaNombre}'}',
-            ),
-            trailing: Text(e.estadoEtiqueta,
-                style: const TextStyle(fontSize: 12)),
-          );
-        },
-      ),
-    );
-  }
 }
