@@ -26,6 +26,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
 
   /// null = todas; true = disponibles; false = no disponibles.
   bool? _filtro;
+  final _buscador = TextEditingController();
   final List<ActivoDisponibilidad> _filas = [];
   int _offset = 0;
   bool _hayMas = true;
@@ -37,6 +38,12 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
   void initState() {
     super.initState();
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _buscador.dispose();
+    super.dispose();
   }
 
   Future<void> _recargar() => _cargar(desdeCero: true);
@@ -58,6 +65,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
       final res = await ActivosService.disponibles(
         referenciaId: widget.referenciaId,
         disponible: _filtro,
+        serial: _buscador.text,
         offset: _offset,
         limit: _porPagina,
       );
@@ -88,6 +96,39 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: TextField(
+              controller: _buscador,
+              textInputAction: TextInputAction.search,
+              textCapitalization: TextCapitalization.characters,
+              // Se busca contra la BASE, no sobre lo ya descargado: con
+              // miles de unidades de un mismo modelo, filtrar en memoria
+              // diría "no existe" cuando el serial está más adelante.
+              onSubmitted: (_) => _recargar(),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Buscar por serial…',
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
+                isDense: true,
+                suffixIcon: _buscador.text.isEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_forward),
+                        tooltip: 'Buscar',
+                        onPressed: _recargar,
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Limpiar',
+                        onPressed: () {
+                          _buscador.clear();
+                          _recargar();
+                        },
+                      ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(12),
             // Wrap: en un teléfono angosto los filtros bajan de línea en vez
@@ -138,11 +179,15 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
       );
     }
     if (_filas.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No hay unidades que cumplan ese filtro.',
-              textAlign: TextAlign.center),
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _buscador.text.trim().isEmpty
+                ? 'No hay unidades que cumplan ese filtro.'
+                : 'Ningún serial coincide con la búsqueda.',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }

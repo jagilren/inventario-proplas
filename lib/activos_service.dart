@@ -556,6 +556,10 @@ class ActivosService {
     bool? disponible = true,
     String? bodegaId,
     String? referenciaId,
+    // El serial se filtra CONTRA LA BASE, no en memoria: esta consulta
+    // viene paginada, así que filtrar lo ya descargado diría "no existe"
+    // cuando el equipo está en una página posterior.
+    String? serial,
   }) async {
     // OJO: la vista llega a `bodegas` por DOS caminos (la bodega dueña y la
     // de la ubicación vigente), así que hay que calificar la FK o PostgREST
@@ -568,6 +572,9 @@ class ActivosService {
     if (disponible != null) q = q.eq('disponible', disponible);
     if (bodegaId != null) q = q.eq('ubicacion_actual_bodega_id', bodegaId);
     if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
+    if (serial != null && serial.trim().isNotEmpty) {
+      q = q.ilike('serial', '%${serial.trim()}%');
+    }
     try {
       final res = await q.order('serial').range(offset, offset + limit - 1);
       return (res as List)
@@ -578,6 +585,7 @@ class ActivosService {
       // El caché guarda las filas de esta misma vista, así que se pueden
       // reconstruir tal cual, con su `disponible` ya calculado.
       final filas = await LocalStore.leerActivos();
+      final q = serial?.trim().toLowerCase();
       final filtradas = filas.where((a) {
         if (disponible != null && (a['disponible'] == true) != disponible) {
           return false;
@@ -587,6 +595,11 @@ class ActivosService {
         }
         if (referenciaId != null && a['referencia_id'] != referenciaId) {
           return false;
+        }
+        if (q != null && q.isNotEmpty) {
+          if (!(a['serial'] ?? '').toString().toLowerCase().contains(q)) {
+            return false;
+          }
         }
         return true;
       }).toList();
