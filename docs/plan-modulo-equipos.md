@@ -869,6 +869,27 @@ Tres huecos que quedaron señalados al terminar la Fase 5 y se cerraron después
 
 ## 12. Ideas para fases futuras (fuera de alcance de esta Fase 1)
 
+### 12.0 Límite conocido del selector de referencias (2026-09-09)
+
+**Decisión del usuario: se queda como está**, igual que los selectores del módulo de
+piping. Queda anotado para que nadie lo descubra por sorpresa.
+
+El selector de referencias descarga TODO el catálogo y filtra en memoria (igual que
+hacen hoy los selectores de centros de costo y bodegas en Inventario). Aguanta miles de
+referencias; **no aguanta millones**. Con ~150 bytes por fila: 5.000 referencias son
+750 KB en cada apertura del formulario, 50.000 son 7,5 MB y ya es inusable. Es el mismo
+muro que [[fase-optimizaciones-rendimiento]] midió para el caché sin conexión (~9.000).
+
+Escala real esperada: el archivo `EQUIPOS_FABRICACIONES` dio 276 referencias candidatas.
+Millones de *modelos distintos* no es un escenario realista — serían millones de máquinas
+diferentes, no millones de máquinas.
+
+**Si algún día hace falta**, la solución ya existe en esta misma app y solo hay que
+copiarla: el catálogo de `elementos` no filtra en el teléfono, sino que consulta
+`buscar_elementos` en la base (con índice) y trae solo las coincidencias. Haría falta un
+`buscar_referencias` equivalente y que `SelectorRecargable` acepte una búsqueda contra el
+servidor — ojo, ese widget lo comparten los dos módulos.
+
 ### 12.1 Roles con permisos distintos por módulo (2026-09-09)
 
 Hoy los roles (`admin`, `coordinador`, etc.) son **globales** — el mismo poder aplica
