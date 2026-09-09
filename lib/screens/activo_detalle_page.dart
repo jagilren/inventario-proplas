@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import '../util/tiempo.dart';
+import '../widgets/campo_obligatorio.dart';
 import 'activo_movimiento_page.dart';
 
 // Mismo formato y misma conversión a hora de Colombia que el resto de la app.
@@ -233,6 +234,23 @@ class _Ficha extends StatelessWidget {
           label: const Text('Ver historial de ubicaciones'),
         ),
 
+        const SizedBox(height: 12),
+        // Un equipo entregado está fuera del inventario: su estado solo
+        // cambia registrando su regreso, no a mano.
+        if (activo.estado != 'entregado')
+          OutlinedButton.icon(
+            onPressed: () async {
+              final cambio = await showModalBottomSheet<bool>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => _HojaEstado(activo: activo),
+              );
+              if (cambio == true) await onCambio();
+            },
+            icon: const Icon(Icons.tune),
+            label: const Text('Cambiar estado o condición'),
+          ),
+
         if (activo.observacion != null && activo.observacion!.isNotEmpty) ...[
           const SizedBox(height: 12),
           _bloque(context, 'Observación', [Text(activo.observacion!)]),
@@ -308,6 +326,178 @@ class _Ficha extends StatelessWidget {
                         destacado ? FontWeight.bold : FontWeight.normal)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Cambia a mano el estado operativo y la condición de un equipo.
+///
+/// Existe porque el trigger de la base solo mueve el estado cuando hay una
+/// entrada o una salida. Sin esta pantalla, un equipo que entra a
+/// mantenimiento se queda atrapado ahí para siempre: no hay movimiento que
+/// lo saque, porque nunca salió de la bodega.
+class _HojaEstado extends StatefulWidget {
+  final Activo activo;
+  const _HojaEstado({required this.activo});
+  @override
+  State<_HojaEstado> createState() => _HojaEstadoState();
+}
+
+class _HojaEstadoState extends State<_HojaEstado> {
+  late String _estado;
+  late String _condicion;
+  late final TextEditingController _actor;
+  bool _guardando = false;
+
+  static const _etiquetasEstado = {
+    'operativo': 'Operativo (listo para entregar)',
+    'mantenimiento_interno': 'En mantenimiento interno',
+    'mantenimiento_externo': 'En un taller externo',
+    'baja': 'De baja',
+  };
+
+  static const _etiquetasCondicion = {
+    'nuevo': 'Nuevo',
+    'usado': 'Usado',
+    'repuestos': 'Para repuestos',
+    'baja': 'De baja',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _estado = widget.activo.estado;
+    _condicion = widget.activo.condicion;
+    _actor = TextEditingController(text: widget.activo.mantenimientoActor ?? '');
+  }
+
+  @override
+  void dispose() {
+    _actor.dispose();
+    super.dispose();
+  }
+
+  bool get _faltaTaller =>
+      _estado == 'mantenimiento_externo' && _actor.text.trim().isEmpty;
+
+  Future<void> _guardar() async {
+    if (_faltaTaller) {
+      setState(() {});
+      return;
+    }
+    setState(() => _guardando = true);
+    try {
+      if (_estado != widget.activo.estado ||
+          _actor.text.trim() != (widget.activo.mantenimientoActor ?? '')) {
+        await ActivosService.cambiarEstado(
+          widget.activo.id,
+          estado: _estado,
+          mantenimientoActor:
+              _actor.text.trim().isEmpty ? null : _actor.text.trim(),
+        );
+      }
+      if (_condicion != widget.activo.condicion) {
+        await ActivosService.cambiarCondicion(widget.activo.id, _condicion);
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Estado y condición',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            const Text(
+              'Para cuando el equipo cambia sin entrar ni salir de la bodega: '
+              'se reparó, se mandó al taller o se dio de baja.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            Text('Estado operativo',
+                style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            // Lista y no chips: las etiquetas son frases, y en un teléfono
+            // angosto unos chips con este texto quedarían ilegibles.
+            for (final e in ActivosService.estadosManuales)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: Icon(_estado == e
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                title: Text(_etiquetasEstado[e] ?? e),
+                onTap: () => setState(() => _estado = e),
+              ),
+            if (_estado == 'mantenimiento_externo') ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _actor,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (_) => setState(() {}),
+                decoration: marcarError(
+                  const InputDecoration(
+                    labelText: '¿En qué taller está? *',
+                    hintText: 'Ej: TALLER DE LUCHO',
+                    border: OutlineInputBorder(),
+                  ),
+                  _faltaTaller,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Si además quieres dejar registrado el movimiento físico, '
+                'usa "Cambiar ubicación" en la ficha.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey),
+              ),
+            ],
+            const Divider(height: 28),
+            Text('Condición', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final c in _etiquetasCondicion.keys)
+                  ChoiceChip(
+                    label: Text(_etiquetasCondicion[c]!),
+                    selected: _condicion == c,
+                    onSelected: (_) => setState(() => _condicion = c),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'La condición es la clasificación comercial (cuánto vale). El '
+              'estado es si se puede usar ahora. Son cosas distintas.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _guardando ? null : _guardar,
+              child: _guardando
+                  ? const SizedBox(
+                      height: 18, width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Guardar'),
+            ),
+          ],
+        ),
       ),
     );
   }

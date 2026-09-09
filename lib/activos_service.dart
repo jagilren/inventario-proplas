@@ -568,6 +568,46 @@ class ActivosService {
     revision.value++;
   }
 
+  /// Estados que se pueden poner a mano desde la ficha del equipo.
+  ///
+  /// `entregado` NO está y no debe estarlo: ese estado significa que el
+  /// equipo salió del inventario, y eso solo puede pasar registrando una
+  /// salida real. Ponerlo a mano dejaría el inventario diciendo una cosa y
+  /// los movimientos otra. Lo mismo al revés: un equipo entregado solo
+  /// vuelve con una entrada, así que a ese no se le cambia el estado a mano.
+  static const estadosManuales = [
+    'operativo',
+    'mantenimiento_interno',
+    'mantenimiento_externo',
+    'baja',
+  ];
+
+  /// Saca un equipo de mantenimiento, lo manda a un taller externo o lo da
+  /// de baja. Es el contrapeso del trigger: la base pone el estado cuando
+  /// hay un movimiento, y esto lo ajusta cuando el cambio ocurre sin que
+  /// entre ni salga nada (se reparó, se mandó al taller, se dio de baja).
+  ///
+  /// [mantenimientoActor] es texto libre a propósito (decisión explícita
+  /// del usuario) y solo aplica a `mantenimiento_externo`: en cualquier
+  /// otro estado se limpia, para no dejar colgado el nombre de un taller
+  /// donde el equipo ya no está.
+  static Future<void> cambiarEstado(
+    String activoId, {
+    required String estado,
+    String? mantenimientoActor,
+  }) async {
+    if (!estadosManuales.contains(estado)) {
+      throw ArgumentError(
+          'El estado "$estado" no se puede poner a mano: depende de un movimiento.');
+    }
+    await supabase.from('activos').update({
+      'estado': estado,
+      'mantenimiento_actor':
+          estado == 'mantenimiento_externo' ? mantenimientoActor : null,
+    }).eq('id', activoId);
+    revision.value++;
+  }
+
   /// Cambia la condición de un equipo (por ejemplo, reclasificarlo a
   /// 'repuestos'). Es una decisión manual posterior, nunca parte de un
   /// movimiento.
