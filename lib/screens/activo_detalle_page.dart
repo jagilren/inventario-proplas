@@ -89,8 +89,13 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
     }
 
     final a = _activo!;
+    // "Piezas" solo aplica cuando el equipo se está desarmando para
+    // aprovechar partes: dado de baja, o reclasificado a repuestos. En un
+    // equipo operativo o entregado la lista de piezas buenas/malas no
+    // significa nada, y una pestaña vacía solo estorba.
+    final muestraPiezas = a.estado == 'baja' || a.condicion == 'repuestos';
     return DefaultTabController(
-      length: 4,
+      length: muestraPiezas ? 4 : 3,
       child: Scaffold(
         appBar: AppBar(
           // Serial arriba y modelo debajo: el serial solo no dice de qué
@@ -112,13 +117,13 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
               ),
             ],
           ),
-          bottom: const TabBar(
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Ficha'),
-              Tab(text: 'Piezas'),
-              Tab(text: 'Mantenimiento'),
-              Tab(text: 'Movimientos'),
+              const Tab(text: 'Ficha'),
+              if (muestraPiezas) const Tab(text: 'Piezas'),
+              const Tab(text: 'Mantenimiento'),
+              const Tab(text: 'Movimientos'),
             ],
           ),
         ),
@@ -129,7 +134,7 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
               ubicacion: _ubicacion,
               onCambio: _cargar,
             ),
-            _Piezas(activoId: a.id),
+            if (muestraPiezas) _Piezas(activoId: a.id),
             _Mantenimientos(activoId: a.id),
             _Movimientos(activoId: a.id, esAdmin: _admin, onCambio: _cargar),
           ],

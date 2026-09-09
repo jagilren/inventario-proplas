@@ -47,14 +47,21 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
   void initState() {
     super.initState();
     _cargar();
+    // Cualquier cambio de estado, condición o ubicación empuja este
+    // contador; así la lista se entera aunque el cambio venga de otra
+    // pantalla o de otro usuario.
+    ActivosService.revision.addListener(_alCambiarAlgo);
   }
 
   @override
   void dispose() {
+    ActivosService.revision.removeListener(_alCambiarAlgo);
     _teclado?.cancel();
     _buscador.dispose();
     super.dispose();
   }
+
+  void _alCambiarAlgo() { if (mounted) _recargar(); }
 
   Future<void> _recargar() => _cargar(desdeCero: true);
 
@@ -240,7 +247,10 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
                 MaterialPageRoute(
                     builder: (_) => ActivoDetallePage(activoId: a.id)),
               );
-              await _cargar();
+              // _recargar y NO _cargar: sin reiniciar, al haber una página
+              // ya cargada esto se tomaba como "cargar más" y AÑADÍA las
+              // filas de nuevo, duplicadas y con el estado viejo.
+              await _recargar();
             },
           );
         },
