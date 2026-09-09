@@ -51,3 +51,14 @@ app.*.map.json
 
 # Basura de Windows/WSL
 *:Zone.Identifier
+
+# Credenciales locales: NUNCA deben entrar al repositorio.
+# Este repo es publico; un descuido con `git add .` las publicaria en
+# internet. Se listan por nombre exacto y tambien por patron, por si se
+# copian con otro nombre parecido.
+.supabase_db_password
+.supabase_db_url
+.backup_passphrase
+*password*.txt
+*passphrase*
+*.pgpass
