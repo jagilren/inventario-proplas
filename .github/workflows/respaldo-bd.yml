@@ -9,10 +9,18 @@ name: Respaldo semanal de la base de datos
 # archivo, sin la clave no le sirve de nada. Si algún día el repositorio
 # pasa a privado, el cifrado igual sobra pero no estorba.
 #
-# QUÉ INCLUYE (las tres piezas hacen falta para reconstruir de cero):
+# QUÉ INCLUYE (las cuatro piezas hacen falta para reconstruir de cero):
 #   · esquema.sql — tablas, funciones, triggers y políticas RLS
-#   · datos.sql   — todas las filas
+#   · datos.sql   — todas las filas del esquema `public`
+#   · cuentas.sql — los usuarios del esquema `auth`
 #   · roles.sql   — los roles del cluster
+#
+# POR QUÉ `cuentas.sql` VA APARTE: el volcado normal cubre solo el esquema
+# `public`. Las cuentas de acceso viven en `auth`, y sin ellas se restauraría
+# todo el inventario pero NADIE PODRÍA ENTRAR A LA APP: habría que recrear
+# los usuarios a mano, y sus permisos (usuario_roles) apuntan a ids que ya no
+# existirían. Lleva hashes de contraseña — otra razón para que todo esto vaya
+# cifrado.
 #
 # SECRETOS QUE NECESITA (Settings → Secrets and variables → Actions):
 #   · SUPABASE_DB_URL     cadena de conexión completa, CON la contraseña.
@@ -61,13 +69,19 @@ jobs:
           set -euo pipefail
           supabase db dump --db-url "$DB_URL" -f esquema.sql
           supabase db dump --db-url "$DB_URL" --data-only --use-copy -f datos.sql
+          supabase db dump --db-url "$DB_URL" --data-only --schema auth -f cuentas.sql
           supabase db dump --db-url "$DB_URL" --role-only -f roles.sql
           # Si alguno saliera vacío, el respaldo no sirve y hay que saberlo
           # ahora, no el día que se necesite restaurar.
-          for f in esquema.sql datos.sql; do
+          for f in esquema.sql datos.sql cuentas.sql; do
             if [ ! -s "$f" ]; then echo "$f quedó vacío"; exit 1; fi
           done
-          ls -lh esquema.sql datos.sql roles.sql
+          # Comprobación específica: que `cuentas.sql` traiga usuarios de
+          # verdad. Un archivo con solo cabeceras pesa poco pero no sirve.
+          if ! grep -q 'auth"\?\."\?users' cuentas.sql; then
+            echo "cuentas.sql no trae la tabla de usuarios"; exit 1
+          fi
+          ls -lh esquema.sql datos.sql cuentas.sql roles.sql
 
       - name: Cifrar
         env:
@@ -75,10 +89,10 @@ jobs:
         run: |
           set -euo pipefail
           FECHA=$(date -u +%Y-%m-%d)
-          tar czf "respaldo-$FECHA.tar.gz" esquema.sql datos.sql roles.sql
+          tar czf "respaldo-$FECHA.tar.gz" esquema.sql datos.sql cuentas.sql roles.sql
           gpg --batch --yes --symmetric --cipher-algo AES256 \
               --passphrase "$CLAVE" "respaldo-$FECHA.tar.gz"
-          rm -f esquema.sql datos.sql roles.sql "respaldo-$FECHA.tar.gz"
+          rm -f esquema.sql datos.sql cuentas.sql roles.sql "respaldo-$FECHA.tar.gz"
           ls -lh "respaldo-$FECHA.tar.gz.gpg"
 
       - name: Guardar el artefacto
@@ -97,8 +111,11 @@ jobs:
 #   2. gpg --decrypt respaldo-FECHA.tar.gz.gpg > respaldo.tar.gz
 #      (pide la BACKUP_PASSPHRASE)
 #   3. tar xzf respaldo.tar.gz
-#   4. psql "<cadena de conexión>" -f esquema.sql
-#      psql "<cadena de conexión>" -f datos.sql
+#   4. En este orden, contra un proyecto Supabase NUEVO y vacío:
+#        psql "<conexión>" -f esquema.sql    (tablas, funciones, triggers)
+#        psql "<conexión>" -f cuentas.sql    (usuarios: primero que los datos,
+#                                             porque `profiles` apunta a ellos)
+#        psql "<conexión>" -f datos.sql      (el inventario)
 #
 # Conviene hacer la prueba de restauración UNA VEZ contra un proyecto de
 # Supabase vacío. Un respaldo que nunca se probó no es un respaldo: es una
