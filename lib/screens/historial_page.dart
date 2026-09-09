@@ -28,6 +28,15 @@ String _tablaLabel(String? t) => switch (t) {
       'aprovechamiento_salidas' => 'Aprovechamiento',
       'categorias' => 'Categoría',
       'elemento_imagenes' => 'Foto',
+      // Módulo de Equipos. Se nombran por lo que significan para el
+      // usuario, no por el nombre técnico de la tabla.
+      'activos' => 'Equipo',
+      'activo_referencias' => 'Referencia de equipo',
+      'activo_terceros' => 'Tercero',
+      'activo_movimientos' => 'Movimiento de equipo',
+      'activo_ubicaciones' => 'Ubicación de equipo',
+      'activo_piezas' => 'Pieza de equipo',
+      'activo_mantenimientos' => 'Mantenimiento',
       _ => t ?? '',
     };
 
@@ -80,6 +89,11 @@ class _HistorialPageState extends State<HistorialPage> {
     ('Centros', 'centros'),
     ('Usuarios', 'usuarios'),
     ('Aprovech.', 'aprovechamientos'),
+    // Equipos: "Equipos" cubre las 7 tablas del módulo; "Mov. Equipos"
+    // aísla solo las entregas y reingresos, que es lo que se suele
+    // auditar (a quién se le entregó qué y cuándo).
+    ('Equipos', 'equipos'),
+    ('Mov. Equipos', 'equipos_mov'),
   ];
 
   Future<List<Auditoria>>? _futurePorRegistro;

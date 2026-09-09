@@ -21,11 +21,14 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data.dart';
+import 'activos_service.dart';
 import 'local_store.dart';
 
 class RealtimeService {
   static RealtimeChannel? _canal;
+  static RealtimeChannel? _canalEquipos;
   static Timer? _debounce;
+  static Timer? _debounceEquipos;
   static String? _deviceId;
 
   /// Espera antes de avisar. Una carga masiva inserta cientos de filas de un
@@ -49,6 +52,20 @@ class RealtimeService {
           callback: _alCambio,
         )
         .subscribe();
+
+    // Canal aparte para Equipos: empuja OTRO contador
+    // (`ActivosService.revision`), porque las pantallas de Equipos escuchan
+    // ese y no el del inventario. Un canal por tabla evita que un
+    // movimiento de piping haga recargar las listas de equipos y al revés.
+    _canalEquipos = supabase
+        .channel('equipos-en-vivo')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'activo_movimientos',
+          callback: _alCambioEquipos,
+        )
+        .subscribe();
   }
 
   static void _alCambio(PostgresChangePayload payload) {
@@ -60,13 +77,25 @@ class RealtimeService {
     _debounce = Timer(_espera, () => InventarioService.revision.value++);
   }
 
+  static void _alCambioEquipos(PostgresChangePayload payload) {
+    if (payload.newRecord['device_id'] == _deviceId) return;
+    _debounceEquipos?.cancel();
+    _debounceEquipos =
+        Timer(_espera, () => ActivosService.revision.value++);
+  }
+
   /// Se llama al cerrar sesión: sin esto el socket queda vivo gastando una
   /// conexión y el siguiente usuario heredaría la suscripción del anterior.
   static Future<void> detener() async {
     _debounce?.cancel();
     _debounce = null;
+    _debounceEquipos?.cancel();
+    _debounceEquipos = null;
     final canal = _canal;
+    final canalEquipos = _canalEquipos;
     _canal = null;
+    _canalEquipos = null;
     if (canal != null) await supabase.removeChannel(canal);
+    if (canalEquipos != null) await supabase.removeChannel(canalEquipos);
   }
 }

@@ -807,6 +807,66 @@ listo para pasar a la Fase 1 (SQL) cuando se confirme.
 
 ---
 
+## 11.1 Qué queda registrado (logs y auditoría) — RESUELTO 2026-09-09
+
+Pregunta explícita del usuario, y era un hueco de verdad: los triggers ya
+grababan desde la Fase 1, pero **lo grabado no se podía leer**.
+
+**Qué se registra (automático, desde la Fase 1).** `fn_auditoria()` —la misma
+función genérica del resto de la app, no una nueva— está conectada a las 7
+tablas del módulo. Por cada cambio guarda: tabla, registro, acción
+(INSERT/UPDATE/DELETE), y en un UPDATE **una fila por cada campo que cambió**
+con su valor anterior y el nuevo, más quién lo hizo y cuándo. O sea: quién
+entregó qué equipo, quién le bajó el valorizado, quién lo mandó al taller,
+quién le cambió una pieza de buena a mala.
+
+**Lo que faltaba y se corrigió:**
+
+1. **No se sabía a qué equipo correspondía cada cambio.** `auditoria_clasificada()`
+   resolvía el "afectado" buscando un `nombre` o un `codigo`, y un equipo no
+   tiene ninguno de los dos: se identifica por su **serial**. Todas las filas de
+   Equipos salían como "(registro eliminado)". Ahora cada tabla del módulo tiene
+   su propia resolución (un movimiento, una ubicación, un mantenimiento y una
+   pieza se identifican por el serial del equipo al que pertenecen; una pieza
+   agrega además su nombre).
+2. **No había cómo filtrarlos.** Se agregaron dos categorías: `equipos` (las 7
+   tablas) y `equipos_mov` (solo entradas y salidas, que es lo que se suele
+   auditar: a quién se le entregó qué y cuándo). En la pantalla son dos pestañas
+   nuevas, "Equipos" y "Mov. Equipos".
+3. **Ruido duplicado.** `valor_actual` es una columna GENERADA
+   (`valor_nuevo × porcentaje`), así que cada cambio de porcentaje registraba dos
+   filas diciendo lo mismo. Se agregó a la lista de campos ignorados, junto a
+   `existencia` y `costo_promedio` que ya estaban.
+
+**Quién puede ver la auditoría:** solo `admin` o `coordinador` — el rol `equipos`
+por sí solo NO alcanza. Es deliberado y coherente con el Drawer, donde
+"Auditoría de cambios" ya estaba detrás de ese mismo permiso.
+
+**Lo que NO se registra, a propósito:** las consultas. Se guarda quién *cambió*
+algo, no quién *miró* algo. Registrar lecturas multiplicaría el tamaño de la
+tabla sin responder ninguna pregunta que hoy alguien se esté haciendo.
+
+## 11.2 Cierre de limitaciones conocidas — RESUELTO 2026-09-09
+
+Tres huecos que quedaron señalados al terminar la Fase 5 y se cerraron después:
+
+1. **Trabajo sin conexión.** El módulo exigía señal. Ahora el catálogo de equipos
+   se baja al aparato (se guarda la **vista** `activos_disponibilidad`, no la
+   tabla, para no repetir en Dart la regla de "disponible") y los movimientos que
+   se registren sin señal quedan en una cola propia que sube después. Claves
+   aparte de las del inventario (`cache_activos`, `cola_pendientes_equipos`) para
+   no tocar el camino que ya funcionaba. La deduplicación usa el mismo mecanismo
+   probado: `device_id` + `local_id` con índice único (migración `schema_v49`).
+   **Fuera de alcance a propósito:** dar de alta un equipo nuevo sin señal (no
+   existe todavía el id que necesita el movimiento) y el detalle del equipo
+   (piezas, mantenimientos, historial), que sí requieren conexión.
+2. **Avisos en vivo.** `activo_movimientos` se publicó para Realtime y tiene su
+   propio canal, que empuja `ActivosService.revision` — un canal por tabla, para
+   que un movimiento de piping no haga recargar las listas de equipos ni al revés.
+3. **Listas truncadas en silencio.** Las listas traían un lote fijo sin decir que
+   había más. Se agregó "Cargar más" (widget `PieCargarMas`) en las cuatro listas
+   que crecen con el uso.
+
 ## 12. Ideas para fases futuras (fuera de alcance de esta Fase 1)
 
 ### 12.1 Roles con permisos distintos por módulo (2026-09-09)

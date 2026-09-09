@@ -10,6 +10,7 @@ import 'activo_detalle_page.dart';
 import 'activo_movimiento_page.dart';
 import 'activos_de_referencia_page.dart';
 import 'equipos_reportes_page.dart';
+import '../widgets/pie_cargar_mas.dart';
 import 'centros_page.dart';
 import 'bodegas_page.dart';
 import 'configuracion_page.dart';
@@ -304,9 +305,14 @@ class _BuscadorMovimiento extends StatefulWidget {
 }
 
 class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
+  static const _porPagina = 50;
+
   final _buscador = TextEditingController();
-  List<Activo> _resultados = [];
+  final List<Activo> _resultados = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = false;
+  bool _cargandoMas = false;
   bool _buscado = false;
 
   @override
@@ -315,18 +321,36 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
     super.dispose();
   }
 
-  Future<void> _buscar() async {
-    setState(() { _cargando = true; _buscado = true; });
+  Future<void> _buscar({bool desdeCero = true}) async {
+    if (_cargandoMas) return;
+    setState(() {
+      _buscado = true;
+      if (desdeCero) {
+        _offset = 0;
+        _hayMas = true;
+        _resultados.clear();
+        _cargando = true;
+      } else {
+        _cargandoMas = true;
+      }
+    });
     try {
       final res = await ActivosService.listar(
         serial: _buscador.text.trim().isEmpty ? null : _buscador.text.trim(),
-        limit: 50,
+        offset: _offset,
+        limit: _porPagina,
       );
       if (!mounted) return;
-      setState(() { _resultados = res; _cargando = false; });
+      setState(() {
+        _resultados.addAll(res);
+        _offset += res.length;
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false;
+        _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _cargando = false);
+      setState(() { _cargando = false; _cargandoMas = false; });
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('No se pudo buscar: $e')));
     }
@@ -385,10 +409,17 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
                   : _resultados.isEmpty
                       ? const _Vacio(texto: 'Ningún equipo coincide.')
                       : ListView.separated(
-                          itemCount: _resultados.length,
+                          itemCount: _resultados.length + 1,
                           separatorBuilder: (_, _) =>
                               const Divider(height: 1),
                           itemBuilder: (_, i) {
+                            if (i == _resultados.length) {
+                              return PieCargarMas(
+                                cargando: _cargandoMas,
+                                hayMas: _hayMas,
+                                onCargarMas: () => _buscar(desdeCero: false),
+                              );
+                            }
                             final a = _resultados[i];
                             return ListTile(
                               title: Text(a.serial),
@@ -417,34 +448,64 @@ class _ListaDisponibilidad extends StatefulWidget {
 }
 
 class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
-  List<ActivoDisponibilidad> _filas = [];
+  static const _porPagina = 50;
+
+  final List<ActivoDisponibilidad> _filas = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = true;
+  bool _cargandoMas = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _cargar();
-    ActivosService.revision.addListener(_cargar);
+    ActivosService.revision.addListener(_recargar);
   }
 
   @override
   void dispose() {
-    ActivosService.revision.removeListener(_cargar);
+    ActivosService.revision.removeListener(_recargar);
     super.dispose();
   }
 
-  Future<void> _cargar() async {
-    if (!mounted) return;
-    setState(() { _cargando = true; _error = null; });
+  void _recargar() => _cargar(desdeCero: true);
+
+  Future<void> _cargar({bool desdeCero = false}) async {
+    if (!mounted || _cargandoMas) return;
+    setState(() {
+      _error = null;
+      if (desdeCero) {
+        _offset = 0;
+        _hayMas = true;
+        _filas.clear();
+        _cargando = true;
+      } else if (_offset > 0) {
+        _cargandoMas = true;
+      }
+    });
     try {
       final res = await ActivosService.disponibles(
-          disponible: widget.disponible, limit: 100);
+          disponible: widget.disponible,
+          offset: _offset,
+          limit: _porPagina);
       if (!mounted) return;
-      setState(() { _filas = res; _cargando = false; });
+      setState(() {
+        _filas.addAll(res);
+        _offset += res.length;
+        // Una página incompleta significa que ya no queda nada detrás.
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false;
+        _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
+      setState(() {
+        _error = '$e';
+        _cargando = false;
+        _cargandoMas = false;
+      });
     }
   }
 
@@ -452,17 +513,24 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
   Widget build(BuildContext context) {
     if (_cargando) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _MensajeError(error: _error!, onReintentar: _cargar);
+      return _MensajeError(error: _error!, onReintentar: _recargarAsync);
     }
     if (_filas.isEmpty) {
       return const _Vacio(texto: 'No hay equipos disponibles ahora mismo.');
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: _recargarAsync,
       child: ListView.separated(
-        itemCount: _filas.length,
+        itemCount: _filas.length + 1, // +1: pie de "Cargar más"
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (i == _filas.length) {
+            return PieCargarMas(
+              cargando: _cargandoMas,
+              hayMas: _hayMas,
+              onCargarMas: _cargar,
+            );
+          }
           final d = _filas[i];
           return ListTile(
             title: Text(d.activo.serial),
@@ -480,6 +548,8 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
       ),
     );
   }
+
+  Future<void> _recargarAsync() => _cargar(desdeCero: true);
 }
 
 // ---------------------------------------------------------------------
@@ -493,33 +563,62 @@ class _EnMantenimiento extends StatefulWidget {
 }
 
 class _EnMantenimientoState extends State<_EnMantenimiento> {
-  List<Activo> _filas = [];
+  static const _porPagina = 50;
+
+  final List<Activo> _filas = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = true;
+  bool _cargandoMas = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _cargar();
-    ActivosService.revision.addListener(_cargar);
+    ActivosService.revision.addListener(_recargar);
   }
 
   @override
   void dispose() {
-    ActivosService.revision.removeListener(_cargar);
+    ActivosService.revision.removeListener(_recargar);
     super.dispose();
   }
 
-  Future<void> _cargar() async {
-    if (!mounted) return;
-    setState(() { _cargando = true; _error = null; });
+  void _recargar() => _cargar(desdeCero: true);
+  Future<void> _recargarAsync() => _cargar(desdeCero: true);
+
+  Future<void> _cargar({bool desdeCero = false}) async {
+    if (!mounted || _cargandoMas) return;
+    setState(() {
+      _error = null;
+      if (desdeCero) {
+        _offset = 0;
+        _hayMas = true;
+        _filas.clear();
+        _cargando = true;
+      } else if (_offset > 0) {
+        _cargandoMas = true;
+      }
+    });
     try {
-      final res = await ActivosService.enMantenimiento(limit: 100);
+      final res = await ActivosService.enMantenimiento(
+          offset: _offset, limit: _porPagina);
       if (!mounted) return;
-      setState(() { _filas = res; _cargando = false; });
+      setState(() {
+        _filas.addAll(res);
+        _offset += res.length;
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false;
+        _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
+      setState(() {
+        _error = '$e';
+        _cargando = false;
+        _cargandoMas = false;
+      });
     }
   }
 
@@ -527,17 +626,24 @@ class _EnMantenimientoState extends State<_EnMantenimiento> {
   Widget build(BuildContext context) {
     if (_cargando) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _MensajeError(error: _error!, onReintentar: _cargar);
+      return _MensajeError(error: _error!, onReintentar: _recargarAsync);
     }
     if (_filas.isEmpty) {
       return const _Vacio(texto: 'Ningún equipo está en mantenimiento.');
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: _recargarAsync,
       child: ListView.separated(
-        itemCount: _filas.length,
+        itemCount: _filas.length + 1, // +1: pie de "Cargar más"
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (i == _filas.length) {
+            return PieCargarMas(
+              cargando: _cargandoMas,
+              hayMas: _hayMas,
+              onCargarMas: _cargar,
+            );
+          }
           final a = _filas[i];
           return ListTile(
             leading: const Icon(Icons.build, color: Colors.orange),

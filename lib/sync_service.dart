@@ -58,7 +58,8 @@ class SyncService {
   }
 
   static Future<void> refrescarPendientes() async {
-    pendientes.value = await LocalStore.cantidadPendientes();
+    pendientes.value = await LocalStore.cantidadPendientes() +
+        await LocalStore.cantidadPendientesEquipos();
   }
 
   /// Baja el catálogo completo al dispositivo para poder trabajar sin señal.
@@ -78,6 +79,25 @@ class SyncService {
           (elementos as List).cast<Map<String, dynamic>>());
       await LocalStore.guardarCentros(
           (centros as List).cast<Map<String, dynamic>>());
+
+      // Equipos: se baja la VISTA, no la tabla, porque trae ya calculados
+      // `disponible` y la ubicación vigente — recalcularlos en el aparato
+      // sería repetir la regla en dos sitios y arriesgar que se separen.
+      // Si el usuario no tiene acceso al módulo, la RLS devuelve cero filas
+      // y el caché simplemente queda vacío: no es un error.
+      try {
+        final activos = await supabase
+            .from('activos_disponibilidad')
+            .select('*, activo_referencias(nombre), '
+                'bodegas!activos_bodega_id_fkey(nombre)')
+            .order('serial');
+        await LocalStore.guardarActivos(
+            (activos as List).cast<Map<String, dynamic>>());
+      } catch (_) {
+        // Que falle el catálogo de equipos no debe tumbar el del inventario,
+        // que es el que usa todo el mundo.
+      }
+
       enLinea.value = true;
       return true;
     } catch (_) {
@@ -91,10 +111,12 @@ class SyncService {
   static Future<int> sincronizar() async {
     if (sincronizando.value) return 0;
     final cola = await LocalStore.pendientes();
-    if (cola.isEmpty) return 0;
+    final colaEquipos = await LocalStore.pendientesEquipos();
+    if (cola.isEmpty && colaEquipos.isEmpty) return 0;
 
     sincronizando.value = true;
     final subidos = <String>{};
+    var subidosEquipos = 0;
     try {
       for (final mov in cola) {
         try {
@@ -117,8 +139,13 @@ class SyncService {
           }
         }
       }
-      if (subidos.isNotEmpty) {
-        await LocalStore.quitarDeCola(subidos);
+      // Los equipos van en su propia cola y a su propia tabla, pero se
+      // suben en la misma pasada: para el usuario "subir pendientes" es
+      // una sola acción, no dos.
+      subidosEquipos = await _subirColaEquipos(colaEquipos);
+
+      if (subidos.isNotEmpty || subidosEquipos > 0) {
+        if (subidos.isNotEmpty) await LocalStore.quitarDeCola(subidos);
         enLinea.value = true;
         // Refrescar existencias reales tras subir
         await refrescarCache();
@@ -127,6 +154,31 @@ class SyncService {
       sincronizando.value = false;
       await refrescarPendientes();
     }
+    return subidos.length + subidosEquipos;
+  }
+
+  /// Sube la cola de movimientos de equipos. Mismo criterio que la del
+  /// inventario: una clave duplicada significa que ya había subido, así que
+  /// se saca de la cola en vez de reintentarla para siempre.
+  static Future<int> _subirColaEquipos(List<Map<String, dynamic>> cola) async {
+    if (cola.isEmpty) return 0;
+    final subidos = <String>{};
+    for (final mov in cola) {
+      try {
+        await supabase.from('activo_movimientos').insert(mov);
+        subidos.add(mov['local_id'] as String);
+      } on Object catch (e) {
+        final txt = e.toString();
+        if (txt.contains('23505') || txt.contains('duplicate key')) {
+          subidos.add(mov['local_id'] as String);
+        } else {
+          // Sin red o error temporal: se reintenta en la próxima pasada.
+          enLinea.value = false;
+          break;
+        }
+      }
+    }
+    if (subidos.isNotEmpty) await LocalStore.quitarDeColaEquipos(subidos);
     return subidos.length;
   }
 

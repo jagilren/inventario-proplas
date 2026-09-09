@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../activos_service.dart';
+import '../widgets/pie_cargar_mas.dart';
 import 'activo_detalle_page.dart';
 
 /// Nivel 2 del módulo: las unidades individuales de una referencia, con los
@@ -21,10 +22,15 @@ class ActivosDeReferenciaPage extends StatefulWidget {
 }
 
 class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
+  static const _porPagina = 50;
+
   /// null = todas; true = disponibles; false = no disponibles.
   bool? _filtro;
-  List<ActivoDisponibilidad> _filas = [];
+  final List<ActivoDisponibilidad> _filas = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = true;
+  bool _cargandoMas = false;
   String? _error;
 
   @override
@@ -33,19 +39,44 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
-    setState(() { _cargando = true; _error = null; });
+  Future<void> _recargar() => _cargar(desdeCero: true);
+
+  Future<void> _cargar({bool desdeCero = false}) async {
+    if (_cargandoMas) return;
+    setState(() {
+      _error = null;
+      if (desdeCero || _offset == 0) {
+        _offset = 0;
+        _hayMas = true;
+        _filas.clear();
+        _cargando = true;
+      } else {
+        _cargandoMas = true;
+      }
+    });
     try {
       final res = await ActivosService.disponibles(
         referenciaId: widget.referenciaId,
         disponible: _filtro,
-        limit: 200,
+        offset: _offset,
+        limit: _porPagina,
       );
       if (!mounted) return;
-      setState(() { _filas = res; _cargando = false; });
+      setState(() {
+        _filas.addAll(res);
+        _offset += res.length;
+        // Una página incompleta significa que ya no queda nada detrás.
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false;
+        _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
+      setState(() {
+        _error = '$e';
+        _cargando = false;
+        _cargandoMas = false;
+      });
     }
   }
 
@@ -74,7 +105,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
                     selected: _filtro == opcion,
                     onSelected: (_) {
                       setState(() => _filtro = opcion);
-                      _cargar();
+                      _recargar();
                     },
                   ),
               ],
@@ -99,7 +130,8 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
               const SizedBox(height: 12),
               Text('No se pudo cargar.\n$_error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _cargar, child: const Text('Reintentar')),
+              FilledButton(
+                  onPressed: _recargar, child: const Text('Reintentar')),
             ],
           ),
         ),
@@ -115,11 +147,18 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
       );
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: _recargar,
       child: ListView.separated(
-        itemCount: _filas.length,
+        itemCount: _filas.length + 1, // +1: pie de "Cargar más"
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (i == _filas.length) {
+            return PieCargarMas(
+              cargando: _cargandoMas,
+              hayMas: _hayMas,
+              onCargarMas: _cargar,
+            );
+          }
           final d = _filas[i];
           final a = d.activo;
           return ListTile(

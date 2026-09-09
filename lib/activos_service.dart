@@ -7,6 +7,8 @@
 // InventarioService en data.dart. Sin pantallas todavía (Fase 4).
 import 'package:flutter/foundation.dart';
 import 'data.dart';
+import 'local_store.dart';
+import 'sync_service.dart';
 
 class ActivoReferencia {
   final String id;
@@ -429,11 +431,61 @@ class ActivosService {
     if (serial != null && serial.trim().isNotEmpty) {
       q = q.ilike('serial', '%${serial.trim()}%');
     }
-    final res = await q
-        .order('creado_en', ascending: false)
-        .range(offset, offset + limit - 1);
-    return (res as List)
-        .map((e) => Activo.fromMap(e as Map<String, dynamic>))
+    try {
+      final res = await q
+          .order('creado_en', ascending: false)
+          .range(offset, offset + limit - 1);
+      return (res as List)
+          .map((e) => Activo.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      SyncService.enLinea.value = false;
+      return _desdeCache(
+        offset: offset,
+        limit: limit,
+        estado: estado,
+        bodegaId: bodegaId,
+        referenciaId: referenciaId,
+        serial: serial,
+      );
+    }
+  }
+
+  /// Mismo filtrado que arriba, pero sobre el catálogo guardado en el
+  /// aparato. Solo sirve para consultar y para elegir un equipo al que
+  /// registrarle un movimiento: el detalle (piezas, mantenimientos,
+  /// historial) sí necesita conexión.
+  static Future<List<Activo>> _desdeCache({
+    int offset = 0,
+    int limit = 50,
+    String? estado,
+    String? bodegaId,
+    String? referenciaId,
+    String? serial,
+    bool? disponible,
+  }) async {
+    final filas = await LocalStore.leerActivos();
+    final q = serial?.trim().toLowerCase();
+    final filtradas = filas.where((a) {
+      if (estado != null && a['estado'] != estado) return false;
+      if (bodegaId != null && a['bodega_id'] != bodegaId) return false;
+      if (referenciaId != null && a['referencia_id'] != referenciaId) {
+        return false;
+      }
+      if (disponible != null && (a['disponible'] == true) != disponible) {
+        return false;
+      }
+      if (q != null && q.isNotEmpty) {
+        final s = (a['serial'] ?? '').toString().toLowerCase();
+        if (!s.contains(q)) return false;
+      }
+      return true;
+    }).toList();
+    if (offset >= filtradas.length) return [];
+    final fin = (offset + limit).clamp(0, filtradas.length);
+    return filtradas
+        .sublist(offset, fin)
+        .map((e) => Activo.fromMap(e))
         .toList();
   }
 
@@ -478,10 +530,35 @@ class ActivosService {
     if (disponible != null) q = q.eq('disponible', disponible);
     if (bodegaId != null) q = q.eq('ubicacion_actual_bodega_id', bodegaId);
     if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
-    final res = await q.order('serial').range(offset, offset + limit - 1);
-    return (res as List)
-        .map((e) => ActivoDisponibilidad.fromMap(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final res = await q.order('serial').range(offset, offset + limit - 1);
+      return (res as List)
+          .map((e) => ActivoDisponibilidad.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      SyncService.enLinea.value = false;
+      // El caché guarda las filas de esta misma vista, así que se pueden
+      // reconstruir tal cual, con su `disponible` ya calculado.
+      final filas = await LocalStore.leerActivos();
+      final filtradas = filas.where((a) {
+        if (disponible != null && (a['disponible'] == true) != disponible) {
+          return false;
+        }
+        if (bodegaId != null && a['ubicacion_actual_bodega_id'] != bodegaId) {
+          return false;
+        }
+        if (referenciaId != null && a['referencia_id'] != referenciaId) {
+          return false;
+        }
+        return true;
+      }).toList();
+      if (offset >= filtradas.length) return [];
+      final fin = (offset + limit).clamp(0, filtradas.length);
+      return filtradas
+          .sublist(offset, fin)
+          .map(ActivoDisponibilidad.fromMap)
+          .toList();
+    }
   }
 
   /// En mantenimiento (interno o externo), para la 4ª pestaña del módulo.
@@ -489,15 +566,28 @@ class ActivosService {
     int offset = 0,
     int limit = 50,
   }) async {
-    final res = await supabase
-        .from('activos')
-        .select(_selectActivo)
-        .inFilter('estado', ['mantenimiento_interno', 'mantenimiento_externo'])
-        .order('creado_en', ascending: false)
-        .range(offset, offset + limit - 1);
-    return (res as List)
-        .map((e) => Activo.fromMap(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final res = await supabase
+          .from('activos')
+          .select(_selectActivo)
+          .inFilter('estado',
+              ['mantenimiento_interno', 'mantenimiento_externo'])
+          .order('creado_en', ascending: false)
+          .range(offset, offset + limit - 1);
+      return (res as List)
+          .map((e) => Activo.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      SyncService.enLinea.value = false;
+      final cache = await _desdeCache(limit: 100000);
+      final enMant = cache
+          .where((a) =>
+              a.estado == 'mantenimiento_interno' ||
+              a.estado == 'mantenimiento_externo')
+          .toList();
+      if (offset >= enMant.length) return [];
+      return enMant.sublist(offset, (offset + limit).clamp(0, enMant.length));
+    }
   }
 
   /// Alta de un equipo nuevo: crea el activo y su primer movimiento de
@@ -632,7 +722,7 @@ class ActivosService {
     String? observacion,
   }) async {
     final uid = supabase.auth.currentUser?.id;
-    await supabase.from('activo_movimientos').insert({
+    await _registrar({
       'activo_id': activoId,
       'tipo': 'entrada',
       'centro_costo_id': centroCostoId,
@@ -644,7 +734,47 @@ class ActivosService {
       'observacion': observacion,
       'usuario_id': uid,
       'usuario_email': supabase.auth.currentUser?.email,
-    });
+    }, estadoResultante: _estadoTrasEntrada(condicion, usable));
+  }
+
+  /// El mismo criterio que aplica el trigger de la base al insertar una
+  /// entrada. Se repite aquí SOLO para poder mostrar el estado correcto
+  /// mientras el movimiento está encolado sin señal; cuando sube, manda lo
+  /// que diga el servidor.
+  static String _estadoTrasEntrada(String condicion, bool? usable) {
+    if (condicion == 'baja') return 'baja';
+    if (condicion == 'usado' && !(usable ?? true)) {
+      return 'mantenimiento_interno';
+    }
+    return 'operativo';
+  }
+
+  /// Inserta el movimiento; si no hay señal lo deja en la cola del aparato
+  /// y ajusta el caché local para que la app no siga mostrando el equipo
+  /// como si nada hubiera pasado.
+  ///
+  /// El par device_id + local_id es lo que impide que un reintento suba dos
+  /// veces el mismo movimiento (hay un índice único en la base).
+  static Future<void> _registrar(
+    Map<String, dynamic> mov, {
+    required String estadoResultante,
+  }) async {
+    try {
+      await supabase.from('activo_movimientos').insert(mov);
+    } catch (_) {
+      SyncService.enLinea.value = false;
+      final localId =
+          '${DateTime.now().microsecondsSinceEpoch}-${mov['activo_id']}';
+      await LocalStore.encolarEquipo({
+        ...mov,
+        'device_id': await LocalStore.deviceId(),
+        'local_id': localId,
+        'fecha': DateTime.now().toUtc().toIso8601String(),
+      });
+      await LocalStore.ajustarEstadoActivoLocal(
+          mov['activo_id'] as String, estadoResultante);
+      await SyncService.refrescarPendientes();
+    }
     revision.value++;
   }
 
@@ -657,7 +787,7 @@ class ActivosService {
     String? observacion,
   }) async {
     final uid = supabase.auth.currentUser?.id;
-    await supabase.from('activo_movimientos').insert({
+    await _registrar({
       'activo_id': activoId,
       'tipo': 'salida',
       'centro_costo_id': centroCostoId,
@@ -665,8 +795,7 @@ class ActivosService {
       'observacion': observacion,
       'usuario_id': uid,
       'usuario_email': supabase.auth.currentUser?.email,
-    });
-    revision.value++;
+    }, estadoResultante: 'entregado');
   }
 
   /// Anula un movimiento (nunca lo borra: inserta un 'ajuste' enlazado).

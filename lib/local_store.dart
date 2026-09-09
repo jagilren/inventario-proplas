@@ -18,6 +18,12 @@ class LocalStore {
   static const _kPendientes = 'cola_pendientes';
   static const _kUltimaSync = 'ultima_sync';
   static const _kDeviceId = 'device_id';
+  // Equipos va en claves APARTE, no mezclado con lo del inventario: son
+  // tablas distintas y se suben a endpoints distintos. Compartir la cola
+  // habría obligado a marcar cada fila con su tabla destino y a tocar el
+  // camino que ya funciona para el inventario.
+  static const _kActivos = 'cache_activos';
+  static const _kPendientesEquipos = 'cola_pendientes_equipos';
 
   static SharedPreferences? _prefs;
 
@@ -101,6 +107,64 @@ class LocalStore {
 
   static Future<int> cantidadPendientes() async => (await pendientes()).length;
 
+  // ---- Equipos: caché y cola propias ---------------------------------
+
+  static Future<void> guardarActivos(List<Map<String, dynamic>> filas) async {
+    final p = await _p;
+    await p.setString(_kActivos, jsonEncode(filas));
+  }
+
+  static Future<List<Map<String, dynamic>>> leerActivos() async {
+    final p = await _p;
+    final txt = p.getString(_kActivos);
+    if (txt == null) return [];
+    return (jsonDecode(txt) as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<List<Map<String, dynamic>>> pendientesEquipos() async {
+    final p = await _p;
+    final txt = p.getString(_kPendientesEquipos);
+    if (txt == null) return [];
+    return (jsonDecode(txt) as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> encolarEquipo(Map<String, dynamic> movimiento) async {
+    final cola = await pendientesEquipos();
+    cola.add(movimiento);
+    final p = await _p;
+    await p.setString(_kPendientesEquipos, jsonEncode(cola));
+  }
+
+  static Future<void> quitarDeColaEquipos(Set<String> localIds) async {
+    final cola = await pendientesEquipos();
+    cola.removeWhere((m) => localIds.contains(m['local_id']));
+    final p = await _p;
+    await p.setString(_kPendientesEquipos, jsonEncode(cola));
+  }
+
+  static Future<int> cantidadPendientesEquipos() async =>
+      (await pendientesEquipos()).length;
+
+  /// Deja el equipo en el caché con el estado que tendrá una vez suba el
+  /// movimiento, para que el usuario no siga viendo "disponible" un equipo
+  /// que él mismo acaba de entregar. El servidor manda: al sincronizar se
+  /// vuelve a bajar el catálogo y esto se sobreescribe con la verdad.
+  static Future<void> ajustarEstadoActivoLocal(
+      String activoId, String estado) async {
+    final activos = await leerActivos();
+    for (final a in activos) {
+      if (a['id'] == activoId) {
+        a['estado'] = estado;
+        // `disponible` viene calculado de la vista; se recalcula igual que
+        // allá para que las listas offline no se contradigan.
+        a['disponible'] =
+            estado == 'operativo' && a['ubicacion_actual_bodega_id'] != null;
+        break;
+      }
+    }
+    await guardarActivos(activos);
+  }
+
   /// Existencia guardada en caché para un elemento (null si no está en caché).
   /// Sirve para validar el stock cuando no hay conexión.
   static Future<num?> existenciaLocal(String elementoId) async {
@@ -132,5 +196,7 @@ class LocalStore {
     await p.remove(_kCentros);
     await p.remove(_kPendientes);
     await p.remove(_kUltimaSync);
+    await p.remove(_kActivos);
+    await p.remove(_kPendientesEquipos);
   }
 }
