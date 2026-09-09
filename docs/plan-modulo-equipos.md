@@ -713,8 +713,21 @@ listo para pasar a la Fase 1 (SQL) cuando se confirme.
 
 ## 11. Fases de desarrollo
 
-1. **SQL** — las 7 tablas/vista de la sección 3, RLS (con el rol `equipos`, sección
-   8.2), triggers de auditoría e inmutabilidad, función `cambiar_ubicacion_activo`.
+1. ~~**SQL** — las 7 tablas/vista de la sección 3, RLS (con el rol `equipos`, sección
+   8.2), triggers de auditoría e inmutabilidad, función `cambiar_ubicacion_activo`.~~
+   **COMPLETADA 2026-09-09** (`supabase/schema_v46_equipos_fase1.sql`, migración
+   `schema_v46_equipos_fase1` aplicada en producción). Incluye, además de lo previsto:
+   `fn_estampar_valor_activo_salida()` (estampa `valor` en una salida desde
+   `activos.valor_actual`, mismo criterio que `fn_estampar_costo_salida`) y
+   `anular_activo_movimiento()` (mismo patrón que `anular_movimiento()`: nunca borra,
+   inserta un `tipo='ajuste'` enlazado, índice único `activo_movimientos_anula_uniq`
+   evita anular dos veces; rechaza explícitamente anular el primer movimiento de un
+   equipo — "alta nueva" — indicando borrar/inactivar el equipo en su lugar). Probado
+   con un `DO $test$` completo dentro de una transacción revertida (alta, entrada
+   usado-no-usable → mantenimiento_interno, salida con valor auto-estampado, anulación,
+   doble anulación bloqueada, inmutabilidad de campos, rechazo de anular la alta) antes
+   de aplicar la migración real. `flutter analyze`/build/deploy no aplica a este paso —
+   es SQL puro, cero cambios en `lib/`.
 2. **Capa de datos en Flutter** — archivo propio `lib/activos_service.dart` (como ya
    se separó `reportes.dart` de `data.dart`), clases + CRUD **paginado desde el día 1**.
 3. **Navegación** — `ModuloSelectorPage` nueva (sección 8.1), ajustes en
