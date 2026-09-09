@@ -30,7 +30,7 @@ class Reportes {
     await FileSaver.instance.saveFile(
       name: '${nombre}_$fecha',
       bytes: bytes,
-      ext: 'csv',
+      fileExtension: 'csv',
       mimeType: MimeType.csv,
     );
   }

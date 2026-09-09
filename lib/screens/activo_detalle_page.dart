@@ -447,8 +447,22 @@ class _HojaEstadoState extends State<_HojaEstado> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Estado y condición',
-                style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Estado y condición',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                // Salida clara sin guardar: sin esto, la única forma de
+                // cancelar era arrastrar la hoja hacia abajo, que no todo el
+                // mundo descubre.
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Cerrar sin guardar',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             const Text(
               'Para cuando el equipo cambia sin entrar ni salir de la bodega: '
@@ -612,8 +626,19 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Cambiar ubicación',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('Cambiar ubicación',
+                            style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Cerrar sin guardar',
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   const Text(
                     'No afecta el inventario: el equipo sigue siendo nuestro.',

@@ -60,7 +60,9 @@ class _EscanerPageState extends State<EscanerPage> {
           MobileScanner(
             controller: _controlador,
             onDetect: _alDetectar,
-            errorBuilder: (context, error, _) => _error(error),
+            // Desde mobile_scanner 7 el errorBuilder ya no recibe el tercer
+            // argumento (el Widget hijo), porque nunca se usaba.
+            errorBuilder: (context, error) => _error(error),
           ),
           // Marco guía para que el usuario sepa dónde apuntar
           Container(
