@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
 import '../activos_service.dart';
+import '../util/import_archivo.dart';
 import 'perfil_page.dart';
 import 'activo_referencias_page.dart';
 import 'activo_terceros_page.dart';
@@ -217,6 +218,7 @@ class _PorReferencia extends StatefulWidget {
 
 class _PorReferenciaState extends State<_PorReferencia> {
   List<ResumenReferencia> _filas = [];
+  final _buscador = TextEditingController();
   bool _cargando = true;
   String? _error;
 
@@ -231,7 +233,21 @@ class _PorReferenciaState extends State<_PorReferencia> {
   @override
   void dispose() {
     ActivosService.revision.removeListener(_cargar);
+    _buscador.dispose();
     super.dispose();
+  }
+
+  /// Filtra sin tildes y sin importar el orden de las palabras, igual que
+  /// la búsqueda de Elementos: escribir "centrifuga bomba" tiene que
+  /// encontrar "BOMBA CENTRÍFUGA".
+  List<ResumenReferencia> get _visibles {
+    final q = normalizarTexto(_buscador.text);
+    if (q.isEmpty) return _filas;
+    final palabras = q.split(' ').where((p) => p.isNotEmpty);
+    return _filas.where((f) {
+      final texto = normalizarTexto(f.etiqueta);
+      return palabras.every(texto.contains);
+    }).toList();
   }
 
   Future<void> _cargar() async {
@@ -257,14 +273,51 @@ class _PorReferenciaState extends State<_PorReferencia> {
             'Crea el primero con el botón "Nuevo equipo".',
       );
     }
+    final visibles = _visibles;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: TextField(
+            controller: _buscador,
+            // Filtra mientras se escribe: la lista ya está en memoria, así
+            // que no hay consulta que esperar.
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Buscar modelo, marca…',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: _buscador.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Limpiar',
+                      onPressed: () =>
+                          setState(() => _buscador.clear()),
+                    ),
+            ),
+          ),
+        ),
+        if (visibles.isEmpty)
+          const Expanded(
+            child: _Vacio(texto: 'Ninguna referencia coincide con la búsqueda.'),
+          )
+        else
+          Expanded(child: _lista(visibles)),
+      ],
+    );
+  }
+
+  Widget _lista(List<ResumenReferencia> visibles) {
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView.separated(
         padding: const EdgeInsets.only(bottom: 88),
-        itemCount: _filas.length,
+        itemCount: visibles.length,
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
-          final f = _filas[i];
+          final f = visibles[i];
           return ListTile(
             title: Text(f.etiqueta),
             subtitle: Text(
