@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
 import 'activo_referencias_page.dart';
+
+// Formato de dinero de toda la app: signo peso y separador de miles.
+final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
 /// Alta de un equipo nuevo. Cubre los dos escenarios de entrada de la
 /// sección 4 del plan:
@@ -405,7 +409,7 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('Valorizado de este equipo: \$${_valorActual.toStringAsFixed(2)}',
+                Text('Valorizado de este equipo: ${_money.format(_valorActual)}',
                     style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 16),
 

@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../activos_service.dart';
 import '../widgets/pie_cargar_mas.dart';
 import 'activo_detalle_page.dart';
+
+// Formato de dinero de toda la app: signo peso y separador de miles.
+final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
 /// Nivel 2 del módulo: las unidades individuales de una referencia, con los
 /// filtros rápidos Todas / Disponibles / No disponibles.
@@ -228,7 +232,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
               a.condicionEtiqueta,
               if (a.bodegaNombre != null) a.bodegaNombre!,
             ].join(' · ')),
-            trailing: Text('\$${a.valorActual.toStringAsFixed(0)}',
+            trailing: Text(_money.format(a.valorActual),
                 style: const TextStyle(fontSize: 12)),
             onTap: () async {
               await Navigator.push(

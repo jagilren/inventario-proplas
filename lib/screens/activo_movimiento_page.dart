@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+
+// Formato de dinero de toda la app: signo peso y separador de miles.
+final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
 /// Registra una entrada (reingreso) o una salida de un equipo.
 ///
@@ -320,7 +324,7 @@ class _ActivoMovimientoPageState extends State<ActivoMovimientoPage> {
                   const SizedBox(height: 8),
                   Text(
                     'Quedará valorizado en '
-                    '\$${(a.valorNuevo * _porcentajeNum / 100).toStringAsFixed(2)}',
+                    '${_money.format(a.valorNuevo * _porcentajeNum / 100)}',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ] else ...[

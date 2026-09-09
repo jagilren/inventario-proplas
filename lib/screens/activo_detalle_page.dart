@@ -6,6 +6,9 @@ import '../util/tiempo.dart';
 import '../widgets/campo_obligatorio.dart';
 import 'activo_movimiento_page.dart';
 
+// Formato de dinero de toda la app: signo peso y separador de miles.
+final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
+
 // Mismo formato y misma conversión a hora de Colombia que el resto de la app.
 final _fecha = DateFormat('dd/MM/yyyy');
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -90,7 +93,25 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(a.serial, overflow: TextOverflow.ellipsis),
+          // Serial arriba y modelo debajo: el serial solo no dice de qué
+          // equipo se trata, y el modelo solo no distingue una unidad de
+          // otra. En un teléfono angosto los dos recortan con puntos
+          // suspensivos en vez de desbordarse.
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(a.serial,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 17)),
+              Text(
+                a.referenciaNombre ?? 'Sin referencia',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.normal),
+              ),
+            ],
+          ),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
@@ -184,9 +205,9 @@ class _Ficha extends StatelessWidget {
         const SizedBox(height: 12),
 
         _bloque(context, 'Valorización', [
-          _fila('Valor a nuevo', '\$${activo.valorNuevo.toStringAsFixed(2)}'),
+          _fila('Valor a nuevo', _money.format(activo.valorNuevo)),
           _fila('Porcentaje', '${activo.porcentajeValor}%'),
-          _fila('Valor actual', '\$${activo.valorActual.toStringAsFixed(2)}',
+          _fila('Valor actual', _money.format(activo.valorActual),
               destacado: true),
         ]),
         const SizedBox(height: 12),
@@ -594,6 +615,25 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
                     style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
                   const SizedBox(height: 16),
+                  // La consecuencia de mandarlo a un tercero no era obvia:
+                  // el equipo deja de contar como disponible. Se dice ANTES
+                  // de guardar, no después de que el usuario se pregunte por
+                  // qué desapareció de la lista de disponibles.
+                  if (!_enBodega)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      color: Colors.orange.shade50,
+                      child: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Text(
+                          'Mientras esté donde un tercero, el equipo NO contará '
+                          'como disponible para entregar. Sigue siendo tuyo y '
+                          'sigue valorizado en tu bodega; solo deja de estar a '
+                          'la mano.',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ),
                   SegmentedButton<bool>(
                     segments: const [
                       ButtonSegment(
@@ -934,7 +974,7 @@ class _MantenimientosState extends State<_Mantenimientos> {
                       ].join(' · ')),
                       trailing: m.costo == 0
                           ? null
-                          : Text('\$${m.costo.toStringAsFixed(2)}'),
+                          : Text(_money.format(m.costo)),
                     );
                   },
                 ),
@@ -1175,7 +1215,7 @@ class _MovimientosState extends State<_Movimientos> {
             _cuando(m.fecha),
             if (m.centroCosto != null) m.centroCosto!,
             if (m.bodega != null) m.bodega!,
-            if (m.valor != null) '\$${m.valor!.toStringAsFixed(2)}',
+            if (m.valor != null) _money.format(m.valor!),
             if (m.usuarioEmail != null) m.usuarioEmail!,
             if (m.observacion != null && m.observacion!.isNotEmpty)
               m.observacion!,

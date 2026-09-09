@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
 import '../activos_service.dart';
@@ -19,6 +20,9 @@ import 'configuracion_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
+
+// Formato de dinero de toda la app: signo peso y separador de miles.
+final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
 /// Pantalla principal del Módulo de Equipos, con las 4 pestañas de la
 /// sección 7.0 del plan.
@@ -598,7 +602,7 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
             title: Text(d.activo.serial),
             subtitle: Text(
                 '${d.activo.referenciaNombre ?? '—'} · ${d.activo.bodegaNombre ?? '—'}'),
-            trailing: Text('\$${d.activo.valorActual.toStringAsFixed(0)}',
+            trailing: Text(_money.format(d.activo.valorActual),
                 style: const TextStyle(fontSize: 12)),
             onTap: () => Navigator.push(
               context,
