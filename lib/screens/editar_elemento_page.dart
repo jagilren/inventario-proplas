@@ -78,6 +78,11 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   bool get _mostrarSeriales => _esNuevo && !widget.forzarAprovechamiento;
   bool get _mostrarExistenciaInicial =>
       _esNuevo && !_serializado && !widget.forzarAprovechamiento;
+
+  /// ¿Se está registrando existencia inicial? Solo entonces hace falta
+  /// saber en qué bodega está.
+  bool get _hayCantidadInicial =>
+      (num.tryParse(_cantIni.text.replaceAll(',', '.')) ?? 0) > 0;
   // Stock mínimo y código de barras no aplican al alta de Aprovechamientos:
   // esos elementos no manejan alertas de existencia ni pasan por la RPC
   // dedicada (crear_elemento_aprovechamiento), que no recibe esos campos.
@@ -182,6 +187,14 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
       await _advertirInconsistencia();
       return;
     }
+    // Existencia inicial NO serializada: si hay cantidad, la bodega es
+    // obligatoria. Antes se elegía sola y el elemento quedaba en una bodega
+    // que nadie decidió — el origen de las correcciones a mano posteriores.
+    if (_mostrarExistenciaInicial && _hayCantidadInicial && _bodegaIni == null) {
+      setState(() => _mostrarErrores = true);
+      _msg('Elige en qué bodega está la existencia inicial');
+      return;
+    }
     // Validación de unidades iniciales serializadas: tantos seriales como cantidad.
     if (_esNuevo && _serializado) {
       final cantS = int.tryParse(_cantIni.text.trim()) ?? 0;
@@ -240,18 +253,20 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // Existencia inicial, si la indicó
         final cant = num.tryParse(_cantIni.text.replaceAll(',', '.'));
         final costo = num.tryParse(_costoIni.text.replaceAll(',', '.'));
-        if (!_serializado && cant != null && cant > 0) {
-          final bods = await InventarioService.bodegas();
-          if (bods.isNotEmpty) {
-            await InventarioService.registrarMovimiento(
-              tipo: 'inicial',
-              elementoId: elementoId,
-              bodegaId: bods.first.id,
-              cantidad: cant,
-              costoUnitario: costo ?? 0,
-              observacion: 'Existencia inicial al crear el elemento',
-            );
-          }
+        // La bodega es la que eligió el usuario (validada arriba), nunca la
+        // primera de la lista: eso dejaba el saldo inicial en una bodega
+        // que nadie escogió y obligaba a corregirlo después a mano.
+        if (!_serializado && cant != null && cant > 0 && _bodegaIni != null) {
+          await InventarioService.registrarMovimiento(
+            tipo: 'inicial',
+            elementoId: elementoId,
+            bodegaId: _bodegaIni!.id,
+            cantidad: cant,
+            costoUnitario: costo ?? 0,
+            observacion:
+                'Existencia inicial al crear el elemento (bodega elegida: '
+                '${_bodegaIni!.nombre})',
+          );
         }
 
         // Unidades iniciales serializadas: se registran con su serial en la
@@ -472,8 +487,17 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Si ya tienes unidades en bodega, regístralas aquí.',
+              'Es el saldo con el que arranca el elemento: unidades que YA '
+              'tienes en bodega. No cuenta como compra ni como devolución, y '
+              'por eso no aparece en los informes por centro de costo.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Si lo que estás registrando es material que vuelve de un '
+              'cliente, no lo cargues aquí: guarda el elemento y regístralo '
+              'como Entrada, que sí te deja indicar el centro de costo.',
+              style: TextStyle(fontSize: 12, color: Colors.orange),
             ),
             const SizedBox(height: 12),
             _campo(
@@ -486,6 +510,30 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               'Costo unitario',
               teclado: const TextInputType.numberWithOptions(decimal: true),
             ),
+            // Antes esta bodega NO se preguntaba: se tomaba la primera de la
+            // lista en silencio, y el elemento terminaba en una bodega que
+            // nadie eligió. Es obligatoria en cuanto haya cantidad.
+            DropdownButtonFormField<Bodega>(
+              initialValue: _bodegaIni,
+              isExpanded: true,
+              decoration: marcarError(
+                const InputDecoration(
+                  labelText: '¿En qué bodega están?',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warehouse),
+                ),
+                _mostrarErrores && _bodegaIni == null && _hayCantidadInicial,
+              ),
+              items: _bodegas
+                  .map((b) => DropdownMenuItem(
+                        value: b,
+                        child:
+                            Text(b.nombre, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _bodegaIni = v),
+            ),
+            const SizedBox(height: 14),
           ],
           if (_esNuevo && _serializado) ...[
             const Divider(height: 28),
