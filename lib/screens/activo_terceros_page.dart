@@ -210,8 +210,17 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
+      final txt = '$e';
+      final duplicado = txt.contains('activo_terceros_uniq') ||
+          txt.contains('23505') ||
+          txt.contains('duplicate key');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar: $e')),
+        SnackBar(
+          content: Text(duplicado
+              ? 'Ya existe un tercero con ese nombre. Búscalo en la lista '
+                  '(puede estar inactivo).'
+              : 'No se pudo guardar: $e'),
+        ),
       );
     }
   }

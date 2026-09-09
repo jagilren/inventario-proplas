@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../activos_service.dart';
+import '../util/import_archivo.dart';
 import '../widgets/campo_obligatorio.dart';
 
 /// Catálogo de referencias de equipos (los modelos: "Bomba Grundfos DNA30").
@@ -177,6 +178,69 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
   String? _t(TextEditingController c) =>
       c.text.trim().isEmpty ? null : c.text.trim();
 
+  /// Antes de crear, avisa si ya existe una referencia PARECIDA.
+  ///
+  /// La base impide las duplicadas exactas, pero no distingue "BOMBA 2HP" de
+  /// "BOMBA 2 HP" — y así es como se fragmenta un catálogo. Se usa el mismo
+  /// emparejador que la app ya aplica al importar archivos, así que respeta
+  /// su regla de que las medidas que se contradicen no emparejan.
+  ///
+  /// Devuelve true si se debe continuar guardando.
+  Future<bool> _confirmarSiSeParece() async {
+    // Se comparan TODAS, incluidas las inactivas: el candado de la base
+    // también las cuenta, así que una inactiva parecida igual haría chocar.
+    final todas = await ActivosService.referencias(
+        soloActivas: false, limit: 500);
+    final mio = normalizarTexto(
+        [_nombre.text, _marca.text, _modelo.text]
+            .where((e) => e.trim().isNotEmpty)
+            .join(' '));
+
+    ActivoReferencia? parecida;
+    var mejor = 0.0;
+    for (final r in todas) {
+      final s = similitud(mio, normalizarTexto(r.etiqueta));
+      if (s > mejor) { mejor = s; parecida = r; }
+    }
+    if (parecida == null || mejor < 0.70) return true;
+    // Copia inmutable: dentro del closure del diálogo Dart ya no puede
+    // garantizar que la variable mutable siga sin ser nula.
+    final candidata = parecida;
+
+    if (!mounted) return false;
+    final seguir = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿No será la misma?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ya existe una referencia muy parecida:'),
+            const SizedBox(height: 10),
+            Text(candidata.etiqueta,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text(
+              'Crear dos referencias para el mismo modelo hace que sus '
+              'equipos queden repartidos y los conteos no cuadren.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Usar la que ya existe')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Es distinta, crearla')),
+        ],
+      ),
+    );
+    return seguir == true;
+  }
+
   Future<void> _guardar() async {
     if (_nombre.text.trim().isEmpty) {
       setState(() => _mostrarErrores = true);
@@ -186,6 +250,10 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
     try {
       final r = widget.referencia;
       if (r == null) {
+        if (!await _confirmarSiSeParece()) {
+          if (mounted) setState(() => _guardando = false);
+          return;
+        }
         await ActivosService.crearReferencia(
           nombre: _nombre.text.trim(),
           marca: _t(_marca),
@@ -209,8 +277,19 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
+      // El candado de la base habla en jerga ("duplicate key value violates
+      // unique constraint activo_referencias_uniq"); aquí se traduce.
+      final txt = '$e';
+      final duplicada = txt.contains('activo_referencias_uniq') ||
+          txt.contains('23505') ||
+          txt.contains('duplicate key');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar: $e')),
+        SnackBar(
+          content: Text(duplicada
+              ? 'Ya existe una referencia con ese mismo nombre, marca y '
+                  'modelo. Búscala en la lista (puede estar inactiva).'
+              : 'No se pudo guardar: $e'),
+        ),
       );
     }
   }
