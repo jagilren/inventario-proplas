@@ -68,7 +68,7 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
 
   Future<void> _cargarCatalogos() async {
     try {
-      final refs = await ActivosService.referencias(limit: 200);
+      final refs = await ActivosService.todasLasReferencias();
       final centros = await InventarioService.centrosCosto();
       final bodegas = await InventarioService.bodegas();
       if (!mounted) return;
@@ -128,7 +128,7 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
   Future<void> _recargarReferencias() async {
     setState(() => _recargandoReferencias = true);
     final nueva = await recargarCatalogo(
-        context, () => ActivosService.referencias(limit: 200), _referencias.length);
+        context, ActivosService.todasLasReferencias, _referencias.length);
     if (!mounted) return;
     setState(() {
       if (nueva != null) _referencias = nueva;
@@ -248,6 +248,11 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                 const Divider(height: 28),
 
                 SelectorRecargable<ActivoReferencia>(
+                  // Siempre con buscador, no atado al umbral de 12: el
+                  // catálogo de modelos va a crecer a cientos, y un
+                  // desplegable de ese tamaño es inservible. Mismo criterio
+                  // que ya se aplicó a los centros de costo.
+                  forzarBuscador: true,
                   etiqueta: 'Referencia (modelo) *',
                   icono: Icons.precision_manufacturing,
                   valor: _referencia,

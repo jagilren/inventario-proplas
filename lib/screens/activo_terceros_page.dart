@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../activos_service.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../widgets/pie_cargar_mas.dart';
 
 /// Catálogo de terceros: talleres, clientes y proveedores donde puede estar
 /// físicamente un equipo que sigue siendo nuestro.
@@ -15,8 +16,13 @@ class ActivoTercerosPage extends StatefulWidget {
 }
 
 class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
-  List<ActivoTercero> _terceros = [];
+  static const _porPagina = 50;
+
+  final List<ActivoTercero> _terceros = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = true;
+  bool _cargandoMas = false;
   bool _mostrarInactivos = false;
   String? _error;
 
@@ -26,16 +32,32 @@ class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
-    setState(() { _cargando = true; _error = null; });
+  Future<void> _recargar() => _cargar(desdeCero: true);
+
+  Future<void> _cargar({bool desdeCero = false}) async {
+    if (_cargandoMas) return;
+    setState(() {
+      _error = null;
+      if (desdeCero || _offset == 0) {
+        _offset = 0; _hayMas = true; _terceros.clear(); _cargando = true;
+      } else {
+        _cargandoMas = true;
+      }
+    });
     try {
       final res = await ActivosService.terceros(
-          soloActivos: !_mostrarInactivos, limit: 200);
+          soloActivos: !_mostrarInactivos,
+          offset: _offset, limit: _porPagina);
       if (!mounted) return;
-      setState(() { _terceros = res; _cargando = false; });
+      setState(() {
+        _terceros.addAll(res);
+        _offset += res.length;
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false; _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
+      setState(() { _error = '$e'; _cargando = false; _cargandoMas = false; });
     }
   }
 
@@ -45,7 +67,7 @@ class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
       isScrollControlled: true,
       builder: (_) => _FormularioTercero(tercero: tercero),
     );
-    if (guardado == true) _cargar();
+    if (guardado == true) _recargar();
   }
 
   @override
@@ -63,7 +85,7 @@ class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
                 : 'Mostrar también los inactivos',
             onPressed: () {
               setState(() => _mostrarInactivos = !_mostrarInactivos);
-              _cargar();
+              _recargar();
             },
           ),
         ],
@@ -91,7 +113,8 @@ class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
               Text('No se pudo cargar el catálogo.\n$_error',
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _cargar, child: const Text('Reintentar')),
+              FilledButton(
+                  onPressed: _recargar, child: const Text('Reintentar')),
             ],
           ),
         ),
@@ -109,12 +132,16 @@ class _ActivoTercerosPageState extends State<ActivoTercerosPage> {
       );
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: _recargar,
       child: ListView.separated(
         padding: const EdgeInsets.only(bottom: 88),
-        itemCount: _terceros.length,
+        itemCount: _terceros.length + 1, // +1: pie de "Cargar más"
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (i == _terceros.length) {
+            return PieCargarMas(
+                cargando: _cargandoMas, hayMas: _hayMas, onCargarMas: _cargar);
+          }
           final t = _terceros[i];
           final detalle = [_etiquetaTipo(t.tipo), t.contacto]
               .where((e) => e != null && e.isNotEmpty)

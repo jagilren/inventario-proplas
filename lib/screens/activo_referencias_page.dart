@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../activos_service.dart';
 import '../util/import_archivo.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../widgets/pie_cargar_mas.dart';
 
 /// Catálogo de referencias de equipos (los modelos: "Bomba Grundfos DNA30").
 ///
@@ -18,8 +19,13 @@ class ActivoReferenciasPage extends StatefulWidget {
 }
 
 class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
-  List<ActivoReferencia> _refs = [];
+  static const _porPagina = 50;
+
+  final List<ActivoReferencia> _refs = [];
+  int _offset = 0;
+  bool _hayMas = true;
   bool _cargando = true;
+  bool _cargandoMas = false;
   bool _mostrarInactivas = false;
   String? _error;
 
@@ -29,18 +35,34 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
-    setState(() { _cargando = true; _error = null; });
+  Future<void> _recargar() => _cargar(desdeCero: true);
+
+  Future<void> _cargar({bool desdeCero = false}) async {
+    if (_cargandoMas) return;
+    setState(() {
+      _error = null;
+      if (desdeCero || _offset == 0) {
+        _offset = 0; _hayMas = true; _refs.clear(); _cargando = true;
+      } else {
+        _cargandoMas = true;
+      }
+    });
     try {
       final res = await ActivosService.referencias(
         soloActivas: !_mostrarInactivas,
-        limit: 200,
+        offset: _offset,
+        limit: _porPagina,
       );
       if (!mounted) return;
-      setState(() { _refs = res; _cargando = false; });
+      setState(() {
+        _refs.addAll(res);
+        _offset += res.length;
+        if (res.length < _porPagina) _hayMas = false;
+        _cargando = false; _cargandoMas = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = '$e'; _cargando = false; });
+      setState(() { _error = '$e'; _cargando = false; _cargandoMas = false; });
     }
   }
 
@@ -50,7 +72,7 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
       isScrollControlled: true, // el teclado no debe tapar los campos
       builder: (_) => _FormularioReferencia(referencia: ref),
     );
-    if (guardado == true) _cargar();
+    if (guardado == true) _recargar();
   }
 
   @override
@@ -68,7 +90,7 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
                 : 'Mostrar también las inactivas',
             onPressed: () {
               setState(() => _mostrarInactivas = !_mostrarInactivas);
-              _cargar();
+              _recargar();
             },
           ),
         ],
@@ -96,7 +118,8 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
               Text('No se pudo cargar el catálogo.\n$_error',
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              FilledButton(onPressed: _cargar, child: const Text('Reintentar')),
+              FilledButton(
+                  onPressed: _recargar, child: const Text('Reintentar')),
             ],
           ),
         ),
@@ -114,13 +137,17 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
       );
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: _recargar,
       child: ListView.separated(
         // Espacio al final para que el FAB no tape la última fila.
         padding: const EdgeInsets.only(bottom: 88),
-        itemCount: _refs.length,
+        itemCount: _refs.length + 1, // +1: pie de "Cargar más"
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
+          if (i == _refs.length) {
+            return PieCargarMas(
+                cargando: _cargandoMas, hayMas: _hayMas, onCargarMas: _cargar);
+          }
           final r = _refs[i];
           final detalle = [r.marca, r.modelo, r.tipo]
               .where((e) => e != null && e.isNotEmpty)
@@ -189,8 +216,8 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
   Future<bool> _confirmarSiSeParece() async {
     // Se comparan TODAS, incluidas las inactivas: el candado de la base
     // también las cuenta, así que una inactiva parecida igual haría chocar.
-    final todas = await ActivosService.referencias(
-        soloActivas: false, limit: 500);
+    final todas =
+        await ActivosService.todasLasReferencias(soloActivas: false);
     final mio = normalizarTexto(
         [_nombre.text, _marca.text, _modelo.text]
             .where((e) => e.trim().isNotEmpty)

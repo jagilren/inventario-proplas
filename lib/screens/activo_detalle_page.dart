@@ -535,7 +535,7 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
   Future<void> _cargar() async {
     try {
       final b = await InventarioService.bodegas();
-      final t = await ActivosService.terceros(limit: 200);
+      final t = await ActivosService.todosLosTerceros();
       if (!mounted) return;
       setState(() {
         _bodegas = b;

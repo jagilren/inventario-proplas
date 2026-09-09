@@ -308,6 +308,44 @@ class ActivosService {
         .toList();
   }
 
+  /// TODAS las referencias activas, trayéndolas por páginas hasta agotarlas.
+  ///
+  /// Es lo que necesita un SELECTOR: si se pide un lote fijo, las que queden
+  /// fuera son imposibles de elegir — y el buscador no las rescata, porque
+  /// solo filtra lo que ya se descargó. Un listado paginado en pantalla puede
+  /// permitirse mostrar de a poco; un desplegable no.
+  static Future<List<ActivoReferencia>> todasLasReferencias({
+    bool soloActivas = true,
+  }) async {
+    const porPagina = 500;
+    final todas = <ActivoReferencia>[];
+    var offset = 0;
+    while (true) {
+      final pagina = await referencias(
+          offset: offset, limit: porPagina, soloActivas: soloActivas);
+      todas.addAll(pagina);
+      if (pagina.length < porPagina) break;
+      offset += pagina.length;
+    }
+    return todas;
+  }
+
+  /// Todos los terceros activos, por el mismo motivo: alimenta el selector
+  /// de "Cambiar ubicación", y un tercero que no se descargue es un tercero
+  /// al que el equipo no se puede mandar.
+  static Future<List<ActivoTercero>> todosLosTerceros() async {
+    const porPagina = 500;
+    final todos = <ActivoTercero>[];
+    var offset = 0;
+    while (true) {
+      final pagina = await terceros(offset: offset, limit: porPagina);
+      todos.addAll(pagina);
+      if (pagina.length < porPagina) break;
+      offset += pagina.length;
+    }
+    return todos;
+  }
+
   static Future<ActivoReferencia> crearReferencia({
     required String nombre,
     String? marca,
