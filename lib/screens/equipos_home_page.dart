@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
@@ -361,6 +362,7 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
   static const _porPagina = 50;
 
   final _buscador = TextEditingController();
+  Timer? _teclado;
   final List<Activo> _resultados = [];
   int _offset = 0;
   bool _hayMas = true;
@@ -370,6 +372,7 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
 
   @override
   void dispose() {
+    _teclado?.cancel();
     _buscador.dispose();
     super.dispose();
   }
@@ -431,6 +434,12 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
             controller: _buscador,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _buscar(),
+            // Busca sola al dejar de escribir: en un móvil, tener que
+            // rematar con Enter hace que la pantalla parezca rota.
+            onChanged: (_) {
+              _teclado?.cancel();
+              _teclado = Timer(const Duration(milliseconds: 400), _buscar);
+            },
             decoration: InputDecoration(
               hintText: 'Buscar por serial…',
               prefixIcon: const Icon(Icons.search),

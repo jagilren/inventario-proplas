@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../activos_service.dart';
 import '../widgets/pie_cargar_mas.dart';
@@ -27,6 +28,10 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
   /// null = todas; true = disponibles; false = no disponibles.
   bool? _filtro;
   final _buscador = TextEditingController();
+  // Espera a que el usuario deje de escribir antes de consultar. Sin esto
+  // habría una consulta por cada letra; con Enter obligatorio, en un móvil
+  // el usuario escribe y se queda esperando resultados que nunca llegan.
+  Timer? _teclado;
   final List<ActivoDisponibilidad> _filas = [];
   int _offset = 0;
   bool _hayMas = true;
@@ -42,6 +47,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
 
   @override
   void dispose() {
+    _teclado?.cancel();
     _buscador.dispose();
     super.dispose();
   }
@@ -106,7 +112,12 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
               // miles de unidades de un mismo modelo, filtrar en memoria
               // diría "no existe" cuando el serial está más adelante.
               onSubmitted: (_) => _recargar(),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});           // refresca el botón de limpiar
+                _teclado?.cancel();
+                _teclado = Timer(
+                    const Duration(milliseconds: 400), _recargar);
+              },
               decoration: InputDecoration(
                 hintText: 'Buscar por serial…',
                 prefixIcon: const Icon(Icons.search),

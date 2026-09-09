@@ -279,6 +279,20 @@ class ResumenReferencia {
   ].where((e) => e != null && e.isNotEmpty).join(' · ');
 }
 
+/// Deja el texto como lo guarda la columna `serial_busqueda` de la base:
+/// mayúsculas y sin tildes. Los dos lados TIENEN que normalizar igual, o la
+/// búsqueda no encuentra lo que el usuario ve en pantalla.
+String normalizarSerial(String s) {
+  const con = 'áàäâãéèëêíìïîóòöôõúùüûñçÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÑÇøØ';
+  const sin = 'aaaaaeeeeiiiiooooouuuuncAAAAAEEEEIIIIOOOOOUUUUNCoO';
+  final sb = StringBuffer();
+  for (final ch in s.split('')) {
+    final i = con.indexOf(ch);
+    sb.write(i >= 0 ? sin[i] : ch);
+  }
+  return sb.toString().toUpperCase();
+}
+
 class ActivosService {
   /// Mismo patrón que InventarioService.revision: las pantallas que lo
   /// escuchan se recargan solas tras un alta/movimiento/cambio de ubicación.
@@ -467,7 +481,9 @@ class ActivosService {
     if (bodegaId != null) q = q.eq('bodega_id', bodegaId);
     if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
     if (serial != null && serial.trim().isNotEmpty) {
-      q = q.ilike('serial', '%${serial.trim()}%');
+      // Se filtra por la columna normalizada (mayúsculas y sin tildes), no
+      // por `serial`: ilike ignora mayúsculas pero NO tildes.
+      q = q.like('serial_busqueda', '%${normalizarSerial(serial.trim())}%');
     }
     try {
       final res = await q
@@ -503,7 +519,7 @@ class ActivosService {
     bool? disponible,
   }) async {
     final filas = await LocalStore.leerActivos();
-    final q = serial?.trim().toLowerCase();
+    final q = serial == null ? null : normalizarSerial(serial.trim());
     final filtradas = filas.where((a) {
       if (estado != null && a['estado'] != estado) return false;
       if (bodegaId != null && a['bodega_id'] != bodegaId) return false;
@@ -514,8 +530,9 @@ class ActivosService {
         return false;
       }
       if (q != null && q.isNotEmpty) {
-        final s = (a['serial'] ?? '').toString().toLowerCase();
-        if (!s.contains(q)) return false;
+        if (!normalizarSerial((a['serial'] ?? '').toString()).contains(q)) {
+          return false;
+        }
       }
       return true;
     }).toList();
@@ -573,7 +590,7 @@ class ActivosService {
     if (bodegaId != null) q = q.eq('ubicacion_actual_bodega_id', bodegaId);
     if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
     if (serial != null && serial.trim().isNotEmpty) {
-      q = q.ilike('serial', '%${serial.trim()}%');
+      q = q.like('serial_busqueda', '%${normalizarSerial(serial.trim())}%');
     }
     try {
       final res = await q.order('serial').range(offset, offset + limit - 1);
@@ -585,7 +602,7 @@ class ActivosService {
       // El caché guarda las filas de esta misma vista, así que se pueden
       // reconstruir tal cual, con su `disponible` ya calculado.
       final filas = await LocalStore.leerActivos();
-      final q = serial?.trim().toLowerCase();
+      final q = serial == null ? null : normalizarSerial(serial.trim());
       final filtradas = filas.where((a) {
         if (disponible != null && (a['disponible'] == true) != disponible) {
           return false;
@@ -597,7 +614,7 @@ class ActivosService {
           return false;
         }
         if (q != null && q.isNotEmpty) {
-          if (!(a['serial'] ?? '').toString().toLowerCase().contains(q)) {
+          if (!normalizarSerial((a['serial'] ?? '').toString()).contains(q)) {
             return false;
           }
         }
