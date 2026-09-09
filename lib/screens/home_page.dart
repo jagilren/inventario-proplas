@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
-import '../ajustes.dart';
-import '../sync_service.dart';
-import '../realtime_service.dart';
 import 'dashboard_page.dart';
 import 'elementos_page.dart';
 import 'movimiento_page.dart';
@@ -47,13 +44,10 @@ class _HomePageState extends State<HomePage> {
     InventarioService.misRoles().then((r) {
       if (mounted) setState(() { _roles = r; _cargado = true; });
     });
-    // Ya hay sesión: descargar el catálogo para poder trabajar sin señal
-    // y subir lo que hubiera quedado pendiente de una sesión anterior.
-    SyncService.alSesionIniciada();
-    // Avisos en vivo: refresca las vistas abiertas cuando OTRO usuario
-    // registra o anula un movimiento.
-    RealtimeService.iniciar();
-    Ajustes.cargar(); // config regional de exportaciones del usuario
+    // El arranque de sesión (descargar catálogo, subir pendientes, avisos en
+    // vivo, configuración regional) se movió a ModuloSelectorPage: corre una
+    // sola vez al entrar, sin importar a qué módulo se vaya después. Todo
+    // camino hacia esta pantalla pasa por allá.
   }
 
   bool get _admin => _roles.contains(Roles.admin);
@@ -61,6 +55,10 @@ class _HomePageState extends State<HomePage> {
   bool get _gestiona => _admin || _coord;
   bool get _puedeExportar => _admin || _roles.contains(Roles.exportar);
   bool get _puedeRemisiones => _admin || _roles.contains(Roles.remisiones);
+  // Solo tiene sentido ofrecer "Cambiar de módulo" a quien de verdad tiene
+  // dos módulos disponibles; para los demás esta pantalla es la raíz y no
+  // hay nada a dónde volver.
+  bool get _puedeEquipos => _gestiona || _roles.contains(Roles.equipos);
 
   List<_Seccion> get _secciones {
     final puedeSalida = _admin || _roles.contains(Roles.operarioMenos);
@@ -103,6 +101,14 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+        actions: [
+          if (_puedeEquipos)
+            IconButton(
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Cambiar de módulo',
+              onPressed: () => Navigator.pop(context),
+            ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(

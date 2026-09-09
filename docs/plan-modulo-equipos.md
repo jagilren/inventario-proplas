@@ -728,10 +728,36 @@ listo para pasar a la Fase 1 (SQL) cuando se confirme.
    doble anulación bloqueada, inmutabilidad de campos, rechazo de anular la alta) antes
    de aplicar la migración real. `flutter analyze`/build/deploy no aplica a este paso —
    es SQL puro, cero cambios en `lib/`.
-2. **Capa de datos en Flutter** — archivo propio `lib/activos_service.dart` (como ya
-   se separó `reportes.dart` de `data.dart`), clases + CRUD **paginado desde el día 1**.
-3. **Navegación** — `ModuloSelectorPage` nueva (sección 8.1), ajustes en
-   `home_page.dart`, rol `equipos` en `class Roles` y en "Gestión de usuarios".
+2. ~~**Capa de datos en Flutter** — archivo propio `lib/activos_service.dart` (como ya
+   se separó `reportes.dart` de `data.dart`), clases + CRUD **paginado desde el día 1**.~~
+   **COMPLETADA 2026-09-09** (`lib/activos_service.dart`). 7 clases de modelo
+   (`ActivoReferencia`, `ActivoTercero`, `Activo`, `ActivoDisponibilidad`,
+   `ActivoUbicacion`, `ActivoPieza`, `ActivoMantenimiento`, `ActivoMovimiento`) +
+   `ActivosService` con todo el CRUD paginado, `revision` (mismo patrón que
+   `InventarioService.revision`), y los dos RPC (`cambiar_ubicacion_activo`,
+   `anular_activo_movimiento`). Los nombres de las FK para el join de centros de costo
+   se verificaron contra `pg_constraint` real antes de escribirlos, para no repetir el
+   error PGRST201 de `pgrst201-doble-fk-centros-costo.md`. **Ningún archivo existente
+   fue modificado** — el archivo nuevo todavía no lo importa nadie, así que la app
+   desplegada se comporta exactamente igual que antes (`flutter analyze`: los mismos 29
+   avisos info de siempre, cero nuevos).
+3. ~~**Navegación** — `ModuloSelectorPage` nueva (sección 8.1), ajustes en
+   `home_page.dart`, rol `equipos` en `class Roles` y en "Gestión de usuarios".~~
+   **COMPLETADA 2026-09-09**, probada por el usuario en un despliegue de vista previa
+   (`fase3-equipos.inventario-proplas.pages.dev`) antes de tocar producción, porque el
+   cambio del `AuthGate` afecta el login de todos. Archivos:
+   `screens/modulo_selector_page.dart` y `screens/equipos_home_page.dart` (nuevos),
+   `main.dart` (AuthGate → `ModuloSelectorPage`), `home_page.dart` (se le quitó el
+   arranque de sesión, se le agregó "Cambiar de módulo"), `data.dart` (`Roles.equipos`).
+   Verificado antes de editar: `RealtimeService.iniciar()` **sí** es idempotente
+   (`if (_canal != null) return;`), `HomePage` solo se alcanzaba desde `main.dart` (así
+   que mover el arranque de sesión al selector cubre todos los caminos), y la UI de
+   roles se genera desde `Roles.todos` (el checkbox del rol nuevo salió solo).
+   **Desviación consciente del plan:** `EquiposHomePage` entró como listado real de
+   equipos con su Drawer, NO con las 4 pestañas de la sección 7.0 — esas, junto con los
+   formularios, son la Fase 4. Se prefirió eso antes que dejar pestañas vacías.
+   El resumen "PROPLAS: $X · RPCI: $Y" del selector (sección 8.0.4) tampoco se incluyó:
+   depende de `valorizado_total_por_bodega()`, que es Fase 5.
 4. **Pantallas del módulo** — los 3 niveles de listado, detalle de equipo, formularios
    de entrada/salida/ubicación/mantenimiento.
 5. **Informes** — los 2 de la sección 9 (Movimientos de Equipos, Valorización de

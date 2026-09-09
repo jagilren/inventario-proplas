@@ -5,7 +5,7 @@ import 'config.dart';
 import 'ajustes.dart';
 import 'sync_service.dart';
 import 'screens/login_page.dart';
-import 'screens/home_page.dart';
+import 'screens/modulo_selector_page.dart';
 import 'screens/nueva_password_page.dart';
 
 Future<void> main() async {
@@ -78,7 +78,9 @@ class _AuthGateState extends State<AuthGate> {
           onListo: () => setState(() => _recuperando = false));
     }
     final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) return const HomePage();
+    // El selector decide a dónde entrar: quien no tiene acceso a Equipos ve
+    // Inventario directo, igual que antes de que existiera el módulo.
+    if (session != null) return const ModuloSelectorPage();
     return const LoginPage();
   }
 }
