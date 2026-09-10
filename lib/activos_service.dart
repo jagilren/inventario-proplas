@@ -279,6 +279,9 @@ class ActivoMovimiento {
   final String? observacion;
   final String? usuarioEmail;
   final DateTime fecha;
+  /// Entrada de un equipo que se había entregado y vuelve. Lo estampa la
+  /// base al insertar (schema_v63); la app nunca lo decide.
+  final bool esReingreso;
 
   ActivoMovimiento.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String,
@@ -295,7 +298,22 @@ class ActivoMovimiento {
       valor = m['valor'] as num?,
       observacion = m['observacion'] as String?,
       usuarioEmail = m['usuario_email'] as String?,
-      fecha = DateTime.parse(m['fecha'] as String);
+      fecha = DateTime.parse(m['fecha'] as String),
+      esReingreso = (m['es_reingreso'] as bool?) ?? false;
+
+  /// El nombre del movimiento como lo reconoce el usuario. Una entrada no es
+  /// lo mismo si es el alta de un equipo nuevo o si es uno que vuelve de un
+  /// centro de costo; en listados e informes tiene que verse la diferencia.
+  String get tipoEtiqueta => etiquetaTipo(tipo, esReingreso);
+
+  /// Una sola definición para la ficha y para los informes: si cada uno
+  /// armara su propia etiqueta, tarde o temprano dirían cosas distintas.
+  static String etiquetaTipo(String tipo, bool esReingreso) => switch (tipo) {
+    'entrada' when esReingreso => 'Entrada · REINGRESO',
+    'entrada' => 'Entrada',
+    'salida' => 'Salida',
+    _ => 'Anulación',
+  };
 
   /// Igual criterio que MovKardex.esAnulacion en data.dart.
   bool get esAnulacion => anulaMovimientoId != null;
@@ -363,7 +381,7 @@ class ActivosService {
 
   static const _selectMovimiento =
       'id, activo_id, tipo, anula_movimiento_id, condicion, usable, valor, '
-      'centro_costo_id, observacion, usuario_email, fecha, '
+      'centro_costo_id, observacion, usuario_email, fecha, es_reingreso, '
       'bodegas(nombre), '
       'centros_costo!activo_movimientos_centro_costo_id_fkey(codigo), '
       'centro_costo_destino:centros_costo!activo_movimientos_centro_costo_destino_id_fkey(codigo)';

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
 import 'util/descargar.dart';
+import 'activos_service.dart' show ActivoMovimiento;
 import 'ajustes.dart';
 import 'data.dart';
 import 'util/tiempo.dart';
@@ -561,7 +562,7 @@ class Reportes {
         .from('activo_movimientos')
         .select(
           'id, fecha, tipo, condicion, usable, valor, observacion, '
-          'usuario_email, anula_movimiento_id, '
+          'usuario_email, anula_movimiento_id, es_reingreso, '
           'activos!inner(serial, activo_referencias(nombre)), '
           'bodegas(nombre), '
           'centros_costo!activo_movimientos_centro_costo_id_fkey(codigo), '
@@ -599,7 +600,10 @@ class Reportes {
           : (idsAnulados.contains(r['id']) ? 'ANULADO' : '');
       filas.add([
         _fecha(r['fecha']),
-        tipo,
+        // "Entrada · REINGRESO" y no solo "entrada": la misma etiqueta que la
+        // ficha del equipo (schema_v63), y se puede filtrar en Excel.
+        ActivoMovimiento.etiquetaTipo(
+            tipo, (r['es_reingreso'] as bool?) ?? false),
         (activo?['activo_referencias'] as Map?)?['nombre'] ?? '',
         activo?['serial'] ?? '',
         (r['centros_costo'] as Map?)?['codigo'] ?? '',

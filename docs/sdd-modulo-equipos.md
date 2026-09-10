@@ -343,6 +343,41 @@ directo a la pantalla de entrega por ser "operativo".
 > mandando datos pensando en el comportamiento viejo.** El alta no se tocó en
 > la `v57`, y aun así se rompió por ella.
 
+**Una entrada no es siempre lo mismo: el REINGRESO.** *(2026-09-10,
+`schema_v63`.)* Una entrada puede ser el **alta** de un equipo nuevo o el
+**reingreso** de uno que se había entregado a un centro de costo y vuelve. En
+la ficha y en los informes las dos decían solo "Entrada". Ahora un reingreso
+dice **"Entrada · REINGRESO"**, con su propio ícono y en otro color, y el
+informe de movimientos lo trae así en la columna *Tipo* — filtrable en Excel.
+
+La decisión de diseño, y por qué:
+
+| Opción | Problema |
+|---|---|
+| Derivarlo al consultar ("¿hubo una salida antes?") | Se complica con las anulaciones, y cada informe repetiría la lógica |
+| **Estamparlo al insertar** ✔ | Es un hecho del momento — igual que el valor de una salida, que ya se estampa así |
+
+El criterio: **es reingreso si el equipo estaba `entregado` en el momento de
+entrar.** Funciona por un detalle del orden de los triggers: el que cambia el
+estado (`fn_aplicar_activo_movimiento`) corre **AFTER** insert, así que uno
+**BEFORE** todavía ve el estado viejo. Y lo decide siempre la base: si la app
+manda la marca, se sobreescribe. Se probó mandando `false` en un reingreso
+real y `true` en un alta: la base corrigió las dos.
+
+**El detalle que casi se escapa.** El candado de inmutabilidad de los
+movimientos (`fn_activo_mov_solo_observacion`) nombra las columnas **una por
+una**. Una columna nueva que no esté en esa lista queda **editable sin que
+nadie se entere** — la app podría haber volteado la marca después. Se agregó
+a la lista y se probó que voltearla falla.
+
+> **Lección:** cuando agregues una columna a una tabla con candado, **revisa
+> el candado**. Una lista explícita de columnas protege lo que había el día
+> que se escribió, no lo que se agregue después.
+
+La etiqueta ("Entrada · REINGRESO") se define **en un solo sitio**
+(`ActivoMovimiento.etiquetaTipo`) y la usan la ficha y el informe. Si cada uno
+armara la suya, tarde o temprano dirían cosas distintas.
+
 **Dónde vive cada regla — y esto es diseño, no detalle:**
 
 | Regla | Dónde | Por qué ahí |

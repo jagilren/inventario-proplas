@@ -2103,20 +2103,33 @@ class _MovimientosState extends State<_Movimientos> {
       itemBuilder: (_, i) {
         final m = _movs[i];
         final anulado = _anulados.contains(m.id);
-        final etiqueta = switch (m.tipo) {
-          'entrada' => 'Entrada',
-          'salida' => 'Salida',
-          _ => 'Anulación',
-        };
+        // La etiqueta sale del modelo, no se arma aquí: así el listado y los
+        // informes dicen exactamente lo mismo ("Entrada · REINGRESO").
+        final etiqueta = m.tipoEtiqueta;
         return ListTile(
-          leading: Icon(switch (m.tipo) {
-            'entrada' => Icons.download,
-            'salida' => Icons.upload,
-            _ => Icons.undo,
-          }),
+          // El reingreso con su propio ícono y color: un equipo que vuelve de
+          // un centro de costo se tiene que distinguir de un alta sin leer.
+          leading: Icon(
+            switch (m.tipo) {
+              'entrada' when m.esReingreso => Icons.assignment_return,
+              'entrada' => Icons.download,
+              'salida' => Icons.upload,
+              _ => Icons.undo,
+            },
+            color: m.esReingreso ? Colors.deepPurple : null,
+          ),
           title: Row(
             children: [
-              Text(etiqueta),
+              // Flexible: "Entrada · REINGRESO" + "ANULADO" no cabe en 360 px
+              // sin dejar que el texto se ajuste.
+              Flexible(
+                child: Text(etiqueta,
+                    style: m.esReingreso
+                        ? const TextStyle(
+                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.w600)
+                        : null),
+              ),
               if (anulado) ...[
                 const SizedBox(width: 8),
                 const Text('ANULADO',
