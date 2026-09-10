@@ -113,7 +113,7 @@ activos_disponibilidad      qué hay disponible por referencia
 activo_observaciones_todas  las 3 fuentes de observaciones, unidas
 ```
 
-**Las cuatro decisiones que hay que justificar:**
+**Las cinco decisiones que hay que justificar:**
 
 **a) `condicion` y `estado` son campos distintos.** Parecen lo mismo y no lo son:
 
@@ -487,7 +487,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los seis errores reales — y qué enseña cada uno
+## 9. Los siete errores reales — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -690,6 +690,73 @@ detalles que vale la pena copiar:
 > para **reconstruir la verdad** cuando un camino del código falló en
 > silencio. Por eso vale la pena tenerla encendida en todas las tablas desde
 > el día uno.
+
+### 9.7 El error de unificar desde una sola puerta
+
+*Reportado por el usuario el 2026-09-10, el mismo día que el 9.6, sobre el
+mismo equipo.*
+
+Después del 9.6 quedó escrita la regla: *el estado y la ubicación cuentan la
+misma historia, en las dos direcciones.* Y se programó — **en la ventana de
+Estado**. Mandar a un taller desde ahí registraba la ubicación; volver,
+también.
+
+Pero había **otra puerta**. La ventana de **"Cambiar ubicación"** llama a la
+función `cambiar_ubicacion_activo`, y esa función solo movía la ubicación. **No
+miraba el estado nunca.** El usuario mandó la bomba al TALLER JUAN GABRIEL
+MONTOYA por ahí, y la ficha siguió diciendo **"Operativo"** en verde.
+
+| Puerta | Ida al taller | Regreso |
+|---|---|---|
+| Ventana de Estado | ✔ (arreglado en 9.1) | ✔ (arreglado en 9.6) |
+| Ventana de Ubicación | **✘ nunca tocó el estado** | **✘ nunca tocó el estado** |
+
+Tres errores seguidos (9.1, 9.6, 9.7) y **los tres se arreglaron en la
+pantalla**. Por eso volvían: cada arreglo tapaba una puerta y dejaba abierta
+la de al lado.
+
+**El arreglo de verdad fue sacar la regla de la pantalla y meterla en la
+base** (`schema_v61`). Ahora es `cambiar_ubicacion_activo` la que decide:
+
+```
+a un tercero tipo 'taller'  -> estado mantenimiento_externo
+                               + el taller en mantenimiento_actor
+a una bodega, desde taller  -> estado operativo, sin mantenimiento_actor
+un equipo entregado         -> se rechaza: ya no es nuestro
+```
+
+Así, **no importa por qué puerta entre el usuario**: la regla vive en un solo
+sitio y las dos pantallas pasan por ella. La de Estado sigue funcionando igual
+porque pone el estado *antes* de llamar a la función, y al llegar no queda nada
+por cambiar — así que no pisa lo que el usuario eligió (por ejemplo, volver
+del taller directo a mantenimiento interno).
+
+Dos detalles más de la misma función:
+
+- `select ... for update` al leer el estado: si dos personas mueven el mismo
+  equipo a la vez, ninguna puede dejar el estado de una y la ubicación de la
+  otra.
+- Un equipo **entregado** ya no se puede mover ni por la API. Antes solo se
+  escondía el botón (regla 3), que es lo que un error de la sección 6 dice que
+  **no** es seguridad.
+
+Y la ficha dejó de decir "Operativo" en verde para cualquier equipo que no se
+pueda entregar: si está para repuestos, de baja, **o fuera de la bodega** (un
+préstamo a un cliente), dice **"No disponible"** en gris. La ventana de
+ubicación, igual que la de estado, avisa **antes** de guardar qué va a pasar:
+*"Al guardar: pasa a 'En mantenimiento (externo)' en TALLER JUAN GABRIEL
+MONTOYA. NO queda disponible mientras esté allá."*
+
+La bomba se corrigió en la base con la nota obligatoria en sus observaciones,
+y se verificó con una consulta que **ningún otro equipo** quedara en la misma
+contradicción.
+
+> **Lección — la más importante de toda esta sección:** si una regla de
+> negocio tiene que cumplirse **siempre**, no puede vivir en una pantalla.
+> Una pantalla es **una** puerta; la base es **la casa**. El SDD lo decía desde
+> la sección 4 (*"si la regla debe cumplirse siempre, va en la base"*) y aun
+> así se programó tres veces en la pantalla. **Escribir un principio no es lo
+> mismo que aplicarlo.**
 
 ---
 

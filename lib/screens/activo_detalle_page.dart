@@ -163,10 +163,21 @@ class _Ficha extends StatelessWidget {
     required this.onCambio,
   });
 
-  /// Verde solo si de verdad se puede entregar. Uno "operativo" para
-  /// repuestos o de baja sale en gris, igual que su etiqueta "No disponible".
+  /// Operativo pero físicamente en un tercero (un préstamo a un cliente, por
+  /// ejemplo). La vista activos_disponibilidad ya lo marca no disponible;
+  /// la ficha tiene que decir lo mismo y no un "Operativo" en verde.
+  bool get _fueraDeBodega => ubicacion?.terceroId != null;
+
+  /// "Operativo" en verde solo si de verdad se puede entregar: misma regla
+  /// que la vista (schema_v55). Si no, "No disponible" en gris.
+  bool get _operativoNoDisponible =>
+      activo.estado == 'operativo' && (activo.noEntregable || _fueraDeBodega);
+
+  String get _etiquetaEstado =>
+      _operativoNoDisponible ? 'No disponible' : activo.estadoEtiqueta;
+
   Color get _colorEstado => switch (activo.estado) {
-    'operativo' when activo.noEntregable => Colors.grey.shade700,
+    'operativo' when _operativoNoDisponible => Colors.grey.shade700,
     'operativo' => Colors.green.shade700,
     'entregado' => Colors.blueGrey,
     'baja' => Colors.red.shade700,
@@ -175,9 +186,10 @@ class _Ficha extends StatelessWidget {
 
   /// Solo un equipo disponible o entregado puede tener un movimiento real.
   /// En mantenimiento o de baja, lo que corresponde son otras acciones. Uno
-  /// para repuestos está "operativo" pero NO disponible: tampoco se entrega.
+  /// operativo pero no disponible (para repuestos, o fuera de la bodega)
+  /// tampoco se entrega.
   bool get _permiteMovimiento =>
-      (activo.estado == 'operativo' && !activo.noEntregable) ||
+      (activo.estado == 'operativo' && !_operativoNoDisponible) ||
       activo.estado == 'entregado';
 
   /// Entregado a un centro de costo: salió del inventario y ya no es
@@ -204,7 +216,7 @@ class _Ficha extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     Chip(
-                      label: Text(activo.estadoEtiqueta),
+                      label: Text(_etiquetaEstado),
                       backgroundColor: _colorEstado.withValues(alpha: 0.15),
                       side: BorderSide(color: _colorEstado),
                     ),
@@ -1370,6 +1382,28 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
     }
   }
 
+  /// Qué le pasa al estado con este cambio de ubicación, y si queda
+  /// disponible. Predice lo que hace `cambiar_ubicacion_activo` (schema_v61);
+  /// la que manda es la base.
+  (String, bool)? get _consecuencia {
+    final a = widget.activo;
+    if (!_enBodega && _tercero != null) {
+      if (_tercero!.tipo == 'taller') {
+        return ('pasa a "En mantenimiento (externo)" en ${_tercero!.nombre}. '
+            'NO queda disponible mientras esté allá.', false);
+      }
+      return ('queda fuera de la bodega, en ${_tercero!.nombre}. NO queda '
+          'disponible mientras esté allá.', false);
+    }
+    if (_enBodega && _bodega != null && a.estado == 'mantenimiento_externo') {
+      final disponible = !a.noEntregable;
+      return ('vuelve del taller y pasa a "Operativo". '
+          '${disponible ? "Queda DISPONIBLE para entregar." : "NO queda disponible: ${a.condicionEtiqueta.toLowerCase()}."}',
+          disponible);
+    }
+    return null;
+  }
+
   Future<void> _guardar() async {
     // Mismo criterio que la hoja de estado: nunca devolverse en silencio.
     // Un botón que no hace nada es peor que un error.
@@ -1518,6 +1552,23 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
                     'fecha y tu nombre.',
                     style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
+                  // Lo mismo que en la ventana de Estado: decir ANTES de
+                  // guardar qué le pasa al estado. Mover a un taller cambia
+                  // el estado (schema_v61), y el usuario tiene que verlo.
+                  if (_consecuencia != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (_consecuencia!.$2 ? Colors.green : Colors.orange)
+                            .withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text('Al guardar: ${_consecuencia!.$1}',
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   FilledButton(
                     onPressed: _guardando ? null : _guardar,
