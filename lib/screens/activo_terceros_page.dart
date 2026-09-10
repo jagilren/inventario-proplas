@@ -263,8 +263,19 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(editando ? 'Editar tercero' : 'Nuevo tercero',
-                style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(editando ? 'Editar tercero' : 'Nuevo tercero',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Cerrar sin guardar',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _nombre,
