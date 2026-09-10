@@ -540,6 +540,26 @@ De paso se corrigieron dos cosas más de la misma pantalla:
 > cerrado un arreglo sin preguntarse *"¿qué otro camino toca esto mismo?"* es
 > lo que hace que un error vuelva con otra cara.
 
+**Cómo se corrigió el dato que ya estaba mal.** Arreglar el código evita que
+vuelva a pasar, pero no arregla la bomba que ya había quedado descuadrada — y
+esa, además, **no aparecía en la lista de disponibles**, porque su ubicación
+vigente seguía siendo un taller. Se corrigió directo en la base, con dos
+detalles que vale la pena copiar:
+
+- **La hora se sacó de la auditoría, no se inventó.** `auditoria` tenía el
+  instante exacto en que el estado pasó de `mantenimiento_externo` a
+  `operativo` (15:35:44). El registro de ubicación se puso con esa hora, no
+  con la de la corrección. Si se hubiera usado `now()`, el historial diría que
+  el equipo estuvo 40 minutos más en el taller de lo que estuvo.
+- **La nota de corrección va en el propio registro.** El `detalle` dice qué
+  pasó, que es una corrección y por qué. Quien lea el historial en un año no
+  tiene que adivinar por qué hay una fila que no creó la app.
+
+> **Lección:** la auditoría no es solo para buscar culpables. Es la fuente
+> para **reconstruir la verdad** cuando un camino del código falló en
+> silencio. Por eso vale la pena tenerla encendida en todas las tablas desde
+> el día uno.
+
 ---
 
 ## 10. Plantilla para el próximo módulo
