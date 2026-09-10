@@ -1,0 +1,17 @@
+-- schema_v56_salida_cierra_ubicacion
+-- Aplicada el 2026-09-10. SUPERSEDIDA por schema_v57 (que la incluye).
+--
+-- Entregar un equipo lo saca del inventario: también de su ubicación.
+--
+-- `fn_aplicar_activo_movimiento` ponía estado='entregado' en la salida pero
+-- no tocaba `activo_ubicaciones`. La ficha seguía diciendo "Está en: Bodega
+-- RPCI" de un equipo que ya no es nuestro.
+--
+-- Es el mismo error que el 9.6 del SDD: se programó medio camino. Aquí se
+-- recorren los dos sentidos, incluida la ANULACIÓN:
+--
+--   salida             -> entregado, se CIERRA la ubicación vigente
+--   anular una salida  -> operativo, se REABRE en su bodega dueña
+--   anular una entrada -> entregado, se CIERRA la ubicación vigente
+--
+-- El cuerpo final de la función quedó en schema_v57.

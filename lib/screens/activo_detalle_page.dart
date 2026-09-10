@@ -170,6 +170,11 @@ class _Ficha extends StatelessWidget {
   bool get _permiteMovimiento =>
       activo.estado == 'operativo' || activo.estado == 'entregado';
 
+  /// Entregado a un centro de costo: salió del inventario y ya no es
+  /// nuestro. No se le cambia ni la ubicación ni el estado a mano; lo único
+  /// que cabe es registrar su regreso con una entrada.
+  bool get _entregado => activo.estado == 'entregado';
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -226,25 +231,56 @@ class _Ficha extends StatelessWidget {
           _fila('Bodega dueña', activo.bodegaNombre ?? '—'),
         ]),
         const SizedBox(height: 6),
-        const Text(
-          'Cambiar la ubicación NO afecta el inventario: el equipo sigue '
-          'contando como nuestro aunque esté en un taller.',
-          style: TextStyle(fontSize: 11.5, color: Colors.grey),
-        ),
+        // Un equipo entregado ya NO es nuestro. Ni se le cambia la ubicación
+        // ni el estado a mano: la única forma de volver a tocarlo es
+        // registrando su regreso con una entrada.
+        if (_entregado)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.logout, size: 18),
+                const SizedBox(width: 10),
+                // Expanded: sin esto el texto desborda en 360 px.
+                const Expanded(
+                  child: Text(
+                    'Este equipo fue entregado y ya no nos pertenece: no suma '
+                    'al inventario. Para volver a moverlo hay que registrar su '
+                    'regreso con una entrada.',
+                    style: TextStyle(fontSize: 12.5),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          const Text(
+            'Cambiar la ubicación NO afecta el inventario: el equipo sigue '
+            'contando como nuestro aunque esté en un taller.',
+            style: TextStyle(fontSize: 11.5, color: Colors.grey),
+          ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final cambio = await showModalBottomSheet<bool>(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => _HojaCambiarUbicacion(activo: activo),
-            );
-            if (cambio == true) await onCambio();
-          },
-          icon: const Icon(Icons.place),
-          label: const Text('Cambiar ubicación'),
-        ),
-        const SizedBox(height: 8),
+        if (!_entregado) ...[
+          OutlinedButton.icon(
+            onPressed: () async {
+              final cambio = await showModalBottomSheet<bool>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => _HojaCambiarUbicacion(activo: activo),
+              );
+              if (cambio == true) await onCambio();
+            },
+            icon: const Icon(Icons.place),
+            label: const Text('Cambiar ubicación'),
+          ),
+          const SizedBox(height: 8),
+        ],
         OutlinedButton.icon(
           onPressed: () async {
             final historial =
@@ -263,7 +299,7 @@ class _Ficha extends StatelessWidget {
         const SizedBox(height: 12),
         // Un equipo entregado está fuera del inventario: su estado solo
         // cambia registrando su regreso, no a mano.
-        if (activo.estado != 'entregado')
+        if (!_entregado)
           OutlinedButton.icon(
             onPressed: () async {
               final cambio = await showModalBottomSheet<bool>(

@@ -229,6 +229,44 @@ hay que saberlo:
 > apuntando a `schema_v55`, porque una fórmula en tres sitios se desincroniza
 > sola si nadie dejó dicho dónde están las otras dos.
 
+**La tercera regla central: entregar es salir del inventario, de verdad.**
+*(Escrita el 2026-09-10.)*
+
+Cuando un equipo se entrega a un centro de costo **deja de ser nuestro**. Eso
+tiene consecuencias en cuatro sitios, y solo una estaba programada:
+
+| Consecuencia | ¿Estaba? |
+|---|---|
+| `estado = 'entregado'` | Sí |
+| Se **cierra** su ubicación vigente | **No** — la ficha seguía diciendo "Está en: Bodega RPCI" |
+| No se le puede cambiar la **ubicación** a mano | **No** — el botón seguía activo |
+| No se le puede cambiar el **estado** a mano | Sí |
+
+Y al revés, **al reingresarlo**:
+
+> El equipo vuelve a ser nuestro **con la condición con la que regresó**. Si
+> salió `nuevo` y vuelve `usado`, su ficha dice `usado` — y por lo tanto se
+> valoriza como usado.
+
+Eso tampoco estaba: `fn_aplicar_activo_movimiento` usaba `new.condicion` para
+decidir el **estado**, pero nunca la copiaba a `activos.condicion`. Una bomba
+que salió nueva y volvió usada se seguía valorizando como nueva.
+
+**Los cuatro caminos, ahora completos** (`schema_v57`):
+
+```
+salida             -> entregado · se CIERRA la ubicación
+entrada            -> estado según condición · se COPIA la condición
+                      · se ABRE ubicación en la bodega
+anular una salida  -> operativo · se REABRE en su bodega dueña
+anular una entrada -> entregado · se CIERRA la ubicación
+```
+
+> **La lección del 9.6, aplicada antes de que muerda:** los cuatro caminos se
+> escribieron y se **probaron en transacción con rollback**, incluidas las dos
+> anulaciones — que son la mitad que siempre se olvida porque nadie las ejerce
+> hasta que toca deshacer algo un viernes.
+
 **Dónde vive cada regla — y esto es diseño, no detalle:**
 
 | Regla | Dónde | Por qué ahí |
