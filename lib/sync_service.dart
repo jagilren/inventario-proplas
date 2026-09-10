@@ -88,7 +88,9 @@ class SyncService {
       try {
         final activos = await supabase
             .from('activos_disponibilidad')
-            .select('*, activo_referencias(nombre), '
+            // marca, modelo y tipo van en el caché para que la búsqueda
+            // universal funcione igual sin internet (schema_v59).
+            .select('*, activo_referencias(nombre, marca, modelo, tipo), '
                 'bodegas!activos_bodega_id_fkey(nombre)')
             .order('serial');
         await LocalStore.guardarActivos(

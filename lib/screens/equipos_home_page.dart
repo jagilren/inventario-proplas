@@ -395,8 +395,11 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
       }
     });
     try {
+      // Búsqueda universal (serial, referencia, marca, modelo, tipo). Antes
+      // era solo por serial, y quien no se lo sabía de memoria no encontraba
+      // el equipo.
       final res = await ActivosService.listar(
-        serial: _buscador.text.trim().isEmpty ? null : _buscador.text.trim(),
+        texto: _buscador.text.trim().isEmpty ? null : _buscador.text.trim(),
         offset: _offset,
         limit: _porPagina,
       );
@@ -419,8 +422,13 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
   /// El estado del equipo decide a dónde lleva tocarlo (sección 7.0.1):
   /// entregado → reingreso, operativo → salida, cualquier otro → su ficha,
   /// porque ahí no aplica una entrada o salida directa.
+  ///
+  /// Uno "para repuestos" o "de baja" está en estado operativo pero NO se
+  /// entrega (schema_v55): se abre su ficha, nunca la pantalla de salida.
   Future<void> _abrir(Activo a) async {
-    final destino = (a.estado == 'entregado' || a.estado == 'operativo')
+    final vaAMovimiento = a.estado == 'entregado' ||
+        (a.estado == 'operativo' && !a.noEntregable);
+    final destino = vaAMovimiento
         ? ActivoMovimientoPage(activo: a)
         : ActivoDetallePage(activoId: a.id) as Widget;
     final hecho = await Navigator.push<bool>(
@@ -445,7 +453,7 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
               _teclado = Timer(const Duration(milliseconds: 400), _buscar);
             },
             decoration: InputDecoration(
-              hintText: 'Buscar por serial…',
+              hintText: 'Serial, referencia, marca o tipo…',
               prefixIcon: const Icon(Icons.search),
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
@@ -470,8 +478,9 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
               ? const Center(child: CircularProgressIndicator())
               : !_buscado
                   ? const _Vacio(
-                      texto: 'Busca un equipo por su serial para registrarle '
-                          'un movimiento.')
+                      texto: 'Busca un equipo por su serial, su referencia, '
+                          'su marca o su tipo para registrarle un '
+                          'movimiento.')
                   : _resultados.isEmpty
                       ? const _Vacio(texto: 'Ningún equipo coincide.')
                       : ListView.separated(
@@ -489,7 +498,14 @@ class _BuscadorMovimientoState extends State<_BuscadorMovimiento> {
                             final a = _resultados[i];
                             return ListTile(
                               title: Text(a.serial),
-                              subtitle: Text(a.referenciaNombre ?? '—'),
+                              // Con la marca: si se buscó "grundfos", se ve
+                              // de una por qué salió este equipo.
+                              subtitle: Text([
+                                a.referenciaNombre ?? '—',
+                                if (a.referenciaMarca != null &&
+                                    a.referenciaMarca!.isNotEmpty)
+                                  a.referenciaMarca!,
+                              ].join(' · ')),
                               trailing: Text(a.estadoEtiqueta,
                                   style: const TextStyle(fontSize: 12)),
                               onTap: () => _abrir(a),

@@ -267,6 +267,36 @@ anular una entrada -> entregado · se CIERRA la ubicación
 > anulaciones — que son la mitad que siempre se olvida porque nadie las ejerce
 > hasta que toca deshacer algo un viernes.
 
+**Reingresar "para repuestos".** *(2026-09-10, `schema_v58`.)* Un equipo que
+salió entero a un centro de costo puede volver desarmado. El diseño original
+lo prohibía a propósito —*"nunca 'repuestos' en un movimiento: es una
+reclasificación posterior"*— y el alta mandaba `usado` en su lugar.
+
+Esa decisión se revirtió, y la razón vale la pena: **dos decisiones que por
+separado eran correctas se volvieron un bug al juntarse.** El truco del alta
+("mandar usado en vez de repuestos") era inofensivo mientras la entrada no
+tocara la condición de la ficha. En cuanto `schema_v57` hizo que la entrada
+copiara su condición, ese mismo truco habría dejado como "usado" un alta que
+era "para repuestos". Nadie lo reportó; se encontró leyendo el código antes de
+tocarlo.
+
+Qué estado queda, y por qué **no** `baja`:
+
+| Opción | Problema |
+|---|---|
+| `estado = 'baja'` | El valorizado **excluye** los de baja, y un donante de piezas **sí vale** |
+| Un estado nuevo `no_disponible` | Duplica lo que ya calcula la vista de disponibilidad |
+| **`estado = 'operativo'`** ✔ | Está en la bodega y fuera de mantenimiento; la vista lo marca **no disponible** por su condición |
+
+En pantalla, un equipo operativo pero para repuestos o de baja **no dice
+"Operativo"**: dice **"No disponible"**, en gris. Y no se le puede dar salida
+— ni desde su ficha ni desde la pestaña Movimientos, que antes lo mandaba
+directo a la pantalla de entrega por ser "operativo".
+
+> **Lección:** cuando cambies lo que hace un trigger, busca **quién le estaba
+> mandando datos pensando en el comportamiento viejo.** El alta no se tocó en
+> la `v57`, y aun así se rompió por ella.
+
 **Dónde vive cada regla — y esto es diseño, no detalle:**
 
 | Regla | Dónde | Por qué ahí |
@@ -306,6 +336,61 @@ salida. El usuario no tiene que saberlo de antemano.
 **Condición no negociable de este proyecto:** todo tiene que verse bien en un
 celular de 360 px. Área táctil de 48 dp, nada de anchos fijos, máximo 4 botones
 en la barra inferior.
+
+### 5.1 Buscar un equipo: por lo que el usuario se sabe, no por lo que la base guarda
+
+*(2026-09-10, `schema_v59`.)* La pestaña Movimientos buscaba **solo por
+serial**. El que no se sabía el serial de memoria —casi todo el mundo— no
+encontraba el equipo.
+
+Ahora busca por **serial, nombre de la referencia, marca, modelo y tipo**, sin
+importar mayúsculas ni tildes, y **cada palabra por separado**: *"grundfos
+diafragma"* encuentra la bomba de diafragma marca Grundfos, aunque una palabra
+esté en la marca y la otra en el nombre.
+
+**Por qué se hizo en la base y no en la app.** La referencia vive en **otra
+tabla**. Filtrar *"serial O nombre de referencia"* desde la app obligaría a
+bajar primero las referencias que coinciden y mandarlas de vuelta como
+`IN(id1, id2, …)`. Con miles de referencias eso **revienta el largo de la
+URL**. Una función SQL (`buscar_activos`) lo resuelve en un solo viaje, y
+devuelve `setof activos` para que PostgREST siga pudiendo paginar, filtrar y
+hacer *embeds* encima.
+
+**Y el hallazgo de paso:** el serial ya tenía un índice, pero de tipo prefijo
+(`text_pattern_ops`), que **no sirve** para un `LIKE '%texto%'`. O sea que hasta
+la búsqueda por serial de antes recorría la tabla entera. Con 2 equipos no se
+nota; con 20.000, sí. Se agregaron índices de **trigramas** (`pg_trgm`) a los
+dos campos.
+
+Tres detalles de pantalla que completan la idea:
+
+- Cada resultado muestra **referencia · marca**. Si alguien busca "grundfos",
+  tiene que ver de una por qué salió ese equipo.
+- El caché **offline** guarda también marca, modelo y tipo, y filtra con la
+  misma regla de "cada palabra". Sin eso, la búsqueda funcionaría distinto con
+  y sin internet.
+- El texto de ayuda dice lo que de verdad busca: *"Serial, referencia, marca o
+  tipo…"*, no *"Buscar por serial…"*.
+
+> **Lección:** un buscador se diseña desde **lo que el usuario recuerda**, no
+> desde la llave que tiene la tabla. Nadie se sabe el serial; todo el mundo se
+> sabe que es "la bomba Grundfos".
+
+### 5.2 Origen ➡️ destino: el formato ya existía
+
+*(2026-09-10.)* El listado de movimientos de un equipo mostraba **solo el
+centro de costo de origen**. El destino no aparecía por ninguna parte.
+
+El proyecto **ya tenía resuelto** cómo mostrarlo: `flujoMovimiento()` en
+`util/movimiento_fmt.dart`, que usa el Kardex de Inventario —
+`🎯 NP00034 ➡️ 🎯 NP00039`, con `🏬` para las bodegas. El listado de Equipos
+simplemente no la usaba. Ahora sí, y con un ajuste: las salidas de equipos no
+guardan bodega en el movimiento, así que se le pasa la **bodega dueña** del
+equipo para que no salga `🏬 — ➡️ 🎯 NP00034`.
+
+> **Lección:** es el error 9.3 otra vez — *mirar al lado antes de escribir*. La
+> diferencia es que esta vez se buscó antes de programar, y en vez de inventar
+> un formato nuevo se reutilizó el que el usuario ya reconoce del Kardex.
 
 ---
 

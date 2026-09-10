@@ -6,6 +6,8 @@
 // Esta es la Fase 2: capa de datos, CRUD paginado desde el día 1, igual que
 // InventarioService en data.dart. Sin pantallas todavía (Fase 4).
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestFilterBuilder;
 import 'data.dart';
 import 'local_store.dart';
 import 'sync_service.dart';
@@ -64,6 +66,9 @@ class Activo {
   final String id;
   final String referenciaId;
   final String? referenciaNombre;
+  /// Para mostrar junto a la referencia en los resultados de búsqueda: si
+  /// alguien busca "grundfos", tiene que ver por qué salió ese equipo.
+  final String? referenciaMarca;
   final String serial;
   final String condicion; // nuevo | usado | repuestos | baja
   // operativo | mantenimiento_interno | mantenimiento_externo | entregado | baja
@@ -82,6 +87,8 @@ class Activo {
       referenciaId = m['referencia_id'] as String,
       referenciaNombre =
           (m['activo_referencias'] as Map?)?['nombre'] as String?,
+      referenciaMarca =
+          (m['activo_referencias'] as Map?)?['marca'] as String?,
       serial = m['serial'] as String,
       condicion = m['condicion'] as String,
       estado = m['estado'] as String,
@@ -101,7 +108,17 @@ class Activo {
     'entregado': 'Entregado',
     'baja': 'De baja',
   };
-  String get estadoEtiqueta => _etiquetasEstado[estado] ?? estado;
+  /// Para repuestos o de baja: puede estar en la bodega, pero NO se entrega.
+  /// Misma regla que la vista `activos_disponibilidad` (schema_v55).
+  bool get noEntregable => condicion == 'repuestos' || condicion == 'baja';
+
+  /// "Operativo" solo quiere decir "listo para entregar" si la condición lo
+  /// permite. Un equipo que volvió para repuestos queda en estado operativo
+  /// (está en la bodega, no en mantenimiento) pero no se puede entregar, y
+  /// la etiqueta tiene que decir eso y no "Operativo".
+  String get estadoEtiqueta => estado == 'operativo' && noEntregable
+      ? 'No disponible'
+      : (_etiquetasEstado[estado] ?? estado);
 
   static const _etiquetasCondicion = {
     'nuevo': 'Nuevo',
@@ -487,7 +504,7 @@ class ActivosService {
   }
 
   static const _selectActivo =
-      '*, activo_referencias(nombre), bodegas(nombre)';
+      '*, activo_referencias(nombre, marca), bodegas(nombre)';
 
   /// Listado general, con filtros opcionales. `q` busca por serial (además
   /// del filtro por nombre de referencia, que se hace en el cliente porque
@@ -499,20 +516,38 @@ class ActivosService {
     String? bodegaId,
     String? referenciaId,
     String? serial,
+    // Búsqueda UNIVERSAL: serial, nombre de la referencia, marca, modelo y
+    // tipo, sin importar mayúsculas ni tildes, y cada palabra por separado.
+    // La hace la base (RPC buscar_activos, schema_v59) porque la referencia
+    // vive en otra tabla y filtrar entre las dos desde aquí no escala.
+    String? texto,
   }) async {
-    var q = supabase.from('activos').select(_selectActivo);
-    if (estado != null) q = q.eq('estado', estado);
-    if (bodegaId != null) q = q.eq('bodega_id', bodegaId);
-    if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
-    if (serial != null && serial.trim().isNotEmpty) {
-      // Se filtra por la columna normalizada (mayúsculas y sin tildes), no
-      // por `serial`: ilike ignora mayúsculas pero NO tildes.
-      q = q.like('serial_busqueda', '%${normalizarSerial(serial.trim())}%');
+    // Los mismos filtros sirven para los dos caminos (tabla o RPC). Con una
+    // RPC tienen que ir ANTES del select: el select de una RPC ya es una
+    // transformación y no admite .eq().
+    PostgrestFilterBuilder<T> filtrar<T>(PostgrestFilterBuilder<T> q) {
+      if (estado != null) q = q.eq('estado', estado);
+      if (bodegaId != null) q = q.eq('bodega_id', bodegaId);
+      if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
+      if (serial != null && serial.trim().isNotEmpty) {
+        // Se filtra por la columna normalizada (mayúsculas y sin tildes), no
+        // por `serial`: ilike ignora mayúsculas pero NO tildes.
+        q = q.like('serial_busqueda', '%${normalizarSerial(serial.trim())}%');
+      }
+      return q;
     }
+
     try {
-      final res = await q
-          .order('creado_en', ascending: false)
-          .range(offset, offset + limit - 1);
+      final hayTexto = texto != null && texto.trim().isNotEmpty;
+      final res = hayTexto
+          ? await filtrar(supabase.rpc('buscar_activos',
+                  params: {'p_texto': texto.trim()}))
+              .select(_selectActivo)
+              .order('creado_en', ascending: false)
+              .range(offset, offset + limit - 1)
+          : await filtrar(supabase.from('activos').select(_selectActivo))
+              .order('creado_en', ascending: false)
+              .range(offset, offset + limit - 1);
       return (res as List)
           .map((e) => Activo.fromMap(e as Map<String, dynamic>))
           .toList();
@@ -525,6 +560,7 @@ class ActivosService {
         bodegaId: bodegaId,
         referenciaId: referenciaId,
         serial: serial,
+        texto: texto,
       );
     }
   }
@@ -540,11 +576,27 @@ class ActivosService {
     String? bodegaId,
     String? referenciaId,
     String? serial,
+    String? texto,
     bool? disponible,
   }) async {
     final filas = await LocalStore.leerActivos();
     final q = serial == null ? null : normalizarSerial(serial.trim());
+    // Misma regla que buscar_activos en la base: cada palabra tiene que
+    // aparecer en el serial o en la referencia (nombre, marca, modelo, tipo).
+    final palabras = texto == null
+        ? const <String>[]
+        : normalizarSerial(texto.trim())
+            .split(RegExp(r'\s+'))
+            .where((p) => p.isNotEmpty)
+            .toList();
     final filtradas = filas.where((a) {
+      if (palabras.isNotEmpty) {
+        final r = a['activo_referencias'] as Map?;
+        final pajar = normalizarSerial([
+          a['serial'], r?['nombre'], r?['marca'], r?['modelo'], r?['tipo'],
+        ].where((e) => e != null).join(' '));
+        if (!palabras.every(pajar.contains)) return false;
+      }
       if (estado != null && a['estado'] != estado) return false;
       if (bodegaId != null && a['bodega_id'] != bodegaId) return false;
       if (referenciaId != null && a['referencia_id'] != referenciaId) {
@@ -725,8 +777,11 @@ class ActivosService {
       'centro_costo_id': centroCostoId,
       'centro_costo_destino_id': centroCostoDestinoId,
       'bodega_id': bodegaId,
-      // Nunca 'repuestos' en un movimiento: es una reclasificación posterior.
-      'condicion': condicion == 'repuestos' ? 'usado' : condicion,
+      // Desde schema_v58 los movimientos aceptan 'repuestos'. Antes aquí se
+      // mandaba 'usado' en su lugar, y con schema_v57 (la entrada copia la
+      // condición a la ficha) eso habría dejado como "usado" un alta que
+      // era "para repuestos".
+      'condicion': condicion,
       'usable': condicion == 'usado' ? (usable ?? true) : null,
       'usuario_id': uid,
       'usuario_email': email,
@@ -790,9 +845,9 @@ class ActivosService {
     revision.value++;
   }
 
-  /// Cambia la condición de un equipo (por ejemplo, reclasificarlo a
-  /// 'repuestos'). Es una decisión manual posterior, nunca parte de un
-  /// movimiento.
+  /// Cambia la condición de un equipo a mano (por ejemplo, reclasificarlo a
+  /// 'repuestos' mientras está en la bodega). Desde schema_v58 también se
+  /// puede fijar al reingresarlo: la entrada copia su condición a la ficha.
   static Future<void> cambiarCondicion(String activoId, String condicion) async {
     await supabase
         .from('activos')

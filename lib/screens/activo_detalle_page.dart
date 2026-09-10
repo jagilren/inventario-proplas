@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
 import '../activos_service.dart';
+import '../util/movimiento_fmt.dart';
 import '../util/tiempo.dart';
 import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
@@ -136,7 +137,11 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
             ),
             if (muestraPiezas) _Piezas(activoId: a.id),
             _Mantenimientos(activoId: a.id),
-            _Movimientos(activoId: a.id, esAdmin: _admin, onCambio: _cargar),
+            _Movimientos(
+                activoId: a.id,
+                bodegaNombre: a.bodegaNombre,
+                esAdmin: _admin,
+                onCambio: _cargar),
           ],
         ),
       ),
@@ -158,7 +163,10 @@ class _Ficha extends StatelessWidget {
     required this.onCambio,
   });
 
-  Color _colorEstado(String estado) => switch (estado) {
+  /// Verde solo si de verdad se puede entregar. Uno "operativo" para
+  /// repuestos o de baja sale en gris, igual que su etiqueta "No disponible".
+  Color get _colorEstado => switch (activo.estado) {
+    'operativo' when activo.noEntregable => Colors.grey.shade700,
     'operativo' => Colors.green.shade700,
     'entregado' => Colors.blueGrey,
     'baja' => Colors.red.shade700,
@@ -166,9 +174,11 @@ class _Ficha extends StatelessWidget {
   };
 
   /// Solo un equipo disponible o entregado puede tener un movimiento real.
-  /// En mantenimiento o de baja, lo que corresponde son otras acciones.
+  /// En mantenimiento o de baja, lo que corresponde son otras acciones. Uno
+  /// para repuestos está "operativo" pero NO disponible: tampoco se entrega.
   bool get _permiteMovimiento =>
-      activo.estado == 'operativo' || activo.estado == 'entregado';
+      (activo.estado == 'operativo' && !activo.noEntregable) ||
+      activo.estado == 'entregado';
 
   /// Entregado a un centro de costo: salió del inventario y ya no es
   /// nuestro. No se le cambia ni la ubicación ni el estado a mano; lo único
@@ -195,9 +205,8 @@ class _Ficha extends StatelessWidget {
                   children: [
                     Chip(
                       label: Text(activo.estadoEtiqueta),
-                      backgroundColor:
-                          _colorEstado(activo.estado).withValues(alpha: 0.15),
-                      side: BorderSide(color: _colorEstado(activo.estado)),
+                      backgroundColor: _colorEstado.withValues(alpha: 0.15),
+                      side: BorderSide(color: _colorEstado),
                     ),
                     Chip(label: Text(activo.condicionEtiqueta)),
                   ],
@@ -1743,10 +1752,14 @@ class _HojaMantenimientoState extends State<_HojaMantenimiento> {
 
 class _Movimientos extends StatefulWidget {
   final String activoId;
+  /// La bodega dueña del equipo. Las salidas no guardan bodega en el
+  /// movimiento, y sin esto el flujo diría "🏬 — ➡️ 🎯 NP00034".
+  final String? bodegaNombre;
   final bool esAdmin;
   final Future<void> Function() onCambio;
   const _Movimientos({
     required this.activoId,
+    required this.bodegaNombre,
     required this.esAdmin,
     required this.onCambio,
   });
@@ -1851,15 +1864,35 @@ class _MovimientosState extends State<_Movimientos> {
               ],
             ],
           ),
-          subtitle: Text([
-            _cuando(m.fecha),
-            if (m.centroCosto != null) m.centroCosto!,
-            if (m.bodega != null) m.bodega!,
-            if (m.valor != null) _money.format(m.valor!),
-            if (m.usuarioEmail != null) m.usuarioEmail!,
-            if (m.observacion != null && m.observacion!.isNotEmpty)
-              m.observacion!,
-          ].join(' · ')),
+          // El flujo "🎯 origen ➡️ 🎯 destino" es el MISMO que usa el Kardex
+          // de Inventario (util/movimiento_fmt.dart). Antes aquí solo salía
+          // el centro de origen y el destino no aparecía por ninguna parte.
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                flujoMovimiento(
+                  tipo: m.tipo,
+                  bodega: m.bodega ?? widget.bodegaNombre,
+                  centroCosto: m.centroCosto,
+                  centroCostoDestino: m.centroCostoDestino,
+                ),
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              Text(
+                [
+                  _cuando(m.fecha),
+                  if (m.valor != null) _money.format(m.valor!),
+                  if (m.usuarioEmail != null) m.usuarioEmail!,
+                ].join(' · '),
+                style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+              ),
+              if (m.observacion != null && m.observacion!.isNotEmpty)
+                Text('📝 ${m.observacion!}',
+                    style: const TextStyle(
+                        fontStyle: FontStyle.italic, fontSize: 11.5)),
+            ],
+          ),
           isThreeLine: true,
           trailing: (widget.esAdmin && !anulado && !m.esAnulacion)
               ? IconButton(

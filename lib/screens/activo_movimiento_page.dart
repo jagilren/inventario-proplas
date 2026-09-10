@@ -277,11 +277,14 @@ class _ActivoMovimientoPageState extends State<ActivoMovimientoPage> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final c in ['nuevo', 'usado', 'baja'])
+                      // 'repuestos' se puede elegir desde schema_v58: un equipo
+                      // que salió entero puede volver desarmado.
+                      for (final c in ['nuevo', 'usado', 'repuestos', 'baja'])
                         ChoiceChip(
                           label: Text(switch (c) {
                             'nuevo' => 'Nuevo',
                             'usado' => 'Usado',
+                            'repuestos' => 'Para repuestos',
                             _ => 'De baja',
                           }),
                           selected: _condicion == c,
@@ -289,6 +292,15 @@ class _ActivoMovimientoPageState extends State<ActivoMovimientoPage> {
                         ),
                     ],
                   ),
+                  if (_condicion == 'repuestos')
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                          'Queda en la bodega pero NO disponible para '
+                          'entregar. Sigue sumando al valorizado con el '
+                          'porcentaje que le pongas abajo.',
+                          style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                    ),
                   if (_condicion == 'usado')
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
