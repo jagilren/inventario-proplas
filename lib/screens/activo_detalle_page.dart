@@ -375,6 +375,14 @@ class _HojaEstadoState extends State<_HojaEstado> {
   late String _condicion;
   late final TextEditingController _actor;
   bool _guardando = false;
+  // Mandar un equipo a un taller externo es, para el usuario, UNA sola
+  // acción. Antes eran dos pantallas distintas que no se hablaban: el
+  // estado guardaba el nombre del taller como texto y el historial de
+  // ubicaciones nunca se enteraba. Ahora se elige el taller del catálogo y
+  // se registra la ubicación en el mismo paso.
+  List<ActivoTercero> _terceros = [];
+  ActivoTercero? _taller;
+  bool _cargandoTerceros = true;
 
   static const _etiquetasEstado = {
     'operativo': 'Operativo (listo para entregar)',
@@ -396,6 +404,58 @@ class _HojaEstadoState extends State<_HojaEstado> {
     _estado = widget.activo.estado;
     _condicion = widget.activo.condicion;
     _actor = TextEditingController(text: widget.activo.mantenimientoActor ?? '');
+    _cargarTerceros();
+  }
+
+  Future<void> _cargarTerceros() async {
+    try {
+      final t = await ActivosService.todosLosTerceros();
+      if (!mounted) return;
+      setState(() { _terceros = t; _cargandoTerceros = false; });
+    } catch (_) {
+      if (mounted) setState(() => _cargandoTerceros = false);
+    }
+  }
+
+  /// Crea un taller sin salir de aquí: si el catálogo está vacío, obligar a
+  /// ir a otra pantalla y volver a empezar sería absurdo.
+  Future<void> _crearTaller() async {
+    final nombre = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Nuevo taller'),
+          content: TextField(
+            controller: c,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+                labelText: 'Nombre del taller',
+                hintText: 'Ej: TALLER METALANDES'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, c.text.trim()),
+                child: const Text('Crear')),
+          ],
+        );
+      },
+    );
+    if (nombre == null || nombre.isEmpty) return;
+    try {
+      final nuevo =
+          await ActivosService.crearTercero(nombre: nombre, tipo: 'taller');
+      if (!mounted) return;
+      setState(() { _terceros = [..._terceros, nuevo]; _taller = nuevo; });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo crear: $e')));
+    }
   }
 
   @override
@@ -405,7 +465,7 @@ class _HojaEstadoState extends State<_HojaEstado> {
   }
 
   bool get _faltaTaller =>
-      _estado == 'mantenimiento_externo' && _actor.text.trim().isEmpty;
+      _estado == 'mantenimiento_externo' && _taller == null;
 
   Future<void> _guardar() async {
     if (_faltaTaller) {
@@ -414,13 +474,28 @@ class _HojaEstadoState extends State<_HojaEstado> {
     }
     setState(() => _guardando = true);
     try {
+      // El nombre del taller se guarda junto al detalle, para que la ficha
+      // muestre de un vistazo dónde está y por qué.
+      final actor = _estado == 'mantenimiento_externo'
+          ? [_taller?.nombre, _actor.text.trim()]
+              .where((e) => e != null && e.isNotEmpty)
+              .join(' · ')
+          : null;
       if (_estado != widget.activo.estado ||
-          _actor.text.trim() != (widget.activo.mantenimientoActor ?? '')) {
+          (actor ?? '') != (widget.activo.mantenimientoActor ?? '')) {
         await ActivosService.cambiarEstado(
           widget.activo.id,
           estado: _estado,
-          mantenimientoActor:
-              _actor.text.trim().isEmpty ? null : _actor.text.trim(),
+          mantenimientoActor: actor,
+        );
+      }
+      // UNA sola acción para el usuario: si el equipo se fue a un taller,
+      // eso ES un cambio de ubicación y tiene que quedar en el historial.
+      if (_estado == 'mantenimiento_externo' && _taller != null) {
+        await ActivosService.cambiarUbicacion(
+          activoId: widget.activo.id,
+          terceroId: _taller!.id,
+          detalle: _actor.text.trim().isEmpty ? null : _actor.text.trim(),
         );
       }
       if (_condicion != widget.activo.condicion) {
@@ -487,23 +562,57 @@ class _HojaEstadoState extends State<_HojaEstado> {
               ),
             if (_estado == 'mantenimiento_externo') ...[
               const SizedBox(height: 8),
+              if (_cargandoTerceros)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<ActivoTercero>(
+                        initialValue: _taller,
+                        isExpanded: true,
+                        decoration: marcarError(
+                          const InputDecoration(
+                            labelText: '¿En qué taller está? *',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.build),
+                          ),
+                          _faltaTaller,
+                        ),
+                        items: _terceros
+                            .map((t) => DropdownMenuItem(
+                                  value: t,
+                                  child: Text(t.nombre,
+                                      overflow: TextOverflow.ellipsis),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _taller = v),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      tooltip: 'Crear un taller nuevo',
+                      onPressed: _crearTaller,
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 10),
               TextField(
                 controller: _actor,
-                textCapitalization: TextCapitalization.characters,
-                onChanged: (_) => setState(() {}),
-                decoration: marcarError(
-                  const InputDecoration(
-                    labelText: '¿En qué taller está? *',
-                    hintText: 'Ej: TALLER DE LUCHO',
-                    border: OutlineInputBorder(),
-                  ),
-                  _faltaTaller,
+                decoration: const InputDecoration(
+                  labelText: '¿Qué le están haciendo?',
+                  hintText: 'Ej: cambio de carcaza',
+                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Si además quieres dejar registrado el movimiento físico, '
-                'usa "Cambiar ubicación" en la ficha.',
+                'Esto queda también en el historial de ubicaciones, con la '
+                'fecha y tu nombre. No hace falta usar "Cambiar ubicación" '
+                'aparte.',
                 style: TextStyle(fontSize: 11.5, color: Colors.grey),
               ),
             ],
