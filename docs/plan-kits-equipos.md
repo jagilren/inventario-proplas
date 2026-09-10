@@ -128,6 +128,37 @@ problema — "45.000" queda en 45, y "1.540.000" queda en **$0** porque no se
 puede leer. Se reportó y no se tocó sin avisar, porque cambia un flujo que ya
 está en uso.
 
+### Fase 4 (la repetición) — 2026-09-10
+
+Al elegir una referencia kit en el alta, el formulario trae la composición del
+kit **más reciente de esa referencia que tenga componentes** (`plantilla_kit`),
+lista para cambiar, quitar o agregar. Dice de qué kit se copió. Si es el primer
+kit de su referencia, lo dice también y la lista arranca vacía.
+
+**La decisión de la fase: todos o ninguno.** Guardar un kit de cuatro
+componentes con cuatro llamadas tenía un riesgo silencioso: si la red se cae
+entre la segunda y la tercera, el kit queda con **2 de sus 4 partes** y vale
+menos, sin que nadie lo note. `agregar_componentes()` (`schema_v65`) los guarda
+en **una sola transacción**: entran todos o ninguno. Y si no entra ninguno, no
+se disimula: el equipo ya existe, la app lleva a su pestaña Componentes y dice
+qué pasó — y ahí se ve que vale $0.
+
+| Del plan (§6.2) | Cómo quedó |
+|---|---|
+| "Cada componente nace con su movimiento alta" | Igual: la función reutiliza `agregar_componente()` para cada uno |
+| — | Todos o ninguno (arriba) |
+| — | Un nombre repetido se avisa **al escribirlo**, con la misma normalización que el índice de la base (`claveComponente`): la app no puede decir "repetido" donde la base diría que no, ni al revés. Por eso **"Guías" y "Guias" no son repetidos** — la base no quita tildes |
+| — | Un kit **no se guarda sin componentes**: valdría $0 |
+| — | Quitar un componente ofrece **Deshacer**: volver a escribirlo es justo lo que la plantilla vino a evitar |
+| — | Si se cambia de referencia mientras carga la plantilla, la respuesta vieja no pisa a la nueva |
+
+**Probado:** en la base, 9 casos en rollback como usuario de solo rol
+`equipos` — en especial, que tras un nombre repetido o una cantidad en cero
+**no queda guardado ninguno** de los anteriores. En la app, 80 pruebas, entre
+ellas que la hoja en modo borrador devuelve lo escrito **sin ir a la base**, y
+las pruebas de accesibilidad sobre la lista del borrador (cada botón dice de
+qué componente es: "Quitar Tela filtros de los medios").
+
 ---
 
 ## 1. Objetivo y alcance
@@ -535,7 +566,7 @@ nueva `equipos_comp`.
 | 1 ✔ | SQL: `es_kit`, las 2 tablas, triggers, RLS, auditoría — **hecha el 2026-09-10** (`schema_v64`, ver §0) | No | **Alto** — la cadena de recálculo |
 | 2 ✔ | `ActivosService`: modelos y CRUD — **hecha el 2026-09-10** (ver §0) | No | Bajo |
 | 3 ✔ | Switch en referencias + ficha Componentes — **hecha el 2026-09-10**, con "agregar componente" y el valor bloqueado en el alta adelantados (ver §0) | **Sí** | Bajo |
-| 4 | Alta con plantilla del kit anterior | **Sí** | Medio |
+| 4 ✔ | Alta con plantilla del kit anterior — **hecha el 2026-09-10**, con los componentes guardados todos o ninguno (`schema_v65`, ver §0) | **Sí** | Medio |
 | 5 | Movimientos de componente (la vida del kit) | **Sí** | Medio |
 | 6 | Valorizado con desglose de kits | Sí | Bajo |
 

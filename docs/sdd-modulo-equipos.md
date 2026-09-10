@@ -395,6 +395,8 @@ armara la suya, tarde o temprano dirían cosas distintas.
 | "Disponible" | Vista SQL | Se deriva; nunca se guarda |
 | Estado tras una entrada | Trigger | Debe pasar siempre, venga de donde venga |
 | Sugerir 70% para un usado | La app | Es una sugerencia, no una ley |
+| Los componentes de un kit nuevo entran **todos o ninguno** *(2026-09-10)* | Función de la base (`agregar_componentes`) | Con una llamada por componente, un corte de red deja un kit a medias valiendo menos, **sin que nadie lo note** |
+| Proponer la composición del kit anterior *(2026-09-10)* | La base la consulta (`plantilla_kit`), la app la ofrece | Es una sugerencia editable: el kit nuevo no queda amarrado al anterior |
 
 > **Criterio:** si la regla debe cumplirse **siempre**, va en la base. Si es una
 > ayuda al usuario, va en la app. Poner una regla dura solo en la app significa

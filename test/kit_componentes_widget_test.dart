@@ -217,6 +217,225 @@ void main() {
     });
   });
 
+  group('HojaComponente.borrador (alta de un kit, Fase 4)', () {
+    /// Abre la hoja como se abre en la app (showModalBottomSheet) y devuelve
+    /// lo que la hoja entregue al cerrarse.
+    Future<ComponentePlantilla?> Function() abrir(
+      WidgetTester t,
+      Widget hoja,
+    ) {
+      ComponentePlantilla? resultado;
+      return () async {
+        await t.pumpWidget(MaterialApp(
+          theme: _tema,
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () async {
+                  resultado = await showModalBottomSheet<ComponentePlantilla>(
+                    context: ctx,
+                    isScrollControlled: true,
+                    builder: (_) => hoja,
+                  );
+                },
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ));
+        await t.tap(find.text('abrir'));
+        await t.pumpAndSettle();
+        return resultado;
+      };
+    }
+
+    testWidgets('devuelve lo escrito, sin tocar la base', (t) async {
+      ComponentePlantilla? devuelto;
+      await t.pumpWidget(MaterialApp(
+        theme: _tema,
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () async {
+                devuelto = await showModalBottomSheet<ComponentePlantilla>(
+                  context: ctx,
+                  isScrollControlled: true,
+                  builder: (_) => const HojaComponente.borrador(orden: 3),
+                );
+              },
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      ));
+      await t.tap(find.text('abrir'));
+      await t.pumpAndSettle();
+      await t.enterText(find.widgetWithText(TextField, 'Nombre *'),
+          '  Guias filtro medios ');
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '24');
+      await t.enterText(
+          find.widgetWithText(TextField, 'Valor unitario *'), '15000');
+      await t.tap(find.widgetWithText(FilledButton, 'Agregar'));
+      await t.pumpAndSettle();
+      // Si hubiera intentado ir a la base, sin Supabase habría fallado y la
+      // hoja seguiría abierta con un error. Se cerró y devolvió los datos.
+      expect(devuelto, isNotNull);
+      expect(devuelto!.nombre, 'Guias filtro medios');
+      expect(devuelto!.cantidad, 24);
+      expect(devuelto!.valorUnitario, 15000);
+      expect(devuelto!.orden, 3);
+      expect(find.text('Agregar componente'), findsNothing);
+    });
+
+    testWidgets('para editar llega con sus datos, y lo dice', (t) async {
+      final abrirla = abrir(
+          t,
+          const HojaComponente.borrador(
+              inicial: ComponentePlantilla(
+                  nombre: 'Tela filtros de los medios',
+                  cantidad: 24,
+                  valorUnitario: 45000)));
+      await abrirla();
+      expect(find.text('Editar componente'), findsOneWidget);
+      expect(find.text('Tela filtros de los medios'), findsOneWidget);
+      expect(find.text('24'), findsOneWidget);
+      expect(find.text('45000'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Guardar cambios'),
+          findsOneWidget);
+    });
+
+    testWidgets('un nombre repetido se avisa AL ESCRIBIR, no al guardar',
+        (t) async {
+      await abrir(
+          t,
+          const HojaComponente.borrador(
+              nombresExistentes: ['Tela filtros de los medios']))();
+      await t.enterText(find.widgetWithText(TextField, 'Nombre *'),
+          '  tela   FILTROS de los medios');
+      await t.pump();
+      expect(find.text('Este kit ya tiene un componente con ese nombre'),
+          findsOneWidget);
+    });
+
+    testWidgets('al editar, su propio nombre no cuenta como repetido',
+        (t) async {
+      await abrir(
+          t,
+          const HojaComponente.borrador(
+            inicial: ComponentePlantilla(
+                nombre: 'Guías', cantidad: 24, valorUnitario: 15000),
+            nombresExistentes: ['Tela', 'Guías'],
+          ))();
+      await t.enterText(find.widgetWithText(TextField, 'Nombre *'), 'guías');
+      await t.pump();
+      expect(find.text('Este kit ya tiene un componente con ese nombre'),
+          findsNothing);
+    });
+  });
+
+  group('ComposicionBorrador (alta de un kit, Fase 4)', () {
+    const composicion = [
+      ComponentePlantilla(
+          nombre: 'Tela filtros de los extremos',
+          cantidad: 2,
+          valorUnitario: 50000),
+      ComponentePlantilla(
+          nombre: 'Tela filtros de los medios',
+          cantidad: 24,
+          valorUnitario: 45000),
+      ComponentePlantilla(
+          nombre: 'Guias filtro medios', cantidad: 24, valorUnitario: 15000),
+    ];
+
+    Widget lista({
+      List<ComponentePlantilla> componentes = composicion,
+      String? desde = 'KIT-7',
+      num porcentaje = 100,
+      String? error,
+      void Function(int)? onEditar,
+      void Function(int)? onQuitar,
+    }) =>
+        ComposicionBorrador(
+          componentes: componentes,
+          desdeSerial: desde,
+          porcentaje: porcentaje,
+          onAgregar: () {},
+          onEditar: onEditar ?? (_) {},
+          onQuitar: onQuitar ?? (_) {},
+          error: error,
+        );
+
+    testWidgets('dice de qué kit se copió', (t) async {
+      await _montar(t, lista());
+      expect(find.textContaining('Composición tomada del kit KIT-7'),
+          findsOneWidget);
+    });
+
+    testWidgets('el primer kit de la referencia lo dice también', (t) async {
+      await _montar(t, lista(componentes: const [], desde: null));
+      expect(find.textContaining('Es el primer kit de esta referencia'),
+          findsOneWidget);
+    });
+
+    testWidgets('el total es la suma: 1.540.000, y al 70% 1.078.000',
+        (t) async {
+      final h = t.ensureSemantics();
+      await _montar(t, lista(porcentaje: 70));
+      expect(
+          find.bySemanticsLabel(
+              'Valor del kit a nuevo, ${_money.format(1540000)}. '
+              'al 70 por ciento, ${_money.format(1078000)}'),
+          findsOneWidget);
+      h.dispose();
+    });
+
+    testWidgets('cada botón dice de QUÉ componente es', (t) async {
+      await _montar(t, lista());
+      // Diez "Quitar" iguales no le sirven a quien usa lector de pantalla.
+      expect(find.byTooltip('Quitar Tela filtros de los medios'),
+          findsOneWidget);
+      expect(find.byTooltip('Editar Guias filtro medios'), findsOneWidget);
+    });
+
+    testWidgets('editar y quitar avisan el componente correcto', (t) async {
+      int? editado;
+      int? quitado;
+      await _montar(
+          t,
+          lista(
+            onEditar: (i) => editado = i,
+            onQuitar: (i) => quitado = i,
+          ));
+      await t.tap(find.byTooltip('Editar Tela filtros de los medios'));
+      await t.tap(find.byTooltip('Quitar Guias filtro medios'));
+      expect(editado, 1);
+      expect(quitado, 2);
+    });
+
+    testWidgets('el problema se ve y se anuncia', (t) async {
+      await _montar(
+          t, lista(error: 'El componente "Guias" está repetido.'));
+      expect(find.text('El componente "Guias" está repetido.'), findsOneWidget);
+    });
+
+    testWidgets('todo lo que se toca mide 48 dp, tiene nombre y contraste',
+        (t) async {
+      final h = t.ensureSemantics();
+      await _montar(t, lista(porcentaje: 70, error: 'Algo que corregir.'));
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+
+    testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
+      await _montar(t, lista(porcentaje: 70, error: 'Algo que corregir.'),
+          escalaTexto: 2.0);
+      expect(t.takeException(), isNull);
+    });
+  });
+
   test('textoCantidad: sin ".0" y con coma decimal', () {
     expect(textoCantidad(24), '24');
     expect(textoCantidad(24.0), '24');

@@ -220,25 +220,265 @@ class PieTotalKit extends StatelessWidget {
   }
 }
 
+/// La composición de un kit MIENTRAS se crea (formulario de alta, Fase 4).
+/// Todavía no está en la base: se puede cambiar, quitar y agregar.
+///
+/// Si viene de la plantilla (el kit más reciente de la misma referencia),
+/// lo dice y de cuál. Es una sugerencia: el kit nuevo es dueño de lo suyo, no
+/// queda amarrado al anterior.
+class ComposicionBorrador extends StatelessWidget {
+  final List<ComponentePlantilla> componentes;
+  /// El serial del kit del que se copió; null si es el primero.
+  final String? desdeSerial;
+  final num porcentaje;
+  final VoidCallback onAgregar;
+  final void Function(int indice) onEditar;
+  final void Function(int indice) onQuitar;
+  /// Un problema que el usuario tiene que resolver antes de guardar.
+  final String? error;
+
+  const ComposicionBorrador({
+    super.key,
+    required this.componentes,
+    required this.desdeSerial,
+    required this.porcentaje,
+    required this.onAgregar,
+    required this.onEditar,
+    required this.onQuitar,
+    this.error,
+  });
+
+  num get total => componentes.fold<num>(0, (s, c) => s + c.subtotal);
+
+  @override
+  Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final gris = esquema.onSurfaceVariant;
+    final ponderado = porcentaje < 100;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Componentes del kit',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: onAgregar,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: esquema.secondaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                desdeSerial == null ? Icons.info_outline : Icons.content_copy,
+                size: 18,
+                color: esquema.onSecondaryContainer,
+              ),
+              const SizedBox(width: 10),
+              // Expanded: sin esto el texto desborda en 360 px.
+              Expanded(
+                child: Text(
+                  desdeSerial == null
+                      ? 'Es el primer kit de esta referencia: agrégale sus '
+                          'componentes. Los siguientes kits llegarán con esta '
+                          'composición ya escrita.'
+                      : 'Composición tomada del kit $desdeSerial. Puedes '
+                          'cambiar, quitar o agregar antes de guardar: este kit '
+                          'queda dueño de lo suyo, sin amarrarse al anterior.',
+                  style: TextStyle(
+                      fontSize: 12.5, color: esquema.onSecondaryContainer),
+                ),
+              ),
+            ],
+          ),
+        ),
+        for (var i = 0; i < componentes.length; i++)
+          Card(
+            margin: const EdgeInsets.only(top: 8),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      // Una frase para el lector, no cifras con "×".
+                      label: '${componentes[i].nombre}. '
+                          '${textoCantidad(componentes[i].cantidad)} a '
+                          '${_money.format(componentes[i].valorUnitario)} cada '
+                          'una. Subtotal ${_money.format(componentes[i].subtotal)}',
+                      excludeSemantics: true,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(componentes[i].nombre,
+                                style: Theme.of(context).textTheme.titleSmall),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${textoCantidad(componentes[i].cantidad)} × '
+                              '${_money.format(componentes[i].valorUnitario)} = '
+                              '${_money.format(componentes[i].subtotal)}',
+                              style: _cifras.copyWith(color: gris),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Cada botón dice de QUÉ componente es: con diez líneas, el
+                  // lector de pantalla no puede anunciar diez "Quitar" iguales.
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Editar ${componentes[i].nombre}',
+                    onPressed: () => onEditar(i),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Quitar ${componentes[i].nombre}',
+                    onPressed: () => onQuitar(i),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (componentes.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Semantics(
+            container: true,
+            label: [
+              'Valor del kit a nuevo, ${_money.format(total)}',
+              if (ponderado)
+                'al ${textoCantidad(porcentaje)} por ciento, '
+                    '${_money.format(total * porcentaje / 100)}',
+            ].join('. '),
+            excludeSemantics: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 12,
+                  children: [
+                    const Text('Valor del kit a nuevo'),
+                    Text(_money.format(total),
+                        style: _cifras.copyWith(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                if (ponderado)
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 12,
+                    children: [
+                      Text('Al ${textoCantidad(porcentaje)}%',
+                          style: TextStyle(color: gris)),
+                      Text(_money.format(total * porcentaje / 100),
+                          style: _cifras.copyWith(color: gris)),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            // liveRegion: el lector lo anuncia en cuanto aparece.
+            child: Semantics(
+              liveRegion: true,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.error_outline, size: 18, color: esquema.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(error!, style: TextStyle(color: esquema.error)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Hoja para agregar un componente a un kit.
 ///
 /// El valor unitario va en pesos ENTEROS y solo acepta dígitos: si alguien
 /// escribe "45.000" como se escribe en Colombia, un campo decimal lo leería
 /// como 45. Debajo de cada número se muestra cómo quedó entendido.
 class HojaComponente extends StatefulWidget {
-  final String activoId;
+  /// Con activoId, GUARDA en la base al tocar el botón (pestaña
+  /// Componentes). Sin él es un BORRADOR (ver [HojaComponente.borrador]).
+  final String? activoId;
   final int orden;
-  const HojaComponente({super.key, required this.activoId, required this.orden});
+  /// Para editar una línea del borrador: llega con sus datos escritos.
+  final ComponentePlantilla? inicial;
+  /// Los nombres que ya tiene el kit (o la lista del borrador). Un nombre
+  /// repetido se avisa AL ESCRIBIR, no cuando la base lo rechaza al guardar.
+  final List<String> nombresExistentes;
+
+  const HojaComponente({
+    super.key,
+    required String this.activoId,
+    required this.orden,
+    this.nombresExistentes = const [],
+  }) : inicial = null;
+
+  /// Modo borrador, para el alta de un kit: el equipo todavía no existe, así
+  /// que la hoja NO toca la base — devuelve lo escrito como
+  /// [ComponentePlantilla] con `Navigator.pop`.
+  const HojaComponente.borrador({
+    super.key,
+    this.inicial,
+    this.orden = 0,
+    this.nombresExistentes = const [],
+  }) : activoId = null;
+
+  bool get esBorrador => activoId == null;
+
   @override
   State<HojaComponente> createState() => _HojaComponenteState();
 }
 
 class _HojaComponenteState extends State<HojaComponente> {
-  final _nombre = TextEditingController();
-  final _cantidad = TextEditingController();
-  final _valor = TextEditingController();
+  late final _nombre = TextEditingController(text: widget.inicial?.nombre ?? '');
+  late final _cantidad = TextEditingController(
+      text: widget.inicial == null ? '' : textoCantidad(widget.inicial!.cantidad));
+  // Pesos enteros: el campo solo acepta dígitos.
+  late final _valor = TextEditingController(
+      text: widget.inicial == null
+          ? ''
+          : widget.inicial!.valorUnitario.round().toString());
   bool _guardando = false;
   bool _mostrarErrores = false;
+
+  /// El nombre ya está en el kit. Al editar una línea, su propio nombre no
+  /// cuenta como repetido.
+  bool get _repetido {
+    final clave = claveComponente(_nombre.text);
+    if (clave.isEmpty) return false;
+    final propio = widget.inicial == null
+        ? null
+        : claveComponente(widget.inicial!.nombre);
+    return widget.nombresExistentes
+        .map(claveComponente)
+        .any((n) => n == clave && n != propio);
+  }
 
   @override
   void dispose() {
@@ -253,8 +493,11 @@ class _HojaComponenteState extends State<HojaComponente> {
   num? get _cant => num.tryParse(_cantidad.text.trim().replaceAll(',', '.'));
   int? get _vr => int.tryParse(_valor.text.trim());
 
-  String? get _errorNombre =>
-      _nombre.text.trim().isEmpty ? 'Escribe el nombre del componente' : null;
+  String? get _errorNombre {
+    if (_nombre.text.trim().isEmpty) return 'Escribe el nombre del componente';
+    if (_repetido) return 'Este kit ya tiene un componente con ese nombre';
+    return null;
+  }
   String? get _errorCantidad {
     final c = _cant;
     if (_cantidad.text.trim().isEmpty) return 'Escribe cuántos hay';
@@ -274,10 +517,23 @@ class _HojaComponenteState extends State<HojaComponente> {
       setState(() => _mostrarErrores = true);
       return;
     }
+    if (widget.esBorrador) {
+      // Nada de red: se devuelve lo escrito al formulario de alta.
+      Navigator.pop(
+        context,
+        ComponentePlantilla(
+          nombre: _nombre.text.trim(),
+          cantidad: _cant!,
+          valorUnitario: _vr!,
+          orden: widget.inicial?.orden ?? widget.orden,
+        ),
+      );
+      return;
+    }
     setState(() => _guardando = true);
     try {
       await ActivosService.agregarComponente(
-        activoId: widget.activoId,
+        activoId: widget.activoId!,
         nombre: _nombre.text,
         cantidad: _cant!,
         valorUnitario: _vr!,
@@ -313,7 +569,10 @@ class _HojaComponenteState extends State<HojaComponente> {
             Row(
               children: [
                 Expanded(
-                  child: Text('Agregar componente',
+                  child: Text(
+                      widget.inicial == null
+                          ? 'Agregar componente'
+                          : 'Editar componente',
                       style: Theme.of(context).textTheme.titleLarge),
                 ),
                 IconButton(
@@ -335,8 +594,9 @@ class _HojaComponenteState extends State<HojaComponente> {
                 hintText: 'Ej: Tela filtros de los medios',
                 border: const OutlineInputBorder(),
                 // errorText y no solo un color: el lector de pantalla lo
-                // anuncia.
-                errorText: _mostrarErrores ? _errorNombre : null,
+                // anuncia. El repetido se avisa al escribir, sin esperar.
+                errorText:
+                    (_mostrarErrores || _repetido) ? _errorNombre : null,
               ),
             ),
             const SizedBox(height: 12),
@@ -395,7 +655,7 @@ class _HojaComponenteState extends State<HojaComponente> {
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Agregar'),
+                  : Text(widget.inicial == null ? 'Agregar' : 'Guardar cambios'),
             ),
           ],
         ),

@@ -215,6 +215,52 @@ void main() {
     });
   });
 
+  group('Composición de un kit nuevo (Fase 4)', () {
+    ComponentePlantilla c(String nombre,
+            {num cantidad = 1, num valor = 1000}) =>
+        ComponentePlantilla(
+            nombre: nombre, cantidad: cantidad, valorUnitario: valor);
+
+    test('claveComponente compara IGUAL que el índice único de la base', () {
+      // upper(regexp_replace(btrim(nombre), '\s+', ' ', 'g'))
+      expect(claveComponente('  tela   MEDIOS '), 'TELA MEDIOS');
+      expect(claveComponente('Tela medios'), claveComponente('TELA  MEDIOS'));
+      // La base NO quita tildes: para ella son distintos, y la app no puede
+      // decir "repetido" donde la base diría que no.
+      expect(claveComponente('Guías'), isNot(claveComponente('Guias')));
+    });
+
+    test('la composición del usuario está bien', () {
+      expect(
+          validarComposicionKit([
+            c('Tela filtros de los extremos', cantidad: 2, valor: 50000),
+            c('Tela filtros de los medios', cantidad: 24, valor: 45000),
+            c('Guias filtro medios', cantidad: 24, valor: 15000),
+          ]),
+          isNull);
+    });
+
+    test('un kit sin componentes no se guarda: valdría \$0', () {
+      expect(validarComposicionKit([]), contains('al menos un componente'));
+    });
+
+    test('dice CUÁL está mal', () {
+      expect(validarComposicionKit([c('  ')]), 'Hay un componente sin nombre.');
+      expect(validarComposicionKit([c('Guías', cantidad: 0)]),
+          contains('"Guías"'));
+      expect(validarComposicionKit([c('Tela', valor: -1)]), contains('"Tela"'));
+    });
+
+    test('un repetido escrito distinto también es repetido', () {
+      expect(validarComposicionKit([c('Tela medios'), c('  tela   MEDIOS ')]),
+          'El componente "tela   MEDIOS" está repetido.');
+    });
+
+    test('con tilde y sin tilde NO son repetidos (igual que en la base)', () {
+      expect(validarComposicionKit([c('Guías'), c('Guias')]), isNull);
+    });
+  });
+
   group('Errores: el usuario ve un mensaje, no jerga de Postgres', () {
     test('las reglas de la base ya vienen en español: pasan tal cual', () {
       expect(

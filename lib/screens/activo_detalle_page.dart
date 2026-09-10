@@ -511,6 +511,8 @@ class _ComponentesState extends State<_Componentes> {
       builder: (_) => HojaComponente(
         activoId: widget.activo.id,
         orden: _lista.length + 1,
+        // Para avisar un nombre repetido al escribirlo, no al guardar.
+        nombresExistentes: [for (final c in _lista) c.nombre],
       ),
     );
     // Recargar el equipo: su valor a nuevo cambió, y la Ficha lo muestra.

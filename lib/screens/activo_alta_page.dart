@@ -4,6 +4,7 @@ import '../data.dart';
 import '../activos_service.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../widgets/kit_componentes.dart';
 import 'activo_detalle_page.dart';
 import 'activo_referencias_page.dart';
 
@@ -55,6 +56,16 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
   bool _recargandoBodegas = false;
   bool _guardando = false;
   bool _mostrarErrores = false;
+
+  // --- Kit (Fase 4, docs/plan-kits-equipos.md) ---
+  /// La composición del kit que se está creando. Llega precargada con la del
+  /// kit MÁS RECIENTE de la misma referencia (plantilla_kit) y se puede
+  /// cambiar: es una sugerencia, no un vínculo con el anterior.
+  List<ComponentePlantilla> _composicion = [];
+  /// De qué kit se copió; null si es el primero de su referencia.
+  String? _composicionDesde;
+  bool _cargandoPlantilla = false;
+  bool _plantillaFallo = false;
 
   @override
   void initState() {
@@ -115,7 +126,100 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
   num get _valorNuevoNum => num.tryParse(_valorNuevo.text.replaceAll(',', '.')) ?? 0;
   num get _porcentajeNum =>
       num.tryParse(_porcentaje.text.replaceAll(',', '.')) ?? 0;
-  num get _valorActual => _valorNuevoNum * _porcentajeNum / 100;
+  num get _totalComposicion =>
+      _composicion.fold<num>(0, (s, c) => s + c.subtotal);
+  /// En un kit, lo que valdrá según su composición; si no, lo escrito.
+  num get _valorActual =>
+      (_esKit ? _totalComposicion : _valorNuevoNum) * _porcentajeNum / 100;
+
+  /// El problema de la composición, solo después de intentar guardar.
+  String? get _errorComposicion =>
+      _mostrarErrores && _esKit ? validarComposicionKit(_composicion) : null;
+
+  /// Elegir la referencia. Si es un kit, se trae la composición del kit más
+  /// reciente de esa referencia: el kit 2 de 50 no se vuelve a digitar.
+  void _elegirReferencia(ActivoReferencia? v) {
+    final cambio = v?.id != _referencia?.id;
+    setState(() {
+      _referencia = v;
+      if (cambio) {
+        _composicion = [];
+        _composicionDesde = null;
+        _plantillaFallo = false;
+      }
+    });
+    if (cambio && v != null && v.esKit) _cargarPlantilla(v);
+  }
+
+  Future<void> _cargarPlantilla(ActivoReferencia ref) async {
+    setState(() => _cargandoPlantilla = true);
+    try {
+      final p = await ActivosService.plantillaKit(ref.id);
+      // Si el usuario cambió de referencia mientras esto cargaba, esta
+      // respuesta ya no es la suya: no se aplica.
+      if (!mounted || _referencia?.id != ref.id) return;
+      setState(() {
+        _composicion = List.of(p);
+        _composicionDesde = p.isEmpty ? null : p.first.desdeSerial;
+        _cargandoPlantilla = false;
+      });
+    } catch (_) {
+      if (!mounted || _referencia?.id != ref.id) return;
+      setState(() {
+        _cargandoPlantilla = false;
+        _plantillaFallo = true;
+      });
+    }
+  }
+
+  List<String> get _nombresComposicion => [for (final c in _composicion) c.nombre];
+
+  Future<void> _agregarComponente() async {
+    final nuevo = await showModalBottomSheet<ComponentePlantilla>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaComponente.borrador(
+        orden: _composicion.length + 1,
+        nombresExistentes: _nombresComposicion,
+      ),
+    );
+    if (nuevo != null) setState(() => _composicion = [..._composicion, nuevo]);
+  }
+
+  Future<void> _editarComponente(int i) async {
+    final editado = await showModalBottomSheet<ComponentePlantilla>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaComponente.borrador(
+        inicial: _composicion[i],
+        nombresExistentes: _nombresComposicion,
+      ),
+    );
+    if (editado != null) {
+      setState(() => _composicion = [..._composicion]..[i] = editado);
+    }
+  }
+
+  /// Quitar con opción de deshacer: en un celular es fácil tocar la basura
+  /// equivocada, y volver a escribir un componente es justo lo que la
+  /// plantilla vino a evitar.
+  void _quitarComponente(int i) {
+    final quitado = _composicion[i];
+    setState(() => _composicion = [..._composicion]..removeAt(i));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Se quitó "${quitado.nombre}".'),
+        action: SnackBarAction(
+          label: 'Deshacer',
+          onPressed: () {
+            if (!mounted) return;
+            setState(() => _composicion = [..._composicion]
+              ..insert(i.clamp(0, _composicion.length), quitado));
+          },
+        ),
+      ));
+  }
 
   bool get _porcentajeValido => _porcentajeNum >= 0 && _porcentajeNum <= 100;
 
@@ -139,6 +243,21 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
       if (nueva != null) _referencias = nueva;
       _recargandoReferencias = false;
     });
+    // La referencia elegida se relee de la lista nueva: si en el catálogo se
+    // marcó como kit (o se le quitó), la vieja en memoria diría otra cosa.
+    final elegida = _referencia;
+    if (nueva != null && elegida != null) {
+      ActivoReferencia? fresca;
+      for (final r in nueva) {
+        if (r.id == elegida.id) fresca = r;
+      }
+      if (fresca != null && fresca.esKit != elegida.esKit) {
+        setState(() => _referencia = null);
+        _elegirReferencia(fresca);
+      } else if (fresca != null) {
+        setState(() => _referencia = fresca);
+      }
+    }
   }
 
   Future<void> _recargarCentros() async {
@@ -184,11 +303,22 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
       _origenEfectivo != null &&
       _centroDestino != null &&
       _bodega != null &&
-      _porcentajeValido;
+      _porcentajeValido &&
+      !_cargandoPlantilla &&
+      (!_esKit || validarComposicionKit(_composicion) == null);
 
   Future<void> _guardar() async {
     if (!_formularioValido) {
       setState(() => _mostrarErrores = true);
+      // El problema de la composición se marca arriba, en su sección; el
+      // botón Guardar está abajo. Sin este aviso, tocar Guardar parecería no
+      // hacer nada (SDD 9.5: nada puede fallar en silencio).
+      final problema =
+          _esKit ? validarComposicionKit(_composicion) : null;
+      if (problema != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(problema)));
+      }
       return;
     }
     setState(() => _guardando = true);
@@ -209,9 +339,23 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
       );
       if (!mounted) return;
       if (_esKit) {
-        // Un kit recién creado vale $0 hasta que se le agreguen componentes:
-        // se lleva al usuario directo a esa pestaña. result: true para que
-        // la pantalla de origen sepa que se creó y se refresque.
+        // Los componentes, TODOS en una operación (agregar_componentes,
+        // schema_v65): entran todos o ninguno, nunca un kit a medias.
+        String? aviso;
+        try {
+          await ActivosService.agregarComponentes(creado.id, _composicion);
+        } catch (e) {
+          // El equipo YA existe. No se oculta: se dice qué pasó y dónde
+          // arreglarlo (la pestaña muestra que vale $0 y deja agregarlos).
+          aviso = 'El equipo se creó, pero sus componentes no se pudieron '
+              'guardar: $e. Agrégalos en esta pestaña.';
+        }
+        if (!mounted) return;
+        // El aviso va por el ScaffoldMessenger de la app, que sobrevive al
+        // cambio de pantalla; se toma ANTES de navegar.
+        final mensajero = ScaffoldMessenger.of(context);
+        // A la pestaña Componentes, para ver cómo quedó. result: true para
+        // que la pantalla de origen sepa que se creó y se refresque.
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -220,6 +364,12 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
           ),
           result: true,
         );
+        if (aviso != null) {
+          mensajero.showSnackBar(SnackBar(
+            content: Text(aviso),
+            duration: const Duration(seconds: 10),
+          ));
+        }
       } else {
         Navigator.pop(context, true);
       }
@@ -285,7 +435,9 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                   textoDe: (r) => r.etiqueta,
                   recargando: _recargandoReferencias,
                   onRecargar: _recargarReferencias,
-                  onChanged: (v) => setState(() => _referencia = v),
+                  // _elegirReferencia y no un setState: si es un kit, trae
+                  // la composición del kit anterior.
+                  onChanged: _elegirReferencia,
                   onAgregar: _agregarReferencia,
                   tooltipAgregar: 'Crear una referencia nueva',
                   textoVacio:
@@ -416,13 +568,52 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                     prefixText: _esKit ? null : '\$ ',
                     hintText: _esKit ? 'Se calcula solo' : null,
                     helperText: _esKit
-                        ? 'Es un kit: su valor es la suma de sus componentes. '
-                            'Al guardar te llevo a agregárselos.'
+                        ? 'Es un kit: su valor es la suma de los componentes '
+                            'de abajo.'
                         : null,
                     helperMaxLines: 3,
                     border: const OutlineInputBorder(),
                   ),
                 ),
+                if (_esKit) ...[
+                  const SizedBox(height: 16),
+                  if (_cargandoPlantilla)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 12),
+                          Expanded(
+                              child: Text(
+                                  'Trayendo la composición del kit anterior…')),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    if (_plantillaFallo)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'No se pudo traer la composición del kit anterior. '
+                          'Puedes escribirla aquí.',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ComposicionBorrador(
+                      componentes: _composicion,
+                      desdeSerial: _composicionDesde,
+                      porcentaje: _porcentajeValido ? _porcentajeNum : 100,
+                      onAgregar: _agregarComponente,
+                      onEditar: _editarComponente,
+                      onQuitar: _quitarComponente,
+                      error: _errorComposicion,
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _porcentaje,
@@ -441,8 +632,7 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                 const SizedBox(height: 8),
                 Text(
                     _esKit
-                        ? 'Valorizado: se calcula cuando le agregues sus '
-                            'componentes.'
+                        ? 'Valorizado de este kit: ${_money.format(_valorActual)}'
                         : 'Valorizado de este equipo: ${_money.format(_valorActual)}',
                     style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 16),

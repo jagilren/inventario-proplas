@@ -283,6 +283,42 @@ String mensajeDeErrorEquipos(String? codigo, String mensaje) {
   }
 }
 
+/// La forma en que la BASE compara nombres de componentes para el índice
+/// único `activo_componentes_uniq`: sin espacios en los bordes, espacios
+/// internos colapsados, en mayúsculas. (Sin quitar tildes: la base tampoco
+/// las quita, así que "Guías" y "Guias" son distintos para ella.)
+///
+/// Si la app normalizara distinto, diría "está bien" y la base lo rechazaría
+/// al guardar — o al revés.
+String claveComponente(String nombre) =>
+    nombre.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+
+/// Revisa la composición de un kit antes de mandarla a la base. Devuelve el
+/// primer problema en palabras, o null si está bien.
+///
+/// Es lo mismo que la base vuelve a comprobar (agregar_componentes,
+/// schema_v65), pero dicho ANTES de ir a la red y señalando cuál línea.
+String? validarComposicionKit(List<ComponentePlantilla> lista) {
+  if (lista.isEmpty) {
+    return 'Agrégale al menos un componente: un kit vale la suma de sus partes.';
+  }
+  final vistos = <String>{};
+  for (final c in lista) {
+    final nombre = c.nombre.trim();
+    if (nombre.isEmpty) return 'Hay un componente sin nombre.';
+    if (c.cantidad <= 0) {
+      return 'La cantidad de "$nombre" tiene que ser mayor que cero.';
+    }
+    if (c.valorUnitario < 0) {
+      return 'El valor de "$nombre" no puede ser negativo.';
+    }
+    if (!vistos.add(claveComponente(nombre))) {
+      return 'El componente "$nombre" está repetido.';
+    }
+  }
+  return null;
+}
+
 /// Los tipos de movimiento de un componente, con todo lo que una pantalla
 /// necesita saber de cada uno.
 ///
@@ -1517,6 +1553,34 @@ class ActivosService {
         }));
     revision.value++;
     return id as String;
+  }
+
+  /// Agrega VARIOS componentes a un kit en UNA operación de la base
+  /// (agregar_componentes, schema_v65): entran todos o ninguno. Es lo que usa
+  /// el alta de un kit: con una llamada por componente, un corte de red a
+  /// mitad dejaría el kit con 2 de sus 4 partes, valiendo menos, sin que
+  /// nadie lo note. Devuelve cuántos se agregaron.
+  static Future<int> agregarComponentes(
+    String activoId,
+    List<ComponentePlantilla> lista,
+  ) async {
+    final problema = validarComposicionKit(lista);
+    if (problema != null) throw ErrorEquipos(problema);
+    final res = await _conMensaje(() => supabase.rpc('agregar_componentes',
+        params: {
+          'p_activo': activoId,
+          'p_componentes': [
+            for (var i = 0; i < lista.length; i++)
+              {
+                'nombre': lista[i].nombre.trim(),
+                'cantidad': lista[i].cantidad,
+                'valor_unitario': lista[i].valorUnitario,
+                'orden': i + 1,
+              },
+          ],
+        }));
+    revision.value++;
+    return res as int;
   }
 
   /// Corrige el nombre, el valor unitario vigente o el orden de un
