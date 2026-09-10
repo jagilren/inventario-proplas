@@ -7,7 +7,7 @@
 // InventarioService en data.dart. Sin pantallas todavía (Fase 4).
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestFilterBuilder;
+    show PostgrestException, PostgrestFilterBuilder;
 import 'data.dart';
 import 'local_store.dart';
 import 'sync_service.dart';
@@ -19,6 +19,9 @@ class ActivoReferencia {
   final String? modelo;
   final String? tipo;
   final bool activo;
+  /// Referencia KITZABLE: sus equipos valen la suma de sus componentes
+  /// (schema_v64). Inmutable en cuanto la referencia tenga equipos.
+  final bool esKit;
 
   ActivoReferencia.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String,
@@ -26,7 +29,8 @@ class ActivoReferencia {
       marca = m['marca'] as String?,
       modelo = m['modelo'] as String?,
       tipo = m['tipo'] as String?,
-      activo = (m['activo'] ?? true) as bool;
+      activo = (m['activo'] ?? true) as bool,
+      esKit = (m['es_kit'] ?? false) as bool;
 
   String get etiqueta => [
     nombre,
@@ -69,6 +73,9 @@ class Activo {
   /// Para mostrar junto a la referencia en los resultados de búsqueda: si
   /// alguien busca "grundfos", tiene que ver por qué salió ese equipo.
   final String? referenciaMarca;
+  /// Si su referencia es un kit: su valor nuevo lo calcula la base desde los
+  /// componentes y NO se escribe a mano (schema_v64).
+  final bool referenciaEsKit;
   final String serial;
   final String condicion; // nuevo | usado | repuestos | baja
   // operativo | mantenimiento_interno | mantenimiento_externo | entregado | baja
@@ -89,6 +96,8 @@ class Activo {
           (m['activo_referencias'] as Map?)?['nombre'] as String?,
       referenciaMarca =
           (m['activo_referencias'] as Map?)?['marca'] as String?,
+      referenciaEsKit =
+          ((m['activo_referencias'] as Map?)?['es_kit'] ?? false) as bool,
       serial = m['serial'] as String,
       condicion = m['condicion'] as String,
       estado = m['estado'] as String,
@@ -222,6 +231,234 @@ class CambioObservacion {
       antes = m['antes'] as String?,
       despues = m['despues'] as String?,
       usuarioEmail = m['usuario_email'] as String?;
+}
+
+// ---------------------------------------------------------------------
+// KITS — Referencias KITZABLES (docs/plan-kits-equipos.md, schema_v64)
+// ---------------------------------------------------------------------
+
+/// Error con un mensaje listo para mostrarle al usuario.
+///
+/// `toString()` devuelve SOLO el mensaje: en el resto de la app el error se
+/// muestra con `'No se pudo guardar: $e'`, y un `Exception` normal saldría
+/// como "Exception: ..." o con todo el "PostgrestException(message: ...,
+/// code: P0001...)".
+class ErrorEquipos implements Exception {
+  final String mensaje;
+  const ErrorEquipos(this.mensaje);
+  @override
+  String toString() => mensaje;
+}
+
+/// Traduce un error de la base a algo que se le pueda decir al usuario.
+///
+/// La base de los kits ya responde en español cuando rompe una regla
+/// (`raise exception`, código P0001: "No hay suficientes...", "Este
+/// movimiento ya fue anulado"), así que esos se pasan tal cual. Lo que
+/// viene en jerga de Postgres se traduce aquí, en UN solo sitio.
+///
+/// Función pura (sin red): se prueba en test/kits_modelos_test.dart.
+String mensajeDeErrorEquipos(String? codigo, String mensaje) {
+  switch (codigo) {
+    case 'P0001':
+      return mensaje;
+    case '23505':
+      if (mensaje.contains('activo_componentes_uniq')) {
+        return 'Este kit ya tiene un componente con ese nombre.';
+      }
+      if (mensaje.contains('activo_comp_mov_anula_uniq')) {
+        return 'Este movimiento ya fue anulado.';
+      }
+      return 'Ese registro ya existe.';
+    case '23514':
+      if (mensaje.contains('activo_comp_mov_tercero_check')) {
+        return 'Para vender o dar en garantía hay que decir a quién (el tercero).';
+      }
+      return 'Hay un valor que no es válido: la cantidad tiene que ser mayor '
+          'que cero y el valor no puede ser negativo.';
+    case '42501':
+      return 'No tienes permiso para hacer esto.';
+    default:
+      return mensaje;
+  }
+}
+
+/// Los tipos de movimiento de un componente, con todo lo que una pantalla
+/// necesita saber de cada uno.
+///
+/// UN solo sitio para las etiquetas: si la ficha, la hoja de mover y el
+/// informe armaran las suyas, tarde o temprano dirían cosas distintas (la
+/// lección de la etiqueta de REINGRESO, schema_v63). Todas en palabras
+/// completas, sin abreviaturas: también las lee un lector de pantalla.
+enum TipoMovComponente {
+  alta('alta', accion: 'Alta', historial: 'Alta', suma: true),
+  aumento('aumento', accion: 'Agregar', historial: 'Se agregó', suma: true),
+  disminucion('disminucion',
+      accion: 'Retirar', historial: 'Se retiró', suma: false),
+  salidaVenta('salida_venta',
+      accion: 'Vender', historial: 'Venta', suma: false, pideTercero: true),
+  salidaGarantia('salida_garantia',
+      accion: 'Garantía', historial: 'Garantía', suma: false, pideTercero: true),
+  bajaDano('baja_dano', accion: 'Daño', historial: 'Daño', suma: false),
+  anulacion('anulacion', accion: 'Anular', historial: 'Anulación', suma: false);
+
+  const TipoMovComponente(
+    this.valor, {
+    required this.accion,
+    required this.historial,
+    required this.suma,
+    this.pideTercero = false,
+  });
+
+  /// Como lo guarda la base.
+  final String valor;
+  /// Verbo para el botón o chip que lo dispara ("Vender").
+  final String accion;
+  /// Cómo se lee en el historial ("Venta").
+  final String historial;
+  /// Si suma al componente. La anulación NO tiene signo propio: toma el
+  /// contrario del movimiento que anula, y la base se lo pone.
+  final bool suma;
+  /// Venta y garantía exigen decir a quién (constraint en la base).
+  final bool pideTercero;
+
+  /// Los que el usuario elige a mano en la hoja de mover un componente.
+  /// `alta` la crea agregar_componente(); `anulacion`, el botón de anular.
+  static const elegibles = [
+    aumento,
+    disminucion,
+    salidaVenta,
+    salidaGarantia,
+    bajaDano,
+  ];
+
+  /// null si la base devuelve un tipo que esta versión de la app no conoce
+  /// (por ejemplo, uno agregado después). Mejor mostrar el texto crudo que
+  /// tumbar la pantalla.
+  static TipoMovComponente? desde(String valor) {
+    for (final t in values) {
+      if (t.valor == valor) return t;
+    }
+    return null;
+  }
+}
+
+/// Un componente de un kit: de qué está hecho el equipo.
+class ActivoComponente {
+  final String id;
+  final String activoId;
+  final String nombre;
+  final num valorUnitario;
+  /// DERIVADA de los movimientos en la base. La app la lee, nunca la escribe.
+  final num cantidad;
+  /// Columna generada en la base: cantidad × valor unitario.
+  final num subtotal;
+  final int orden;
+
+  ActivoComponente.fromMap(Map<String, dynamic> m)
+    : id = m['id'] as String,
+      activoId = m['activo_id'] as String,
+      nombre = m['nombre'] as String,
+      valorUnitario = (m['valor_unitario'] ?? 0) as num,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      subtotal = (m['subtotal'] ?? 0) as num,
+      orden = (m['orden'] ?? 0) as int;
+
+  /// Ya no queda nada (se retiró, vendió o dañó todo). Se sigue mostrando,
+  /// atenuado: su historia no desaparece.
+  bool get agotado => cantidad <= 0;
+
+  /// El subtotal ponderado al porcentaje del equipo, SOLO para mostrar.
+  /// El valor del kit lo calcula la base aplicando el porcentaje una sola
+  /// vez al total (evita el arrastre de redondeo, plan §4.2).
+  num subtotalAl(num porcentaje) => subtotal * porcentaje / 100;
+}
+
+/// Un movimiento de un componente: la vida del kit.
+class MovimientoComponente {
+  final String id;
+  final String componenteId;
+  /// Como lo guarda la base. Ver [tipo].
+  final String tipoValor;
+  /// +1 suma, −1 resta. Lo estampa la base al insertar.
+  final int signo;
+  final num cantidad;
+  /// Estampado: lo que pasó, pasó a ese precio.
+  final num valorUnitario;
+  final String? terceroNombre;
+  final String? anulaMovimientoId;
+  final String? observacion;
+  final String? usuarioEmail;
+  final DateTime fecha;
+
+  MovimientoComponente.fromMap(Map<String, dynamic> m)
+    : id = m['id'] as String,
+      componenteId = m['componente_id'] as String,
+      tipoValor = m['tipo'] as String,
+      signo = (m['signo'] ?? 1) as int,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      valorUnitario = (m['valor_unitario'] ?? 0) as num,
+      terceroNombre = (m['activo_terceros'] as Map?)?['nombre'] as String?,
+      anulaMovimientoId = m['anula_movimiento_id'] as String?,
+      observacion = m['observacion'] as String?,
+      usuarioEmail = m['usuario_email'] as String?,
+      fecha = DateTime.parse(m['fecha'] as String);
+
+  TipoMovComponente? get tipo => TipoMovComponente.desde(tipoValor);
+  bool get esAnulacion => anulaMovimientoId != null;
+
+  /// Cómo se lee en el historial ("Venta", "Se retiró", "Anulación").
+  String get etiqueta => tipo?.historial ?? tipoValor;
+
+  num get cantidadConSigno => signo * cantidad;
+
+  /// Para ver: "+2" o "−3", con el signo menos tipográfico (U+2212).
+  String get textoCantidad {
+    final n = cantidad % 1 == 0 ? cantidad.toInt().toString() : '$cantidad';
+    return signo > 0 ? '+$n' : '−$n';
+  }
+
+  /// Para el lector de pantalla: en palabras, sin signos. Un "−3" se lee
+  /// distinto según el lector (o no se lee); "salieron 3" no tiene pérdida.
+  String get descripcionAccesible {
+    final n = cantidad % 1 == 0 ? cantidad.toInt().toString() : '$cantidad';
+    final movio = signo > 0 ? 'entraron $n' : 'salieron $n';
+    return [
+      etiqueta,
+      movio,
+      if (terceroNombre != null && terceroNombre!.isNotEmpty)
+        'a $terceroNombre',
+    ].join(', ');
+  }
+}
+
+/// Una línea de la composición sugerida para un kit nuevo: sale del kit MÁS
+/// RECIENTE de la misma referencia (plantilla_kit en la base). Es solo una
+/// sugerencia para el formulario: el equipo nuevo es dueño de lo suyo.
+class ComponentePlantilla {
+  final String nombre;
+  final num cantidad;
+  final num valorUnitario;
+  final int orden;
+  /// De qué kit se copió, para decírselo al usuario.
+  final String? desdeSerial;
+
+  const ComponentePlantilla({
+    required this.nombre,
+    required this.cantidad,
+    required this.valorUnitario,
+    this.orden = 0,
+    this.desdeSerial,
+  });
+
+  ComponentePlantilla.fromMap(Map<String, dynamic> m)
+    : nombre = m['nombre'] as String,
+      cantidad = (m['cantidad'] ?? 0) as num,
+      valorUnitario = (m['valor_unitario'] ?? 0) as num,
+      orden = (m['orden'] ?? 0) as int,
+      desdeSerial = m['desde_serial'] as String?;
+
+  num get subtotal => cantidad * valorUnitario;
 }
 
 class ActivoPieza {
@@ -446,10 +683,17 @@ class ActivosService {
     String? marca,
     String? modelo,
     String? tipo,
+    bool esKit = false,
   }) async {
     final res = await supabase
         .from('activo_referencias')
-        .insert({'nombre': nombre, 'marca': marca, 'modelo': modelo, 'tipo': tipo})
+        .insert({
+          'nombre': nombre,
+          'marca': marca,
+          'modelo': modelo,
+          'tipo': tipo,
+          'es_kit': esKit,
+        })
         .select()
         .single();
     revision.value++;
@@ -463,6 +707,9 @@ class ActivosService {
     String? modelo,
     String? tipo,
     bool? activo,
+    // Solo se manda si se pasa. La base rechaza cambiarlo si la referencia
+    // ya tiene equipos (schema_v64); mandarlo igual que antes no molesta.
+    bool? esKit,
   }) async {
     final cambios = <String, dynamic>{};
     if (nombre != null) cambios['nombre'] = nombre;
@@ -470,9 +717,25 @@ class ActivosService {
     if (modelo != null) cambios['modelo'] = modelo;
     if (tipo != null) cambios['tipo'] = tipo;
     if (activo != null) cambios['activo'] = activo;
+    if (esKit != null) cambios['es_kit'] = esKit;
     if (cambios.isEmpty) return;
+    // SIN traducir el error a propósito: la pantalla de referencias reconoce
+    // un duplicado buscando 'activo_referencias_uniq' / '23505' en el texto
+    // crudo. Traducirlo aquí le rompería ese aviso.
     await supabase.from('activo_referencias').update(cambios).eq('id', id);
     revision.value++;
+  }
+
+  /// Si la referencia ya tiene equipos. La pantalla lo usa para deshabilitar
+  /// el interruptor "Es un kit" y DECIR por qué, en vez de dejarlo oprimir y
+  /// que la base lo rechace después.
+  static Future<bool> referenciaTieneEquipos(String referenciaId) async {
+    final res = await supabase
+        .from('activos')
+        .select('id')
+        .eq('referencia_id', referenciaId)
+        .limit(1);
+    return (res as List).isNotEmpty;
   }
 
   // ---------------------------------------------------------------------
@@ -544,7 +807,7 @@ class ActivosService {
   }
 
   static const _selectActivo =
-      '*, activo_referencias(nombre, marca), bodegas(nombre)';
+      '*, activo_referencias(nombre, marca, es_kit), bodegas(nombre)';
 
   /// Listado general, con filtros opcionales. `q` busca por serial (además
   /// del filtro por nombre de referencia, que se hace en el cliente porque
@@ -1175,6 +1438,212 @@ class ActivosService {
         .map((e) => CambioObservacion.fromMap(e as Map<String, dynamic>))
         .toList();
   }
+
+  // ---------------------------------------------------------------------
+  // Kits: componentes y su vida (schema_v64)
+  // ---------------------------------------------------------------------
+  //
+  // La base hace cumplir TODAS las reglas: la cantidad de un componente y el
+  // valor de un kit los calcula ella, estampa el signo, el valor unitario y
+  // el usuario de cada movimiento, y rechaza lo que no se puede. Aquí solo
+  // se pide y se traduce el error. Nada de esto escribe `cantidad` ni el
+  // `valor_nuevo` de un kit.
+
+  static const _selectComponente =
+      'id, activo_id, nombre, valor_unitario, cantidad, subtotal, orden';
+
+  static const _selectMovComponente =
+      'id, componente_id, tipo, signo, cantidad, valor_unitario, '
+      'anula_movimiento_id, observacion, usuario_email, fecha, '
+      'activo_terceros(nombre)';
+
+  /// Ejecuta una llamada y convierte el error de la base en un ErrorEquipos
+  /// con mensaje para el usuario.
+  static Future<T> _conMensaje<T>(Future<T> Function() llamada) async {
+    try {
+      return await llamada();
+    } on PostgrestException catch (e) {
+      throw ErrorEquipos(mensajeDeErrorEquipos(e.code, e.message));
+    }
+  }
+
+  /// Los componentes de un kit, en su orden. Incluye los agotados
+  /// (cantidad 0): se muestran atenuados, su historia no desaparece.
+  static Future<List<ActivoComponente>> componentes(String activoId) =>
+      _conMensaje(() async {
+        final res = await supabase
+            .from('activo_componentes')
+            .select(_selectComponente)
+            .eq('activo_id', activoId)
+            .order('orden')
+            .order('nombre');
+        return (res as List)
+            .map((e) => ActivoComponente.fromMap(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  /// Agrega un componente a un kit, con su movimiento de alta, en UNA sola
+  /// operación de la base (agregar_componente). Si fueran dos llamadas desde
+  /// aquí, un corte de red en medio dejaría un componente en cero sin historia.
+  static Future<String> agregarComponente({
+    required String activoId,
+    required String nombre,
+    required num cantidad,
+    required num valorUnitario,
+    int orden = 0,
+    String? observacion,
+  }) async {
+    if (nombre.trim().isEmpty) {
+      throw const ErrorEquipos('El componente necesita un nombre.');
+    }
+    if (cantidad <= 0) {
+      throw ErrorEquipos(
+          'La cantidad de "${nombre.trim()}" tiene que ser mayor que cero.');
+    }
+    if (valorUnitario < 0) {
+      throw const ErrorEquipos('El valor unitario no puede ser negativo.');
+    }
+    final id = await _conMensaje(() => supabase.rpc('agregar_componente',
+        params: {
+          'p_activo': activoId,
+          'p_nombre': nombre.trim(),
+          'p_cantidad': cantidad,
+          'p_valor_unitario': valorUnitario,
+          'p_orden': orden,
+          'p_observacion':
+              (observacion == null || observacion.trim().isEmpty)
+                  ? null
+                  : observacion.trim(),
+        }));
+    revision.value++;
+    return id as String;
+  }
+
+  /// Corrige el nombre, el valor unitario vigente o el orden de un
+  /// componente. La CANTIDAD no está aquí a propósito: cambia solo con un
+  /// movimiento (moverComponente), para que quede el porqué y el para quién.
+  static Future<void> editarComponente(
+    String id, {
+    String? nombre,
+    num? valorUnitario,
+    int? orden,
+  }) async {
+    final cambios = <String, dynamic>{};
+    if (nombre != null) {
+      if (nombre.trim().isEmpty) {
+        throw const ErrorEquipos('El componente necesita un nombre.');
+      }
+      cambios['nombre'] = nombre.trim();
+    }
+    if (valorUnitario != null) {
+      if (valorUnitario < 0) {
+        throw const ErrorEquipos('El valor unitario no puede ser negativo.');
+      }
+      cambios['valor_unitario'] = valorUnitario;
+    }
+    if (orden != null) cambios['orden'] = orden;
+    if (cambios.isEmpty) return;
+    await _conMensaje(
+        () => supabase.from('activo_componentes').update(cambios).eq('id', id));
+    revision.value++;
+  }
+
+  /// La historia de un componente, del más reciente al más antiguo (regla
+  /// de históricos del proyecto).
+  static Future<List<MovimientoComponente>> movimientosComponente(
+    String componenteId, {
+    int limit = 100,
+  }) =>
+      _conMensaje(() async {
+        final res = await supabase
+            .from('activo_componente_movimientos')
+            .select(_selectMovComponente)
+            .eq('componente_id', componenteId)
+            .order('fecha', ascending: false)
+            .limit(limit);
+        return (res as List)
+            .map((e) =>
+                MovimientoComponente.fromMap(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  /// Registra la vida de un componente: se agrega, se retira, se vende, se
+  /// va en garantía o se daña. Solo los tipos que el usuario elige a mano
+  /// (TipoMovComponente.elegibles): el alta la hace agregarComponente y la
+  /// anulación, anularMovimientoComponente.
+  ///
+  /// Se valida aquí lo mismo que la base, para decirlo ANTES de ir a la red
+  /// — la base lo vuelve a comprobar de todas formas.
+  static Future<void> moverComponente({
+    required String componenteId,
+    required TipoMovComponente tipo,
+    required num cantidad,
+    String? terceroId,
+    String? observacion,
+  }) async {
+    if (!TipoMovComponente.elegibles.contains(tipo)) {
+      throw ErrorEquipos('"${tipo.accion}" no se registra desde aquí.');
+    }
+    if (cantidad <= 0) {
+      throw const ErrorEquipos('La cantidad tiene que ser mayor que cero.');
+    }
+    if (tipo.pideTercero && terceroId == null) {
+      throw const ErrorEquipos(
+          'Para vender o dar en garantía hay que decir a quién (el tercero).');
+    }
+    await _conMensaje(
+        () => supabase.from('activo_componente_movimientos').insert({
+              'componente_id': componenteId,
+              'tipo': tipo.valor,
+              'cantidad': cantidad,
+              'tercero_id': tipo.pideTercero ? terceroId : null,
+              'observacion':
+                  (observacion == null || observacion.trim().isEmpty)
+                      ? null
+                      : observacion.trim(),
+            }));
+    revision.value++;
+  }
+
+  /// Deshace un movimiento con otro movimiento que lo anula. La base copia
+  /// su cantidad y valor y le pone el signo contrario; rechaza anular dos
+  /// veces y anular una anulación. Nada se borra.
+  static Future<void> anularMovimientoComponente(
+    MovimientoComponente original, {
+    String? observacion,
+  }) async {
+    if (original.esAnulacion) {
+      throw const ErrorEquipos(
+          'Una anulación no se anula: registra un movimiento nuevo.');
+    }
+    await _conMensaje(
+        () => supabase.from('activo_componente_movimientos').insert({
+              'componente_id': original.componenteId,
+              'tipo': TipoMovComponente.anulacion.valor,
+              // La base la reemplaza por la del original; va porque la
+              // columna no admite nulos antes de que corra el trigger.
+              'cantidad': original.cantidad,
+              'anula_movimiento_id': original.id,
+              'observacion':
+                  (observacion == null || observacion.trim().isEmpty)
+                      ? null
+                      : observacion.trim(),
+            }));
+    revision.value++;
+  }
+
+  /// La composición del kit MÁS RECIENTE de una referencia, para proponerla
+  /// al crear el siguiente (plantilla_kit en la base). Vacía si es el primer
+  /// kit de esa referencia.
+  static Future<List<ComponentePlantilla>> plantillaKit(
+          String referenciaId) =>
+      _conMensaje(() async {
+        final res = await supabase
+            .rpc('plantilla_kit', params: {'p_referencia': referenciaId});
+        return (res as List)
+            .map((e) => ComponentePlantilla.fromMap(e as Map<String, dynamic>))
+            .toList();
+      });
 
   // ---------------------------------------------------------------------
   // Piezas (buenas/malas)

@@ -52,6 +52,39 @@ probar el rol, no a la persona). 24 casos, 24 correctos:
 Después, contra la API real: HTTP 200 en todas las consultas nuevas, sin
 PGRST201.
 
+### Fase 2 (capa de datos) — 2026-09-10
+
+Modelos y llamadas en `lib/activos_service.dart`, siguiendo la convención
+del módulo (todos sus modelos viven ahí). **Sin pantallas**: esas empiezan en
+la Fase 3. Lo que queda listo para ellas:
+
+| Pieza | Para qué |
+|---|---|
+| `ActivoReferencia.esKit`, `Activo.referenciaEsKit` | Saber si mostrar la ficha Componentes y bloquear el valor a mano |
+| `ActivoComponente`, `MovimientoComponente`, `ComponentePlantilla` | Los datos de un kit y su vida |
+| `TipoMovComponente` | **Todas** las etiquetas en un solo sitio ("Vender" en el botón, "Venta" en el historial), en palabras completas |
+| `MovimientoComponente.descripcionAccesible` | El texto para el lector de pantalla, **en palabras** ("Venta, salieron 1, a TALLER X"): un "−3" cada lector lo lee distinto, o no lo lee |
+| `componentes`, `agregarComponente`, `editarComponente`, `movimientosComponente`, `moverComponente`, `anularMovimientoComponente`, `plantillaKit`, `referenciaTieneEquipos` | Las llamadas. **Usan** `agregar_componente()` y `plantilla_kit()` de la base; ninguna escribe la cantidad ni el valor del kit |
+| `ErrorEquipos` + `mensajeDeErrorEquipos()` | El usuario ve "Este movimiento ya fue anulado", no `PostgrestException(message: …, code: 23505…)` |
+
+**Verificado antes del commit** (el push publica solo, por CI/CD):
+
+1. `flutter analyze` **del proyecto entero**, como lo corre el CI — sin avisos
+   nuevos.
+2. `flutter test`: 47 de 47, con 26 pruebas nuevas. Una de ellas compara la
+   lista de tipos de la app con la del `check` de la base: si algún día se
+   separan, el CI frena la publicación.
+3. Cada consulta nueva, **contra la API real**: 8 de 8 con HTTP 200. Y una
+   dañada a propósito, que respondió 400 — para saber que la prueba sí detecta
+   un error y no aprueba todo a ciegas.
+4. `flutter build web` en local.
+5. El diff línea por línea: de código que ya existía solo cambiaron 6 líneas,
+   todas para **agregar**; las firmas públicas solo ganaron parámetros
+   opcionales.
+
+Y se atajaron dos errores que habrían llegado a producción — están contados en
+el SDD, §9.8.
+
 ---
 
 ## 1. Objetivo y alcance
@@ -457,7 +490,7 @@ nueva `equipos_comp`.
 | Fase | Qué | Entrega valor sola | Riesgo |
 |:---:|---|:---:|---|
 | 1 ✔ | SQL: `es_kit`, las 2 tablas, triggers, RLS, auditoría — **hecha el 2026-09-10** (`schema_v64`, ver §0) | No | **Alto** — la cadena de recálculo |
-| 2 | `ActivosService`: modelos y CRUD | No | Bajo |
+| 2 ✔ | `ActivosService`: modelos y CRUD — **hecha el 2026-09-10** (ver §0) | No | Bajo |
 | 3 | Switch en referencias + ficha Componentes (solo lectura) | **Sí** | Bajo |
 | 4 | Alta con plantilla del kit anterior | **Sí** | Medio |
 | 5 | Movimientos de componente (la vida del kit) | **Sí** | Medio |

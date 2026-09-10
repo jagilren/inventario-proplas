@@ -568,7 +568,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los siete errores reales — y qué enseña cada uno
+## 9. Los siete errores reales, dos que se atajaron — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -838,6 +838,49 @@ contradicción.
 > la sección 4 (*"si la regla debe cumplirse siempre, va en la base"*) y aun
 > así se programó tres veces en la pantalla. **Escribir un principio no es lo
 > mismo que aplicarlo.**
+
+### 9.8 Los dos que se atajaron antes de publicar
+
+*2026-09-10, Fase 2 de Referencias KITZABLES.*
+
+Los siete errores de arriba llegaron a producción. Estos dos **no**, y vale la
+pena contarlos porque enseñan lo mismo desde el otro lado: **qué verificación
+los paró**. En este proyecto el push a `main` publica solo (CI/CD), así que lo
+que no se ataje antes del commit lo ve el usuario.
+
+**a) El arreglo que rompía una pantalla que funcionaba.** Para que el usuario
+viera mensajes claros y no `PostgrestException(message: …, code: 23505)`, se
+envolvió `editarReferencia()` para traducir los errores. Parecía una mejora
+sin riesgo. Pero la pantalla de referencias **ya existía**, y reconoce un
+nombre duplicado buscando el texto `activo_referencias_uniq` o `23505`
+**dentro del error crudo**. Con la traducción, esas palabras desaparecían: el
+aviso de "ya existe" habría dejado de salir y el usuario habría visto un error
+genérico.
+
+Se atajó con una búsqueda de un minuto — `grep "23505\|_uniq"` sobre la
+pantalla — antes de seguir. La traducción quedó solo en las funciones nuevas
+de kits, que nadie más lee todavía.
+
+> **Lección:** antes de cambiar **cómo sale** un error, busca **quién lee** ese
+> error. Un mensaje de error no es solo texto: a veces es la entrada de otro
+> código.
+
+**b) El error que el análisis no vio porque se analizaba la carpeta
+equivocada.** Durante todo el día se corrió `flutter analyze lib/`. Una prueba
+nueva tenía una variable llamada `daño` — y Dart no acepta la `ñ` en nombres.
+El archivo estaba en `test/`, no en `lib/`, así que el análisis salía limpio.
+Lo detectó `flutter test`. El CI corre `flutter analyze` sobre **todo** el
+proyecto: allá habría fallado y frenado la publicación, pero después del
+commit.
+
+> **Lección:** verifica **exactamente lo mismo que verifica el CI**, con los
+> mismos comandos. Una verificación local "parecida" da una confianza que no
+> corresponde.
+
+Y un detalle de método que se agregó ese día al validar consultas contra la
+API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a
+propósito**, que respondió 400. Una prueba que nunca ha fallado no demuestra
+que sepa detectar un fallo.
 
 ---
 
