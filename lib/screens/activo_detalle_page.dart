@@ -269,7 +269,8 @@ class _Ficha extends StatelessWidget {
               final cambio = await showModalBottomSheet<bool>(
                 context: context,
                 isScrollControlled: true,
-                builder: (_) => _HojaEstado(activo: activo),
+                builder: (_) =>
+                    _HojaEstado(activo: activo, ubicacion: ubicacion),
               );
               if (cambio == true) await onCambio();
             },
@@ -564,7 +565,10 @@ class _HojaNotaState extends State<_HojaNota> {
 
 class _HojaEstado extends StatefulWidget {
   final Activo activo;
-  const _HojaEstado({required this.activo});
+  /// La ubicación vigente. Es la fuente de verdad de dónde está el equipo;
+  /// `mantenimiento_actor` es solo texto para mostrar.
+  final ActivoUbicacion? ubicacion;
+  const _HojaEstado({required this.activo, required this.ubicacion});
   @override
   State<_HojaEstado> createState() => _HojaEstadoState();
 }
@@ -623,15 +627,29 @@ class _HojaEstadoState extends State<_HojaEstado> {
     }
   }
 
-  /// El equipo pudo llegar aquí ya estando en un taller. `mantenimiento_actor`
-  /// guarda "TALLER · qué le hacen" en un solo texto, así que se separa para
-  /// preseleccionar el taller y dejar en el campo solo la descripción.
+  /// El equipo pudo llegar aquí ya estando en un taller. Se preselecciona el
+  /// taller donde está para que cambiar solo la condición no exija volver a
+  /// elegirlo, y para no anteponer su nombre por segunda vez al guardar.
   ///
-  /// Sin esto pasaban dos cosas: el taller quedaba sin seleccionar (y no se
-  /// podía guardar nada más), y al volver a guardar el nombre del taller se
-  /// anteponía por segunda vez.
+  /// Primero se mira la ubicación vigente, que es el dato duro. Solo si no
+  /// hay ubicación con tercero se cae al texto de `mantenimiento_actor`, que
+  /// es lo que existía antes de unificar estado y ubicación.
   void _preseleccionarTaller() {
     if (_estado != 'mantenimiento_externo') return;
+    final terceroId = widget.ubicacion?.terceroId;
+    if (terceroId != null) {
+      for (final t in _terceros) {
+        if (t.id == terceroId) {
+          _taller = t;
+          _tallerOriginal = t;
+          final actor = widget.activo.mantenimientoActor ?? '';
+          _actor.text = actor.startsWith('${t.nombre} · ')
+              ? actor.substring(t.nombre.length + 3)
+              : (actor == t.nombre ? '' : actor);
+          return;
+        }
+      }
+    }
     final actor = widget.activo.mantenimientoActor ?? '';
     if (actor.isEmpty) return;
     for (final t in _terceros) {
@@ -709,6 +727,44 @@ class _HojaEstadoState extends State<_HojaEstado> {
 
   bool get _faltaTaller => _entraATaller && _taller == null;
 
+  /// El equipo estaba en un taller externo y deja de estarlo: vuelve a su
+  /// bodega. Se registra solo si el historial no dice ya que está ahí, para
+  /// no duplicar la fila cuando los datos venían descuadrados de antes.
+  bool get _vuelveDeTaller =>
+      widget.activo.estado == 'mantenimiento_externo' &&
+      _estado != 'mantenimiento_externo' &&
+      widget.ubicacion?.bodegaId != widget.activo.bodegaId;
+
+  /// Misma fórmula que la vista `activos_disponibilidad` (schema_v55). Sirve
+  /// solo para AVISAR aquí lo que va a pasar; la verdad la calcula la base.
+  bool get _quedaraDisponible =>
+      _estado == 'operativo' &&
+      _condicion != 'repuestos' &&
+      _condicion != 'baja' &&
+      // Vuelve a la bodega, o ya estaba en una.
+      (_vuelveDeTaller ||
+          (_estado != 'mantenimiento_externo' &&
+              widget.ubicacion?.bodegaId != null));
+
+  /// Lo que va a pasar al guardar, en frases que el usuario reconozca. La
+  /// ambigüedad entre esta pantalla y "Cambiar ubicación" fue lo que hizo
+  /// que un regreso a bodega no quedara en el historial (SDD, error 9.6).
+  List<String> get _consecuencias => [
+    if (_vuelveDeTaller)
+      'Vuelve a ${widget.activo.bodegaNombre ?? "su bodega"} y queda en el '
+          'historial de ubicaciones.',
+    if (_quedaraDisponible)
+      'Queda DISPONIBLE para entregar.'
+    else if (_condicion == 'repuestos')
+      'NO queda disponible: está marcado para repuestos.'
+    else if (_condicion == 'baja' || _estado == 'baja')
+      'NO queda disponible: está dado de baja.'
+    else if (_estado == 'mantenimiento_externo')
+      'NO queda disponible: está en un taller externo.'
+    else if (_estado == 'mantenimiento_interno')
+      'NO queda disponible: está en mantenimiento.',
+  ];
+
   Future<void> _guardar() async {
     if (_faltaTaller) {
       // Nunca fallar en silencio: antes solo se repintaba y el usuario
@@ -744,19 +800,30 @@ class _HojaEstadoState extends State<_HojaEstado> {
           mantenimientoActor: actor,
         );
       }
-      // UNA sola acción para el usuario: si el equipo se fue a un taller,
-      // eso ES un cambio de ubicación y tiene que quedar en el historial.
-      //
-      // Solo si el taller CAMBIÓ. Desde que el taller se precarga, guardar
-      // un cambio de condición volvería a registrar la misma ubicación y
-      // llenaría el historial de filas repetidas.
-      if (_estado == 'mantenimiento_externo' &&
-          _taller != null &&
-          _taller!.id != _tallerOriginal?.id) {
+      // El estado y la ubicación tienen que contar la MISMA historia, en las
+      // dos direcciones. Antes solo estaba programada la de ida: mandar un
+      // equipo al taller registraba la ubicación, pero traerlo de vuelta no
+      // registraba nada y el historial se quedaba diciendo que seguía allá.
+      if (_estado == 'mantenimiento_externo') {
+        // IDA. Solo si el taller CAMBIÓ: desde que se precarga, guardar un
+        // cambio de condición repetiría la misma ubicación una y otra vez.
+        if (_taller != null && _taller!.id != _tallerOriginal?.id) {
+          await ActivosService.cambiarUbicacion(
+            activoId: widget.activo.id,
+            terceroId: _taller!.id,
+            detalle: _actor.text.trim().isEmpty ? null : _actor.text.trim(),
+          );
+        }
+      } else if (_vuelveDeTaller) {
+        // REGRESO. Dejar de estar en un taller externo significa que el
+        // equipo volvió a su bodega. Es un movimiento físico real y va al
+        // historial con su fecha y su responsable, como cualquier otro.
         await ActivosService.cambiarUbicacion(
           activoId: widget.activo.id,
-          terceroId: _taller!.id,
-          detalle: _actor.text.trim().isEmpty ? null : _actor.text.trim(),
+          bodegaId: widget.activo.bodegaId,
+          detalle: _tallerOriginal != null
+              ? 'Regresa de ${_tallerOriginal!.nombre}'
+              : 'Regresa a la bodega',
         );
       }
       if (_condicion != widget.activo.condicion) {
@@ -878,6 +945,44 @@ class _HojaEstadoState extends State<_HojaEstado> {
                 'fecha y tu nombre. No hace falta usar "Cambiar ubicación" '
                 'aparte.',
                 style: TextStyle(fontSize: 11.5, color: Colors.grey),
+              ),
+            ],
+            // Que la ventana DIGA qué va a pasar, antes de guardar. La
+            // ambigüedad entre esta pantalla y "Cambiar ubicación" es lo que
+            // hizo que un regreso a bodega no quedara en el historial.
+            if (_consecuencias.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (_quedaraDisponible ? Colors.green : Colors.orange)
+                      .withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Al guardar:',
+                        style: Theme.of(context).textTheme.labelLarge),
+                    const SizedBox(height: 6),
+                    for (final c in _consecuencias)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• '),
+                            // Expanded: sin esto el texto desborda en 360 px.
+                            Expanded(
+                              child: Text(c,
+                                  style: const TextStyle(fontSize: 12.5)),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
             const Divider(height: 28),

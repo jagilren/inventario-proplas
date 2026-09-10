@@ -155,10 +155,14 @@ class LocalStore {
     for (final a in activos) {
       if (a['id'] == activoId) {
         a['estado'] = estado;
-        // `disponible` viene calculado de la vista; se recalcula igual que
-        // allá para que las listas offline no se contradigan.
-        a['disponible'] =
-            estado == 'operativo' && a['ubicacion_actual_bodega_id'] != null;
+        // `disponible` viene calculado de la vista activos_disponibilidad;
+        // se recalcula IGUAL que allá para que las listas offline no se
+        // contradigan con las de línea. Si cambia la fórmula en la vista,
+        // hay que cambiarla aquí (schema_v55).
+        a['disponible'] = estado == 'operativo' &&
+            a['condicion'] != 'repuestos' &&
+            a['condicion'] != 'baja' &&
+            a['ubicacion_actual_bodega_id'] != null;
         break;
       }
     }

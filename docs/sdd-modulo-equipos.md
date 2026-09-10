@@ -190,6 +190,45 @@ programan. Y **dónde vive cada una**.
 | ¿Afecta el inventario? | **No.** Sigue siendo nuestro | **Sí** |
 | Ejemplo | Bomba en el taller de Lucho | Bomba entregada al centro NP00034 |
 
+**La segunda regla central: qué significa "disponible".**
+*(Escrita el 2026-09-10, después de tres errores seguidos por no tenerla.)*
+
+`estado` y `condicion` son campos distintos (§3a), pero para **disponibilidad
+mandan los dos a la vez**:
+
+> Un equipo está **disponible para entregar** si está `operativo`, **su
+> condición no es `repuestos` ni `baja`**, y está **físicamente en una bodega**.
+
+Las tres partes importan, y cada una tapa un hueco real:
+
+| Parte | Qué tapa |
+|---|---|
+| `estado = 'operativo'` | No se entrega algo que está en mantenimiento |
+| `condicion not in ('repuestos','baja')` | Una bomba marcada **para repuestos** aparecía como lista para entregar |
+| Está en una bodega | No se entrega algo que está en el taller de un tercero |
+
+Y de ahí sale la regla que unifica la pantalla de estado con la de ubicación:
+
+> Poner un equipo en **"Operativo (listo para entregar)"** significa que
+> **volvió a su bodega**. Si estaba en un taller, ese regreso es un movimiento
+> físico real y va al historial. Marcarlo **de baja** o **para repuestos** no
+> lo devuelve a estar disponible, aunque esté en la bodega.
+
+**Dónde vive:** en la vista `activos_disponibilidad`, porque se **deriva** y no
+se guarda nunca. Pero está **duplicada a propósito en dos sitios más**, y eso
+hay que saberlo:
+
+| Copia | Para qué |
+|---|---|
+| `lib/local_store.dart` (`ajustarEstadoActivoLocal`) | Que las listas offline no contradigan a las de línea |
+| La hoja "Estado y condición" | Avisar al usuario qué va a pasar **antes** de guardar |
+
+> **Cuándo se permite duplicar una regla:** cuando las copias no *deciden* nada
+> —solo predicen— y la base sigue siendo la única que manda. Las dos copias de
+> arriba se pueden equivocar sin corromper un dato. Aun así van comentadas
+> apuntando a `schema_v55`, porque una fórmula en tres sitios se desincroniza
+> sola si nadie dejó dicho dónde están las otras dos.
+
 **Dónde vive cada regla — y esto es diseño, no detalle:**
 
 | Regla | Dónde | Por qué ahí |
@@ -279,7 +318,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los cinco errores reales — y qué enseña cada uno
+## 9. Los seis errores reales — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -407,6 +446,61 @@ Corregido igual, con su mensaje. **Cuando encuentres un defecto, búscalo en
 todo el archivo antes de darlo por cerrado** — es la misma lección del 9.3, y
 el usuario ya la había tenido que dar una vez ("le pusiste la X a 2 de 6
 hojas").
+
+### 9.6 El error de arreglar solo la mitad de un camino
+
+*Detectado el 2026-09-10 por el usuario, sobre el equipo `A9772113810000036 P12209`.*
+
+Este es el 9.1 **otra vez**, en la dirección contraria.
+
+El 9.1 se arregló haciendo que mandar un equipo a un taller registrara la
+ubicación. Se probó, funcionó, se dio por cerrado. Pero solo se programó la
+**ida**:
+
+```dart
+if (_estado == 'mantenimiento_externo' && _taller != null) {
+  await ActivosService.cambiarUbicacion(...);   // va al taller
+}
+// ...y no hay ningún else. Volver no registra nada.
+```
+
+El usuario devolvió la bomba a Bodega RPCI cambiando el estado de "En un
+taller externo" a "Operativo" — que es exactamente lo que significa que
+regresó — y **no se registró nada**. El historial siguió diciendo que el
+equipo estaba en TALLER METALANDES.
+
+Los datos quedaron contándose dos historias distintas:
+
+| Fuente | Decía |
+|---|---|
+| `activo_ubicaciones` (vigente) | TALLER METALANDES, desde las 15:13 |
+| La ficha del equipo | Operativo, en Bodega RPCI |
+
+**La regla que faltaba escribir**, y que ahora está en el código:
+
+> El estado y la ubicación tienen que contar la **misma** historia, en las
+> **dos** direcciones. Si `estado = mantenimiento_externo`, el equipo está en
+> un tercero. Si deja de estarlo, volvió a su bodega — y eso es un movimiento
+> físico real que va al historial con su fecha y su responsable.
+
+De paso se corrigieron dos cosas más de la misma pantalla:
+
+- La preselección del taller ahora sale de **la ubicación vigente**, no de
+  adivinar partiendo el texto de `mantenimiento_actor`. El dato duro estaba
+  ahí desde el principio y se estaba usando el blando.
+- La ventana ahora **dice qué va a pasar** antes de guardar: *"El equipo
+  vuelve a Bodega RPCI. Queda en el historial de ubicaciones."* La ambigüedad
+  entre esta pantalla y "Cambiar ubicación" es lo que produjo el error.
+
+> **Lección:** cuando arregles un camino, **recórrelo en los dos sentidos**.
+> Un cambio de estado que implica un movimiento físico lo implica también al
+> revés, y la mitad que no se programa no falla con un error: falla
+> **callada**, dejando los datos mintiendo.
+>
+> **Y la lección de segundo orden, que es la que más duele:** el 9.1, el 9.5
+> y el 9.6 son **la misma pantalla y el mismo tema**, en seis días. Dar por
+> cerrado un arreglo sin preguntarse *"¿qué otro camino toca esto mismo?"* es
+> lo que hace que un error vuelva con otra cara.
 
 ---
 
