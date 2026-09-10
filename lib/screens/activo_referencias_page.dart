@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../activos_service.dart';
 import '../util/import_archivo.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../widgets/kit_componentes.dart';
 import '../widgets/pie_cargar_mas.dart';
 
 /// Catálogo de referencias de equipos (los modelos: "Bomba Grundfos DNA30").
@@ -153,7 +154,18 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
               .where((e) => e != null && e.isNotEmpty)
               .join(' · ');
           return ListTile(
-            title: Text(r.nombre),
+            // Un kit se distingue a simple vista, con ícono Y texto: solo con
+            // color no lo nota quien no distingue colores, y un lector de
+            // pantalla no lee colores.
+            title: Row(
+              children: [
+                Flexible(child: Text(r.nombre)),
+                if (r.esKit) ...[
+                  const SizedBox(width: 8),
+                  const MarcaKit(),
+                ],
+              ],
+            ),
             subtitle: detalle.isEmpty ? null : Text(detalle),
             trailing: r.activo
                 ? const Icon(Icons.chevron_right)
@@ -179,6 +191,11 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
   late final TextEditingController _modelo;
   late final TextEditingController _tipo;
   late bool _activo;
+  late bool _esKit;
+  /// null mientras se averigua. Una referencia con equipos no puede cambiar
+  /// si es kit (schema_v64): el interruptor se deshabilita y DICE por qué,
+  /// en vez de dejarlo oprimir y que la base lo rechace al guardar.
+  bool? _tieneEquipos;
   bool _guardando = false;
   bool _mostrarErrores = false;
 
@@ -191,7 +208,31 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
     _modelo = TextEditingController(text: r?.modelo ?? '');
     _tipo = TextEditingController(text: r?.tipo ?? '');
     _activo = r?.activo ?? true;
+    _esKit = r?.esKit ?? false;
+    if (r == null) {
+      _tieneEquipos = false;
+    } else {
+      ActivosService.referenciaTieneEquipos(r.id).then(
+        (v) { if (mounted) setState(() => _tieneEquipos = v); },
+        // Si no se pudo averiguar, se deja bloqueado: es lo seguro. La base
+        // lo rechazaría de todas formas si ya hay equipos.
+        onError: (_) { if (mounted) setState(() => _tieneEquipos = true); },
+      );
+    }
   }
+
+  /// El texto bajo el interruptor "Es un kit". Siempre dice algo: qué hace,
+  /// o por qué no se puede cambiar.
+  String get _ayudaKit => switch (_tieneEquipos) {
+    null => 'Revisando si esta referencia ya tiene equipos…',
+    true => 'No se puede cambiar: esta referencia ya tiene equipos. Si te '
+        'equivocaste, crea otra referencia.',
+    false => _esKit
+        ? 'Sus equipos valdrán la suma de sus componentes: el valor no se '
+            'escribe a mano.'
+        : 'Actívalo si el equipo está hecho de varias partes que se cuentan '
+            'y se valoran por separado.',
+  };
 
   @override
   void dispose() {
@@ -286,6 +327,7 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
           marca: _t(_marca),
           modelo: _t(_modelo),
           tipo: _t(_tipo),
+          esKit: _esKit,
         );
       } else {
         await ActivosService.editarReferencia(
@@ -297,6 +339,8 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
           modelo: _modelo.text.trim(),
           tipo: _tipo.text.trim(),
           activo: _activo,
+          // Solo si cambió: mandarlo igual no molesta, pero así ni se toca.
+          esKit: _esKit != r.esKit ? _esKit : null,
         );
       }
       if (!mounted) return;
@@ -384,6 +428,20 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
                 labelText: 'Tipo',
                 hintText: 'Ej: BOMBA, MOTOR, HERRAMIENTA',
                 border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            // SwitchListTile y no un Switch suelto: toda la fila se puede
+            // tocar (no solo el interruptorcito), y el lector de pantalla
+            // lee título, estado y la razón del subtítulo juntos.
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Es un kit compuesto por varios componentes'),
+              subtitle: Text(_ayudaKit),
+              value: _esKit,
+              onChanged: _tieneEquipos == false
+                  ? (v) => setState(() => _esKit = v)
+                  : null,
             ),
             if (editando) ...[
               const SizedBox(height: 8),

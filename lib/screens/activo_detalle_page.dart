@@ -4,6 +4,7 @@ import '../data.dart';
 import '../activos_service.dart';
 import '../util/movimiento_fmt.dart';
 import '../util/tiempo.dart';
+import '../widgets/kit_componentes.dart';
 import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
 
@@ -23,7 +24,15 @@ String _cuando(DateTime f) => _fechaHora.format(horaColombia(f));
 /// "Registrar movimiento" sí lo suma o lo resta.
 class ActivoDetallePage extends StatefulWidget {
   final String activoId;
-  const ActivoDetallePage({super.key, required this.activoId});
+  /// Abrir directo en la pestaña Componentes. Lo usa el alta de un kit: el
+  /// equipo recién creado vale $0 hasta que se le agreguen, así que se lleva
+  /// al usuario justo ahí en vez de dejarlo buscando dónde.
+  final bool abrirComponentes;
+  const ActivoDetallePage({
+    super.key,
+    required this.activoId,
+    this.abrirComponentes = false,
+  });
   @override
   State<ActivoDetallePage> createState() => _ActivoDetallePageState();
 }
@@ -101,8 +110,16 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
     // equipo operativo o entregado la lista de piezas buenas/malas no
     // significa nada, y una pestaña vacía solo estorba.
     final muestraPiezas = a.estado == 'baja' || a.condicion == 'repuestos';
+    // "Componentes" en todo equipo cuya referencia es un kit, SIEMPRE: es lo
+    // que define su valor, también si está de baja o para repuestos (el plan
+    // decía que ahí ganaba "Piezas"; se cambió porque ocultarla escondería
+    // de dónde sale el valor que se sigue sumando al valorizado).
+    final muestraComponentes = a.referenciaEsKit;
+    final pestanas = 3 + (muestraPiezas ? 1 : 0) + (muestraComponentes ? 1 : 0);
     return DefaultTabController(
-      length: muestraPiezas ? 4 : 3,
+      length: pestanas,
+      // Componentes va justo después de Ficha, así que es la pestaña 1.
+      initialIndex: widget.abrirComponentes && muestraComponentes ? 1 : 0,
       child: Scaffold(
         appBar: AppBar(
           // Serial arriba y modelo debajo: el serial solo no dice de qué
@@ -128,6 +145,7 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
             isScrollable: true,
             tabs: [
               const Tab(text: 'Ficha'),
+              if (muestraComponentes) const Tab(text: 'Componentes'),
               if (muestraPiezas) const Tab(text: 'Piezas'),
               const Tab(text: 'Mantenimiento'),
               const Tab(text: 'Movimientos'),
@@ -142,6 +160,7 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
               editaObservaciones: _editaObservaciones,
               onCambio: _cargar,
             ),
+            if (muestraComponentes) _Componentes(activo: a, onCambio: _cargar),
             if (muestraPiezas) _Piezas(activoId: a.id),
             _Mantenimientos(activoId: a.id),
             _Movimientos(
@@ -245,7 +264,12 @@ class _Ficha extends StatelessWidget {
         const SizedBox(height: 12),
 
         _bloque(context, 'Valorización', [
-          _fila('Valor a nuevo', _money.format(activo.valorNuevo)),
+          // En un kit el valor no lo escribió nadie: es la suma de sus
+          // componentes. La etiqueta lo dice para que no parezca un error.
+          _fila(activo.referenciaEsKit
+                  ? 'Valor a nuevo (suma de componentes)'
+                  : 'Valor a nuevo',
+              _money.format(activo.valorNuevo)),
           _fila('Porcentaje', '${activo.porcentajeValor}%'),
           _fila('Valor actual', _money.format(activo.valorActual),
               destacado: true),
@@ -429,6 +453,173 @@ class _Ficha extends StatelessWidget {
 /// entrada o una salida. Sin esta pantalla, un equipo que entra a
 /// mantenimiento se queda atrapado ahí para siempre: no hay movimiento que
 /// lo saque, porque nunca salió de la bodega.
+// ---------------------------------------------------------------------
+// Pestaña — Componentes de un KIT (Fase 3, docs/plan-kits-equipos.md)
+// ---------------------------------------------------------------------
+
+/// De qué está hecho un kit y cuánto vale cada parte. El valor del equipo es
+/// la suma de estos subtotales: lo calcula la base (schema_v64), aquí solo se
+/// muestra y se le agregan componentes. Mover uno (vender, dañar, garantía)
+/// llega en la Fase 5.
+class _Componentes extends StatefulWidget {
+  final Activo activo;
+  final Future<void> Function() onCambio;
+  const _Componentes({required this.activo, required this.onCambio});
+  @override
+  State<_Componentes> createState() => _ComponentesState();
+}
+
+class _ComponentesState extends State<_Componentes> {
+  List<ActivoComponente> _lista = [];
+  bool _cargando = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+    ActivosService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    ActivosService.revision.removeListener(_cargar);
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final l = await ActivosService.componentes(widget.activo.id);
+      if (!mounted) return;
+      setState(() { _lista = l; _cargando = false; _error = null; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = '$e'; _cargando = false; });
+    }
+  }
+
+  /// Un kit entregado ya no es nuestro (regla 3): la base rechaza agregarle
+  /// componentes, así que ni se ofrece el botón.
+  bool get _entregado => widget.activo.estado == 'entregado';
+  num get _porcentaje => widget.activo.porcentajeValor;
+  num get _total => _lista.fold<num>(0, (s, c) => s + c.subtotal);
+
+  Future<void> _agregar() async {
+    final agregado = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaComponente(
+        activoId: widget.activo.id,
+        orden: _lista.length + 1,
+      ),
+    );
+    // Recargar el equipo: su valor a nuevo cambió, y la Ficha lo muestra.
+    if (agregado == true) await widget.onCambio();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('No se pudieron cargar los componentes.\n$_error',
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: _cargar, child: const Text('Reintentar')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Los que siguen en el kit primero; los agotados al final, pero se
+    // muestran: su historia no desaparece porque se hayan acabado.
+    final vivos = _lista.where((c) => !c.agotado).toList();
+    final agotados = _lista.where((c) => c.agotado).toList();
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      vivos.length == 1
+                          ? '1 componente'
+                          : '${vivos.length} componentes',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (!_entregado)
+                    FilledButton.tonalIcon(
+                      onPressed: _agregar,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar'),
+                    ),
+                ],
+              ),
+              if (_entregado)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Este kit fue entregado y ya no nos pertenece: no se le '
+                    'agregan componentes.',
+                    style: TextStyle(fontSize: 12.5),
+                  ),
+                ),
+              if (_lista.isEmpty)
+                Card(
+                  margin: const EdgeInsets.only(top: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline),
+                        const SizedBox(width: 12),
+                        // Expanded: sin esto el texto desborda en 360 px.
+                        Expanded(
+                          child: Text(
+                            _entregado
+                                ? 'Este kit no tiene componentes registrados.'
+                                : 'Este kit todavía no tiene componentes, así '
+                                    'que vale \$0. Agrégale sus partes con el '
+                                    'botón "Agregar": su valor será la suma de '
+                                    'todas.',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              for (final c in vivos)
+                TarjetaComponente(componente: c, porcentaje: _porcentaje),
+              if (agotados.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Text('Agotados',
+                    style: Theme.of(context).textTheme.labelLarge),
+                for (final c in agotados)
+                  TarjetaComponente(componente: c, porcentaje: _porcentaje),
+              ],
+            ],
+          ),
+        ),
+        // El total, fijo al pie: se ve siempre, aunque la lista sea larga.
+        if (_lista.isNotEmpty)
+          PieTotalKit(total: _total, porcentaje: _porcentaje),
+      ],
+    );
+  }
+}
+
 /// Listado cronológico de observaciones del equipo, del más reciente al más
 /// antiguo (regla de históricos del proyecto).
 ///

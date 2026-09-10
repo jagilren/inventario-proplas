@@ -482,6 +482,42 @@ equipo para que no salga `🏬 — ➡️ 🎯 NP00034`.
 > diferencia es que esta vez se buscó antes de programar, y en vez de inventar
 > un formato nuevo se reutilizó el que el usuario ya reconoce del Kardex.
 
+### 5.3 Accesibilidad: medida, no supuesta
+
+*(2026-09-10, pantallas de los kits.)* "Se ve bien en mi pantalla" no es una
+verificación. Flutter trae pruebas automáticas de accesibilidad, y las piezas
+visuales de los kits (`lib/widgets/kit_componentes.dart`) las pasan **en el
+CI, antes de cada publicación** (`test/kit_componentes_widget_test.dart`):
+
+| Qué se mide | Por qué importa aquí |
+|---|---|
+| Todo lo que se toca mide **48 dp** (Android e iOS) | Se usa con el dedo en una tablet de bodega, a veces con guantes |
+| Todo lo que se toca tiene **nombre** para el lector de pantalla | Un botón que solo es un ícono, para quien no ve, no existe |
+| **Contraste** del texto, con el tema real de la app | Un componente agotado va en el gris del tema, **no con opacidad**: la opacidad baja el contraste por debajo de lo legible |
+| **360 px con la letra al doble**, sin desbordes | Así usa el celular quien agranda la letra en Ajustes |
+
+Y cuatro decisiones de diseño que salen de lo mismo:
+
+- **Una frase, no cifras sueltas.** Cada tarjeta le dice al lector de pantalla
+  *"Tela filtros de los medios. 24 unidades a $45.000 cada una. Subtotal
+  $1.080.000. Al 70 por ciento, $756.000"* — en vez de leer "24 por 45.000" y
+  tres números sin decir qué es cada uno.
+- **Nunca solo color.** Un kit se marca con ícono **y** la palabra KIT; un
+  agotado dice "Agotado". Quien no distingue colores, o no ve, también se entera.
+- **Un control deshabilitado dice por qué.** El interruptor "Es un kit" de una
+  referencia con equipos no solo se apaga: explica que ya tiene equipos y qué
+  hacer. Lo mismo el valor bloqueado en el alta de un kit.
+- **Los números, como se escriben en Colombia.** "45.000" en un campo decimal se
+  lee como 45. El valor unitario solo acepta dígitos y muestra en vivo cómo quedó
+  entendido. (El campo "Valor a nuevo" del alta, que ya existía, **sí** tiene ese
+  problema — "1.540.000" queda en $0 — y está anotado como pendiente.)
+
+> **Lección:** una verificación que nunca ha fallado no demuestra que sepa
+> detectar un fallo. Antes de confiar en estas pruebas se corrieron tres
+> controles **dañados a propósito** —un botón de 20 px, texto gris claro sobre
+> blanco, una fila más ancha que la pantalla— y las tres verificaciones los
+> atraparon.
+
 ---
 
 ## 6. Permisos

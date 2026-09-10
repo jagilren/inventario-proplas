@@ -85,6 +85,49 @@ la Fase 3. Lo que queda listo para ellas:
 Y se atajaron dos errores que habrían llegado a producción — están contados en
 el SDD, §9.8.
 
+### Fase 3 (pantallas) — 2026-09-10
+
+**Qué cambió del plan, y por qué.** La Fase 3 decía "ficha Componentes de
+**solo lectura**". Como el push publica solo, eso dejaba en producción una
+trampa: con el interruptor "Es un kit" ya disponible, alguien crea un kit,
+escribe su valor en el alta, la base lo pone en **$0** (en un kit el valor sale
+de los componentes)… y no habría **ninguna forma** de agregarle componentes
+hasta la Fase 4. Un equipo en cero, cambiado **en silencio**. Por eso la Fase 3
+trajo lo mínimo para que no quede esa trampa:
+
+| Del plan | Cómo quedó |
+|---|---|
+| Ficha de solo lectura | Se ven los componentes **y se pueden agregar** (hoja "Agregar componente") |
+| El alta con valor bloqueado era de la Fase 4 | Se adelantó: en un kit el campo se **deshabilita diciendo por qué**, y al guardar lleva **directo** a la pestaña Componentes |
+| "Si el kit está de baja, gana Piezas" (§2) | **Componentes se ve siempre** en un kit. Ocultarla escondería de dónde sale el valor que se sigue sumando al valorizado |
+
+La plantilla (Fase 4) y los movimientos de componente (Fase 5) siguen pendientes.
+
+**Lo que se ve:**
+- Referencias: marca **KIT** junto al nombre (ícono y texto, no solo color), e
+  interruptor "Es un kit compuesto por varios componentes" que, si la
+  referencia ya tiene equipos, se deshabilita y **dice por qué**.
+- Equipo: pestaña **Componentes** justo después de Ficha. Tarjetas, no tabla;
+  el valor del kit **fijo al pie**; los agotados al final, marcados con texto.
+- En la Ficha, un kit dice "Valor a nuevo (suma de componentes)".
+
+**Accesibilidad medida, no supuesta.** Las piezas visuales viven en
+`lib/widgets/kit_componentes.dart` para poder probarlas, y
+`test/kit_componentes_widget_test.dart` corre en el CI las pruebas de
+accesibilidad de Flutter: área táctil de 48 dp (Android e iOS), que todo lo que
+se toca tenga nombre para el lector de pantalla, contraste del texto con el tema
+real de la app, y que **nada se desborde en 360 px con la letra al doble**. Y
+se comprobó con tres controles dañados a propósito que esas verificaciones sí
+detectan un fallo.
+
+**Números como se escriben en Colombia.** El valor unitario solo acepta dígitos
+y muestra en vivo cómo quedó entendido ("= $45.000 cada uno"): "45.000" en un
+campo decimal se leería como 45. **Hallazgo pendiente, fuera de esta fase:** el
+campo "Valor a nuevo" del alta de equipos (el que ya existía) sí tiene ese
+problema — "45.000" queda en 45, y "1.540.000" queda en **$0** porque no se
+puede leer. Se reportó y no se tocó sin avisar, porque cambia un flujo que ya
+está en uso.
+
 ---
 
 ## 1. Objetivo y alcance
@@ -491,7 +534,7 @@ nueva `equipos_comp`.
 |:---:|---|:---:|---|
 | 1 ✔ | SQL: `es_kit`, las 2 tablas, triggers, RLS, auditoría — **hecha el 2026-09-10** (`schema_v64`, ver §0) | No | **Alto** — la cadena de recálculo |
 | 2 ✔ | `ActivosService`: modelos y CRUD — **hecha el 2026-09-10** (ver §0) | No | Bajo |
-| 3 | Switch en referencias + ficha Componentes (solo lectura) | **Sí** | Bajo |
+| 3 ✔ | Switch en referencias + ficha Componentes — **hecha el 2026-09-10**, con "agregar componente" y el valor bloqueado en el alta adelantados (ver §0) | **Sí** | Bajo |
 | 4 | Alta con plantilla del kit anterior | **Sí** | Medio |
 | 5 | Movimientos de componente (la vida del kit) | **Sí** | Medio |
 | 6 | Valorizado con desglose de kits | Sí | Bajo |

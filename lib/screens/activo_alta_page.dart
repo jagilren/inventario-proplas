@@ -4,6 +4,7 @@ import '../data.dart';
 import '../activos_service.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+import 'activo_detalle_page.dart';
 import 'activo_referencias_page.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
@@ -171,6 +172,12 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
     await _recargarReferencias();
   }
 
+  /// La referencia elegida es un kit: su valor lo calcula la base sumando los
+  /// componentes (schema_v64) y cualquier número que se escriba aquí lo
+  /// reemplazaría por $0. Por eso el campo se bloquea y lo dice, en vez de
+  /// dejar escribir un valor que va a desaparecer en silencio.
+  bool get _esKit => _referencia?.esKit ?? false;
+
   bool get _formularioValido =>
       _referencia != null &&
       _serial.text.trim().isNotEmpty &&
@@ -186,12 +193,12 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
     }
     setState(() => _guardando = true);
     try {
-      await ActivosService.alta(
+      final creado = await ActivosService.alta(
         referenciaId: _referencia!.id,
         serial: _serial.text.trim(),
         condicion: _condicion,
         bodegaId: _bodega!.id,
-        valorNuevo: _valorNuevoNum,
+        valorNuevo: _esKit ? 0 : _valorNuevoNum,
         porcentajeValor: _porcentajeNum,
         observacion: _observacion.text.trim().isEmpty
             ? null
@@ -201,7 +208,21 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
         usable: _condicion == 'usado' ? _usable : null,
       );
       if (!mounted) return;
-      Navigator.pop(context, true);
+      if (_esKit) {
+        // Un kit recién creado vale $0 hasta que se le agreguen componentes:
+        // se lleva al usuario directo a esa pestaña. result: true para que
+        // la pantalla de origen sepa que se creó y se refresque.
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ActivoDetallePage(activoId: creado.id, abrirComponentes: true),
+          ),
+          result: true,
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
@@ -384,13 +405,22 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
 
                 TextField(
                   controller: _valorNuevo,
+                  // Deshabilitado en un kit: el lector de pantalla lo anuncia
+                  // como "deshabilitado" y el helperText dice por qué.
+                  enabled: !_esKit,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Valor a nuevo',
-                    prefixText: '\$ ',
-                    border: OutlineInputBorder(),
+                    prefixText: _esKit ? null : '\$ ',
+                    hintText: _esKit ? 'Se calcula solo' : null,
+                    helperText: _esKit
+                        ? 'Es un kit: su valor es la suma de sus componentes. '
+                            'Al guardar te llevo a agregárselos.'
+                        : null,
+                    helperMaxLines: 3,
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -409,7 +439,11 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('Valorizado de este equipo: ${_money.format(_valorActual)}',
+                Text(
+                    _esKit
+                        ? 'Valorizado: se calcula cuando le agregues sus '
+                            'componentes.'
+                        : 'Valorizado de este equipo: ${_money.format(_valorActual)}',
                     style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 16),
 
