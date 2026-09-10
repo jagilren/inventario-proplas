@@ -46,6 +46,12 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
 
   bool get _admin => _roles.contains(Roles.admin);
 
+  /// Solo admin y coordinador modifican una observación ya escrita; el rol
+  /// `equipos` solo agrega. La base lo hace cumplir (schema_v62): esto solo
+  /// evita mostrar un lápiz que le iba a fallar al usuario.
+  bool get _editaObservaciones =>
+      _admin || _roles.contains(Roles.coordinador);
+
   Future<void> _cargar() async {
     setState(() { _cargando = true; _error = null; });
     try {
@@ -133,6 +139,7 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
             _Ficha(
               activo: a,
               ubicacion: _ubicacion,
+              editaObservaciones: _editaObservaciones,
               onCambio: _cargar,
             ),
             if (muestraPiezas) _Piezas(activoId: a.id),
@@ -156,10 +163,12 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
 class _Ficha extends StatelessWidget {
   final Activo activo;
   final ActivoUbicacion? ubicacion;
+  final bool editaObservaciones;
   final Future<void> Function() onCambio;
   const _Ficha({
     required this.activo,
     required this.ubicacion,
+    required this.editaObservaciones,
     required this.onCambio,
   });
 
@@ -336,7 +345,8 @@ class _Ficha extends StatelessWidget {
           ),
 
         const SizedBox(height: 12),
-        _Observaciones(activoId: activo.id),
+        _Observaciones(
+            activoId: activo.id, puedeEditar: editaObservaciones),
 
         const SizedBox(height: 24),
         if (_permiteMovimiento)
@@ -428,7 +438,9 @@ class _Ficha extends StatelessWidget {
 /// `activo_observaciones_todas`.
 class _Observaciones extends StatefulWidget {
   final String activoId;
-  const _Observaciones({required this.activoId});
+  /// Admin o coordinador. El rol `equipos` agrega pero no edita (v62).
+  final bool puedeEditar;
+  const _Observaciones({required this.activoId, required this.puedeEditar});
   @override
   State<_Observaciones> createState() => _ObservacionesState();
 }
@@ -616,12 +628,14 @@ class _ObservacionesState extends State<_Observaciones> {
                       ),
                     ),
                     // 48 dp de área táctil: es un botón que se usa con el
-                    // dedo en una tablet, no con un mouse.
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                      tooltip: 'Editar esta observación',
-                      onPressed: () => _editar(o),
-                    ),
+                    // dedo en una tablet, no con un mouse. Solo admin y
+                    // coordinador: al rol `equipos` la base se lo rechaza.
+                    if (widget.puedeEditar)
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        tooltip: 'Editar esta observación',
+                        onPressed: () => _editar(o),
+                      ),
                   ],
                 ),
               ],

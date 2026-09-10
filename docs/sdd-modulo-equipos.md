@@ -450,6 +450,43 @@ equipo para que no salga `🏬 — ➡️ 🎯 NP00034`.
 Se aplica en **RLS de la base de datos**, no en la app. Ocultar un botón no es
 seguridad: cualquiera con el token puede llamar la API igual.
 
+**Una excepción al "acceso completo".** *(2026-09-10, `schema_v62`.)*
+
+| Acción | admin | coordinador | equipos |
+|---|:---:|:---:|:---:|
+| Agregar una observación | ✔ | ✔ | ✔ |
+| **Modificar** una observación ya escrita | ✔ | ✔ | **✘** |
+
+Los roles de operario (`operario_mas`, `operario_menos`) son del Inventario y
+**no entran** al módulo de Equipos. Hoy los tres bodegueros entran porque
+también son coordinadores — y por eso sí editan.
+
+**Cómo se hace cumplir una regla sobre UNA columna.** No se puede quitarle el
+permiso de `UPDATE` al rol `equipos` sobre esas tablas: lo necesita para
+cambiar el estado, cerrar ubicaciones, etc. Lo que se bloquea es cambiar una
+columna concreta, con un trigger `before update of <columna>` que solo se
+dispara si esa columna viene en el `UPDATE`. Una sola función para las tres
+tablas: el nombre de la columna le llega como argumento del trigger.
+
+El lápiz de editar tampoco se le muestra al rol `equipos`. Pero eso **no** es
+el candado — es cortesía, para no ofrecerle un botón que la base le va a
+rechazar.
+
+**El hueco que apareció al probarlo.** Para probar la regla había que darle el
+rol `equipos` a un usuario de prueba… y **la base no lo dejó**. La restricción
+de `usuario_roles` tenía seis roles y **le faltaba `equipos`**. Quedó así desde
+la Fase 1: el rol se agregó a la app (`Roles.todos`) y a todas las políticas
+RLS del módulo, pero no a la lista de valores permitidos. **Nadie podía
+tenerlo.** Si el admin intentaba asignárselo a alguien desde la app, fallaba.
+
+No se había notado porque los tres usuarios que entran a Equipos lo hacen como
+coordinadores.
+
+> **Lección:** una prueba de permisos tiene que probar **el rol**, no a una
+> persona. Si se hubiera probado con un usuario que tuviera *solo* el rol
+> `equipos`, esto habría saltado el día que se creó el módulo. Probar con los
+> usuarios que ya existen solo prueba los roles que ya se usan.
+
 ---
 
 ## 7. Fases de entrega
