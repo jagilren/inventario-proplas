@@ -627,7 +627,7 @@ class Reportes {
     final res = await supabase
         .from('activos_disponibilidad')
         .select(
-          '*, activo_referencias(nombre), '
+          '*, activo_referencias(nombre, activo), '
           'bodegas!activos_bodega_id_fkey(nombre), '
           'ubicacion_bodega:bodegas!activo_ubicaciones_bodega_id_fkey(nombre), '
           'activo_terceros(nombre)',
@@ -646,12 +646,22 @@ class Reportes {
         '%',
         'Valor actual',
         'Disponible',
+        // Un equipo de baja, ya entregado, o cuyo modelo se sacó del
+        // catálogo, sigue apareciendo en la lista pero NO suma: así este
+        // TOTAL coincide con el "Valorizado total por bodega" en vez de dar
+        // dos cifras distintas para lo mismo.
+        'Cuenta en el valorizado',
       ],
     ];
     int total = 0;
     for (final r in (res as List)) {
       final valorActual = ((r['valor_actual'] ?? 0) as num).round();
-      total += valorActual;
+      final estado = (r['estado'] ?? '') as String;
+      final refActiva =
+          ((r['activo_referencias'] as Map?)?['activo'] ?? true) == true;
+      final cuenta =
+          estado != 'entregado' && estado != 'baja' && refActiva;
+      if (cuenta) total += valorActual;
       // La ubicación vigente es una bodega propia O un tercero, nunca las
       // dos (lo garantiza un CHECK en la tabla).
       final ubicacion = (r['ubicacion_bodega'] as Map?)?['nombre'] ??
@@ -661,16 +671,17 @@ class Reportes {
         (r['activo_referencias'] as Map?)?['nombre'] ?? '',
         r['serial'] ?? '',
         r['condicion'] ?? '',
-        r['estado'] ?? '',
+        estado,
         (r['bodegas'] as Map?)?['nombre'] ?? '',
         ubicacion,
         ((r['valor_nuevo'] ?? 0) as num).round(),
         (r['porcentaje_valor'] ?? 0) as num,
         valorActual,
         (r['disponible'] ?? false) == true ? 'Sí' : 'No',
+        cuenta ? 'Sí' : 'No',
       ]);
     }
-    filas.add(['', '', '', '', '', '', '', '', 'TOTAL', total]);
+    filas.add(['', '', '', '', '', '', '', '', 'TOTAL', total, '']);
     await _descargar('equipos_valorizacion', filas);
   }
 
