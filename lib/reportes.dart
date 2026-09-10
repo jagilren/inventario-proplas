@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
-import 'package:file_saver/file_saver.dart';
+import 'util/descargar.dart';
 import 'ajustes.dart';
 import 'data.dart';
 import 'util/tiempo.dart';
@@ -27,11 +27,11 @@ class Reportes {
     // BOM UTF-8 para que Excel muestre bien las tildes.
     final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
     final fecha = DateTime.now().toIso8601String().substring(0, 10);
-    await FileSaver.instance.saveFile(
-      name: '${nombre}_$fecha',
+    await guardarArchivo(
+      nombre: '${nombre}_$fecha',
+      extension: 'csv',
       bytes: bytes,
-      fileExtension: 'csv',
-      mimeType: MimeType.csv,
+      mimeType: 'text/csv',
     );
   }
 

@@ -11,6 +11,6 @@ class Config {
   /// Se mantiene a mano igual a la de pubspec.yaml. Leerla en tiempo de
   /// ejecución exigiría el paquete package_info_plus, y sumar otro plugin
   /// justo ahora agravaría el aviso de KGP que ya tenemos pendiente con
-  /// file_saver y mobile_scanner.
+  /// file_picker y mobile_scanner.
   static const versionApp = '1.0.0';
 }
