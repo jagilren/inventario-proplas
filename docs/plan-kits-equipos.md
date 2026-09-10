@@ -1,8 +1,56 @@
 # Plan: Referencias KITZABLES
 
-**Estado:** diseñado 2026-09-10, sin implementar.
+**Estado:** diseñado 2026-09-10 · **Fase 1 (SQL) en producción el 2026-09-10**
+(`schema_v64_kits_fase1`) · Fases 2 a 6 pendientes.
 **Extiende:** el Módulo de Equipos (`docs/plan-modulo-equipos.md`).
 **Sigue la plantilla de 10 secciones de** `docs/sdd-modulo-equipos.md`.
+
+---
+
+## 0. Qué cambió del diseño al construir la Fase 1
+
+El plan de abajo se escribió en la mañana del 2026-09-10. Esa misma tarde, el
+Módulo de Equipos tuvo siete errores reales (SDD §9), y varias de esas
+lecciones cambiaron esta Fase 1 **antes** de escribir el SQL. Se dejan
+anotadas aquí, sin borrar el plan original, porque *por qué cambió* enseña más
+que el resultado.
+
+| Del plan original | Cómo quedó | Por qué |
+|---|---|---|
+| Crear un componente = insertar componente + insertar su movimiento de alta | **Una sola función**, `agregar_componente()`, hace las dos cosas | Error 9.7: una regla que debe cumplirse siempre va en la base. Dos inserciones desde la app pueden quedar a medias con un corte de red: un componente en cero, sin historia |
+| El signo de cada movimiento se deduce del tipo al calcular | Cada movimiento **guarda su signo** al insertarse (`signo` = +1 / −1) | La anulación necesita el signo **contrario al original**. Guardado, la cantidad es solo `suma(signo × cantidad)` |
+| Anular sin tipo propio | Tipo **`anulacion`**, que copia cantidad y valor del original y toma el signo opuesto | Deshace exactamente lo que hizo el original. No se puede anular dos veces ni anular una anulación |
+| Candado de inmutabilidad "como el de los movimientos" | Candado propio que nombra **todas** sus columnas | `schema_v63`: una lista incompleta deja editable lo que falte |
+| — | Un kit **entregado** no admite componentes ni movimientos | Regla 3 del SDD: ya no es nuestro |
+| — | La observación de un movimiento de componente solo la editan admin y coordinador | `schema_v62`, con la misma función |
+| — | `plantilla_kit(referencia)` en la base | La "repetición" (§6.2) necesita la composición del kit más reciente; es una consulta, no lógica de pantalla |
+| — | El usuario de cada movimiento lo pone la base (`auth.uid()`) | La app no puede firmar a nombre de otro |
+
+**De paso**, al extender `auditoria_clasificada` para las dos tablas nuevas
+apareció que `activo_observaciones` (creada ese mismo día en `schema_v54`)
+**nunca se había agregado** a la categoría "Equipos" de la auditoría: sus
+cambios no salían en ese filtro. Quedó arreglado en la misma migración.
+
+**Cómo se probó.** En una transacción que se deshace al final, ejerciendo
+todo **como un usuario con solo el rol `equipos`** (lección de `schema_v62`:
+probar el rol, no a la persona). 24 casos, 24 correctos:
+
+- Con el ejemplo real: 3 componentes → **$1.540.000**; al 70% → **$1.078.000**;
+  se dañan 3 telas → **$1.405.000**; se anula el daño → vuelve; se vende una
+  guía a un tercero → **$1.525.000**.
+- Lo que debe fallar, falla con un mensaje claro: vender sin tercero, anular
+  dos veces, anular una anulación, sacar más de lo que hay, quitarle `es_kit`
+  a una referencia con equipos, poner componentes a un equipo que no es kit,
+  editar un movimiento, mover componentes de un kit entregado, y que el rol
+  `equipos` edite una observación.
+- Lo que no se debe poder hacer a escondidas, se corrige solo: escribir la
+  cantidad o el valor de un kit a mano se sobreescribe con la suma verdadera.
+- **Lo que ya funcionaba sigue igual**: un equipo que no es kit sigue
+  aceptando su valor escrito a mano, y los dos equipos reales quedaron con el
+  mismo valor que tenían.
+
+Después, contra la API real: HTTP 200 en todas las consultas nuevas, sin
+PGRST201.
 
 ---
 
@@ -408,7 +456,7 @@ nueva `equipos_comp`.
 
 | Fase | Qué | Entrega valor sola | Riesgo |
 |:---:|---|:---:|---|
-| 1 | SQL: `es_kit`, las 2 tablas, triggers, RLS, auditoría | No | **Alto** — la cadena de recálculo |
+| 1 ✔ | SQL: `es_kit`, las 2 tablas, triggers, RLS, auditoría — **hecha el 2026-09-10** (`schema_v64`, ver §0) | No | **Alto** — la cadena de recálculo |
 | 2 | `ActivosService`: modelos y CRUD | No | Bajo |
 | 3 | Switch en referencias + ficha Componentes (solo lectura) | **Sí** | Bajo |
 | 4 | Alta con plantilla del kit anterior | **Sí** | Medio |

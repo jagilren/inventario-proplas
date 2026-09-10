@@ -97,7 +97,7 @@ que no sea obvia**. No hay que documentar que un nombre es texto; sí hay que
 documentar por qué algo es una tabla aparte, por qué un campo es obligatorio, o
 por qué existe un índice único.
 
-**El del módulo — 8 tablas y 2 vistas:**
+**El del módulo — 10 tablas y 2 vistas:**
 
 ```
 activo_referencias   los modelos (catálogo)
@@ -108,10 +108,19 @@ activo_movimientos   entradas y salidas REALES (sí tocan inventario)
 activo_piezas        piezas buenas/malas de un equipo desarmado
 activo_mantenimientos hoja de vida
 activo_observaciones  notas sueltas que no tienen otra casa
+activo_componentes            de qué está hecho un KIT (extensión)
+activo_componente_movimientos la vida de cada componente (extensión)
 
 activos_disponibilidad      qué hay disponible por referencia
 activo_observaciones_todas  las 3 fuentes de observaciones, unidas
 ```
+
+> Las dos últimas tablas son la extensión **Referencias KITZABLES**: una
+> referencia marcada como kit vale la suma de sus componentes, y cada
+> componente tiene su propia historia (daño, venta, garantía, anulación).
+> Tienen su propio documento de diseño, `docs/plan-kits-equipos.md`, que
+> sigue la plantilla de la sección 10 de este SDD — y su sección 0 cuenta qué
+> cambió del diseño al construirlas, a la luz de los errores de la §9.
 
 **Las cinco decisiones que hay que justificar:**
 
