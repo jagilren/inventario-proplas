@@ -455,6 +455,44 @@ class _ObservacionesState extends State<_Observaciones> {
     _ => Icons.notes,
   };
 
+  /// Edita el texto en su tabla de origen. El historial lo guarda solo el
+  /// trigger de auditoría; aquí no hay que hacer nada más.
+  Future<void> _editar(ActivoObservacion o) async {
+    final texto = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _HojaNota(
+        titulo: 'Editar observación',
+        inicial: o.texto,
+        aviso: 'El cambio queda registrado: fecha, tu nombre y lo que decía '
+            'antes.',
+      ),
+    );
+    if (texto == null || texto.trim() == o.texto.trim()) return;
+    if (texto.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('La observación no puede quedar vacía.')));
+      return;
+    }
+    try {
+      await ActivosService.editarObservacion(
+          origen: o.origen, id: o.id, texto: texto);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo guardar: $e')));
+    }
+  }
+
+  Future<void> _verCambios(ActivoObservacion o) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _HojaCambiosObservacion(observacion: o),
+    );
+  }
+
   Future<void> _agregar() async {
     final texto = await showModalBottomSheet<String>(
       context: context,
@@ -534,8 +572,43 @@ class _ObservacionesState extends State<_Observaciones> {
                             style: const TextStyle(
                                 fontSize: 11.5, color: Colors.grey),
                           ),
+                          // Una observación editada lo dice, y deja ver qué
+                          // decía antes. Sin esto, editar sería reescribir
+                          // la historia en silencio.
+                          if (o.editada)
+                            InkWell(
+                              onTap: () => _verCambios(o),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.history,
+                                        size: 15,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary),
+                                    const SizedBox(width: 4),
+                                    Text('Editada · ver cambios',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary)),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
+                    ),
+                    // 48 dp de área táctil: es un botón que se usa con el
+                    // dedo en una tablet, no con un mouse.
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      tooltip: 'Editar esta observación',
+                      onPressed: () => _editar(o),
                     ),
                   ],
                 ),
@@ -548,14 +621,26 @@ class _ObservacionesState extends State<_Observaciones> {
 }
 
 /// Hoja mínima para escribir una observación suelta.
+/// Hoja para escribir una observación nueva o editar una existente. La
+/// misma para las dos cosas: si se ven distinto, el usuario duda de si está
+/// haciendo lo mismo.
 class _HojaNota extends StatefulWidget {
-  const _HojaNota();
+  final String titulo;
+  final String inicial;
+  /// Una línea gris bajo el campo. Al editar, avisa que el cambio queda
+  /// registrado: editar no es borrar lo que se dijo.
+  final String? aviso;
+  const _HojaNota({
+    this.titulo = 'Nueva observación',
+    this.inicial = '',
+    this.aviso,
+  });
   @override
   State<_HojaNota> createState() => _HojaNotaState();
 }
 
 class _HojaNotaState extends State<_HojaNota> {
-  final _texto = TextEditingController();
+  late final _texto = TextEditingController(text: widget.inicial);
 
   @override
   void dispose() {
@@ -575,7 +660,7 @@ class _HojaNotaState extends State<_HojaNota> {
           Row(
             children: [
               Expanded(
-                child: Text('Nueva observación',
+                child: Text(widget.titulo,
                     style: Theme.of(context).textTheme.titleLarge),
               ),
               IconButton(
@@ -597,12 +682,125 @@ class _HojaNotaState extends State<_HojaNota> {
               border: OutlineInputBorder(),
             ),
           ),
+          if (widget.aviso != null) ...[
+            const SizedBox(height: 6),
+            Text(widget.aviso!,
+                style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+          ],
           const SizedBox(height: 20),
           FilledButton(
             onPressed: () => Navigator.pop(context, _texto.text),
             child: const Text('Guardar'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Lo que ha cambiado el texto de una observación: fecha, quién, antes y
+/// después. En tarjetas y no en tabla: en 360 px una tabla de cuatro
+/// columnas con textos largos es ilegible.
+class _HojaCambiosObservacion extends StatelessWidget {
+  final ActivoObservacion observacion;
+  const _HojaCambiosObservacion({required this.observacion});
+
+  @override
+  Widget build(BuildContext context) {
+    final alto = MediaQuery.of(context).size.height * 0.8;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: alto),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Cambios de la observación',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Cerrar',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text('Del más reciente al más antiguo.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+            const SizedBox(height: 12),
+            Flexible(
+              child: FutureBuilder<List<CambioObservacion>>(
+                future: ActivosService.historialObservacion(
+                    origen: observacion.origen, id: observacion.id),
+                builder: (context, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snap.hasError) {
+                    return Text('No se pudo cargar: ${snap.error}');
+                  }
+                  final cambios = snap.data ?? const [];
+                  if (cambios.isEmpty) {
+                    return const Text('Esta observación no tiene cambios.');
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: cambios.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) => _TarjetaCambio(cambio: cambios[i]),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TarjetaCambio extends StatelessWidget {
+  final CambioObservacion cambio;
+  const _TarjetaCambio({required this.cambio});
+
+  @override
+  Widget build(BuildContext context) {
+    final gris = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              [
+                _cuando(cambio.fecha),
+                if (cambio.usuarioEmail != null) cambio.usuarioEmail!,
+              ].join(' · '),
+              style: TextStyle(fontSize: 11.5, color: gris),
+            ),
+            const SizedBox(height: 8),
+            Text('ANTES', style: TextStyle(fontSize: 10.5, color: gris,
+                fontWeight: FontWeight.w600, letterSpacing: 0.6)),
+            // Tachado: se lee de un vistazo que es lo que ya no dice.
+            Text(cambio.antes ?? '(vacío)',
+                style: TextStyle(
+                    color: gris, decoration: TextDecoration.lineThrough)),
+            const SizedBox(height: 8),
+            Text('DESPUÉS', style: TextStyle(fontSize: 10.5, color: gris,
+                fontWeight: FontWeight.w600, letterSpacing: 0.6)),
+            Text(cambio.despues ?? '(vacío)'),
+          ],
+        ),
       ),
     );
   }

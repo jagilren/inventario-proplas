@@ -173,6 +173,52 @@ que ya existían y nadie estaba viendo. Cero migración de datos.
 > guarda a mano. Aplica a `valor_actual`, a `disponible`, y ahora al listado
 > de observaciones.
 
+**e) Observaciones editables, sin reescribir la historia.** *(2026-09-10,
+`schema_v60`.)*
+
+El usuario pidió poder **editar** cada observación, y que quedara una
+auditoría con **fecha, diferencia y usuario**.
+
+La tentación era una tabla nueva de "versiones de observaciones". No hizo
+falta, y la razón es la decisión (d): como cada texto tiene **un solo dueño**,
+editarlo es un `UPDATE` en su tabla de origen — y las tres tablas ya tenían el
+trigger `fn_auditoria`, que guarda por cada cambio el campo, el valor anterior,
+el nuevo, el usuario y la fecha. **La auditoría ya existía. Lo que faltaba era
+poder verla desde la ficha.**
+
+Ahí apareció el problema de verdad: `auditoria` solo la leen **admin y
+coordinador**. Y así tiene que seguir — guarda los cambios de **todo** el
+sistema, incluidos costos de inventario. Abrírsela al rol `equipos` para que
+viera el historial de una nota sería regalarle mucho más de lo que pidió.
+
+La salida es una función `SECURITY DEFINER`:
+
+| | Función normal | `SECURITY DEFINER` |
+|---|---|---|
+| Corre con los permisos de | Quien la llama | El dueño de la función |
+| Lee `auditoria` el rol `equipos` | No | Sí, pero **solo lo que la función devuelve** |
+
+`observacion_historial(origen, id)` lee la auditoría con permisos de dueño,
+pero **devuelve únicamente** los cambios del texto de **una** observación, y
+solo si quien la llama tiene acceso al módulo. Es una ventana del tamaño
+exacto de lo pedido.
+
+> Una función `SECURITY DEFINER` es **una llave maestra**. Tres reglas que no
+> se negocian: fijarle el `search_path` (si no, alguien puede meterle una
+> función con el mismo nombre en otro esquema), revisar los permisos **adentro**
+> y no confiar en quién la llama, y quitársela a `anon` y a `public` con
+> `revoke`. Las tres están en la `v60`.
+
+En pantalla, cada observación tiene un **lápiz** para editarla, y si ya se
+editó dice **"Editada · ver cambios"**, que abre cada cambio con su fecha, su
+usuario, lo que decía **antes** (tachado) y lo que dice **después**. Una nota
+no se puede dejar vacía al editarla: la haría desaparecer del listado sin
+dejar rastro visible.
+
+> **Lección:** antes de construir un sistema de auditoría, **mira si ya lo
+> tienes**. El trabajo aquí no fue guardar los cambios —eso ya pasaba— sino
+> abrir una ventana segura para mirarlos.
+
 ---
 
 ## 4. Las reglas de negocio

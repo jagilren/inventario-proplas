@@ -181,18 +181,25 @@ class ActivoUbicacion {
 /// Una línea del listado cronológico de observaciones del equipo. Viene de
 /// la vista `activo_observaciones_todas`, que une tres orígenes distintos.
 class ActivoObservacion {
+  /// Id de la fila en su tabla de ORIGEN (activos, activo_ubicaciones o
+  /// activo_observaciones, según [origen]). Es lo que se edita.
+  final String id;
   final DateTime fecha;
   final String texto;
   final String origen; // alta | ubicacion | estado | manual
   final String? contexto;
   final String? usuarioEmail;
+  /// Si el texto se cambió alguna vez después de escrito (schema_v60).
+  final bool editada;
 
   ActivoObservacion.fromMap(Map<String, dynamic> m)
-    : fecha = DateTime.parse(m['fecha'] as String),
+    : id = m['id'] as String,
+      fecha = DateTime.parse(m['fecha'] as String),
       texto = m['texto'] as String,
       origen = m['origen'] as String,
       contexto = m['contexto'] as String?,
-      usuarioEmail = m['usuario_email'] as String?;
+      usuarioEmail = m['usuario_email'] as String?,
+      editada = (m['editada'] as bool?) ?? false;
 
   String get etiquetaOrigen => switch (origen) {
     'alta' => 'Al crear el equipo',
@@ -200,6 +207,21 @@ class ActivoObservacion {
     'estado' => 'Cambio de estado',
     _ => 'Nota',
   };
+}
+
+/// Un cambio en el texto de una observación: quién, cuándo, y qué decía
+/// antes y después.
+class CambioObservacion {
+  final DateTime fecha;
+  final String? antes;
+  final String? despues;
+  final String? usuarioEmail;
+
+  CambioObservacion.fromMap(Map<String, dynamic> m)
+    : fecha = DateTime.parse(m['fecha'] as String),
+      antes = m['antes'] as String?,
+      despues = m['despues'] as String?,
+      usuarioEmail = m['usuario_email'] as String?;
 }
 
 class ActivoPieza {
@@ -1068,7 +1090,7 @@ class ActivosService {
   }) async {
     final res = await supabase
         .from('activo_observaciones_todas')
-        .select('fecha, texto, origen, contexto, usuario_email')
+        .select('id, fecha, texto, origen, contexto, usuario_email, editada')
         .eq('activo_id', activoId)
         .order('fecha', ascending: false)
         .limit(limit);
@@ -1096,6 +1118,44 @@ class ActivosService {
       'usuario_email': supabase.auth.currentUser?.email,
     });
     revision.value++;
+  }
+
+  /// Edita el texto de una observación EN SU TABLA DE ORIGEN. No hay tabla
+  /// de observaciones "maestra": cada texto tiene un solo dueño, y editarlo
+  /// ahí hace que el trigger fn_auditoria guarde el antes, el después, el
+  /// usuario y la fecha, sin código extra.
+  static Future<void> editarObservacion({
+    required String origen,
+    required String id,
+    required String texto,
+  }) async {
+    final t = texto.trim();
+    // Vaciarla la haría desaparecer del listado sin dejar rastro visible.
+    if (t.isEmpty) {
+      throw ArgumentError('La observación no puede quedar vacía.');
+    }
+    final (tabla, campo) = switch (origen) {
+      'alta' => ('activos', 'observacion'),
+      'ubicacion' => ('activo_ubicaciones', 'detalle'),
+      _ => ('activo_observaciones', 'texto'),
+    };
+    await supabase.from(tabla).update({campo: t}).eq('id', id);
+    revision.value++;
+  }
+
+  /// Los cambios que ha tenido el texto de una observación, más reciente
+  /// primero. Sale de la auditoría por una función SECURITY DEFINER que
+  /// devuelve SOLO esto: la tabla `auditoria` en sí no la lee el rol
+  /// `equipos`, y no debe (guarda cambios de todo el sistema).
+  static Future<List<CambioObservacion>> historialObservacion({
+    required String origen,
+    required String id,
+  }) async {
+    final res = await supabase.rpc('observacion_historial',
+        params: {'p_origen': origen, 'p_id': id});
+    return (res as List)
+        .map((e) => CambioObservacion.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ---------------------------------------------------------------------
