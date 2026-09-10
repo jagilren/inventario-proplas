@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import '../util/tiempo.dart';
-import '../widgets/campo_obligatorio.dart';
+import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
@@ -568,36 +568,23 @@ class _HojaEstadoState extends State<_HojaEstado> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<ActivoTercero>(
-                        initialValue: _taller,
-                        isExpanded: true,
-                        decoration: marcarError(
-                          const InputDecoration(
-                            labelText: '¿En qué taller está? *',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.build),
-                          ),
-                          _faltaTaller,
-                        ),
-                        items: _terceros
-                            .map((t) => DropdownMenuItem(
-                                  value: t,
-                                  child: Text(t.nombre,
-                                      overflow: TextOverflow.ellipsis),
-                                ))
-                            .toList(),
-                        onChanged: (v) => setState(() => _taller = v),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      tooltip: 'Crear un taller nuevo',
-                      onPressed: _crearTaller,
-                    ),
-                  ],
+                // Con buscador SIEMPRE, no atado a un umbral: la lista de
+                // talleres va a crecer, y un desplegable de cientos de
+                // opciones es inservible. Mismo criterio que ya se aplicó a
+                // los centros de costo y a las referencias.
+                SelectorRecargable<ActivoTercero>(
+                  forzarBuscador: true,
+                  etiqueta: '¿En qué taller está? *',
+                  icono: Icons.build,
+                  valor: _taller,
+                  opciones: _terceros,
+                  textoDe: (t) => t.nombre,
+                  onRecargar: _cargarTerceros,
+                  onChanged: (v) => setState(() => _taller = v),
+                  onAgregar: _crearTaller,
+                  tooltipAgregar: 'Crear un taller nuevo',
+                  textoVacio: 'No hay talleres. Crea uno con el botón +.',
+                  error: _faltaTaller,
                 ),
               const SizedBox(height: 10),
               TextField(
@@ -697,6 +684,46 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _cargando = false);
+    }
+  }
+
+  /// Crear un tercero sin salir de aquí: si falta justo el que se necesita,
+  /// obligar a ir al catálogo y volver a empezar es una pérdida de tiempo.
+  Future<void> _crearTercero() async {
+    final nombre = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Nuevo tercero'),
+          content: TextField(
+            controller: c,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+                labelText: 'Nombre', hintText: 'Ej: TALLER METALANDES'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, c.text.trim()),
+                child: const Text('Crear')),
+          ],
+        );
+      },
+    );
+    if (nombre == null || nombre.isEmpty) return;
+    try {
+      final nuevo =
+          await ActivosService.crearTercero(nombre: nombre, tipo: 'taller');
+      if (!mounted) return;
+      setState(() { _terceros = [..._terceros, nuevo]; _tercero = nuevo; });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo crear: $e')));
     }
   }
 
@@ -803,25 +830,22 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
                           .toList(),
                       onChanged: (v) => setState(() => _bodega = v),
                     )
-                  else if (_terceros.isEmpty)
-                    const Text(
-                      'No hay terceros registrados. Créalos desde el menú '
-                      '"Terceros" del módulo.',
-                      style: TextStyle(color: Colors.grey),
-                    )
                   else
-                    DropdownButtonFormField<ActivoTercero>(
-                      initialValue: _tercero,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                          labelText: 'Tercero', border: OutlineInputBorder()),
-                      items: _terceros
-                          .map((t) => DropdownMenuItem(
-                              value: t,
-                              child: Text(t.nombre,
-                                  overflow: TextOverflow.ellipsis)))
-                          .toList(),
+                    // Con buscador siempre: la lista de terceros crece, y
+                    // un desplegable largo no se puede recorrer. El "+"
+                    // evita tener que salir a otra pantalla si falta uno.
+                    SelectorRecargable<ActivoTercero>(
+                      forzarBuscador: true,
+                      etiqueta: 'Tercero',
+                      icono: Icons.store,
+                      valor: _tercero,
+                      opciones: _terceros,
+                      textoDe: (t) => t.nombre,
+                      onRecargar: _cargar,
                       onChanged: (v) => setState(() => _tercero = v),
+                      onAgregar: _crearTercero,
+                      tooltipAgregar: 'Crear un tercero nuevo',
+                      textoVacio: 'No hay terceros. Crea uno con el botón +.',
                     ),
                   const SizedBox(height: 12),
                   TextField(
