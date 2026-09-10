@@ -161,6 +161,30 @@ class ActivoUbicacion {
   String get lugar => bodegaNombre ?? terceroNombre ?? '—';
 }
 
+/// Una línea del listado cronológico de observaciones del equipo. Viene de
+/// la vista `activo_observaciones_todas`, que une tres orígenes distintos.
+class ActivoObservacion {
+  final DateTime fecha;
+  final String texto;
+  final String origen; // alta | ubicacion | estado | manual
+  final String? contexto;
+  final String? usuarioEmail;
+
+  ActivoObservacion.fromMap(Map<String, dynamic> m)
+    : fecha = DateTime.parse(m['fecha'] as String),
+      texto = m['texto'] as String,
+      origen = m['origen'] as String,
+      contexto = m['contexto'] as String?,
+      usuarioEmail = m['usuario_email'] as String?;
+
+  String get etiquetaOrigen => switch (origen) {
+    'alta' => 'Al crear el equipo',
+    'ubicacion' => 'Cambio de ubicación',
+    'estado' => 'Cambio de estado',
+    _ => 'Nota',
+  };
+}
+
 class ActivoPieza {
   final String id;
   final String activoId;
@@ -973,6 +997,49 @@ class ActivosService {
         'p_detalle': detalle,
       },
     );
+    revision.value++;
+  }
+
+  // ---------------------------------------------------------------------
+  // Observaciones
+  // ---------------------------------------------------------------------
+
+  /// Todas las observaciones del equipo en UN solo listado cronológico:
+  /// las del alta, las de cada cambio de ubicación y las de cada cambio de
+  /// estado. Sale de una vista que las une; ningún texto se guarda dos veces.
+  static Future<List<ActivoObservacion>> observaciones(
+    String activoId, {
+    int limit = 50,
+  }) async {
+    final res = await supabase
+        .from('activo_observaciones_todas')
+        .select('fecha, texto, origen, contexto, usuario_email')
+        .eq('activo_id', activoId)
+        .order('fecha', ascending: false)
+        .limit(limit);
+    return (res as List)
+        .map((e) => ActivoObservacion.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Guarda una observación suelta. `contexto` es lo que estaba pasando
+  /// cuando se escribió, para que después se entienda sin adivinar.
+  static Future<void> agregarObservacion({
+    required String activoId,
+    required String texto,
+    String? contexto,
+    String origen = 'estado',
+  }) async {
+    final t = texto.trim();
+    if (t.isEmpty) return;
+    await supabase.from('activo_observaciones').insert({
+      'activo_id': activoId,
+      'texto': t,
+      'origen': origen,
+      'contexto': contexto,
+      'usuario_id': supabase.auth.currentUser?.id,
+      'usuario_email': supabase.auth.currentUser?.email,
+    });
     revision.value++;
   }
 

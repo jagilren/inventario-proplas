@@ -97,7 +97,7 @@ que no sea obvia**. No hay que documentar que un nombre es texto; sí hay que
 documentar por qué algo es una tabla aparte, por qué un campo es obligatorio, o
 por qué existe un índice único.
 
-**El del módulo — 7 tablas:**
+**El del módulo — 8 tablas y 2 vistas:**
 
 ```
 activo_referencias   los modelos (catálogo)
@@ -107,9 +107,13 @@ activo_ubicaciones   historial de DÓNDE ESTÁ (no toca inventario)
 activo_movimientos   entradas y salidas REALES (sí tocan inventario)
 activo_piezas        piezas buenas/malas de un equipo desarmado
 activo_mantenimientos hoja de vida
+activo_observaciones  notas sueltas que no tienen otra casa
+
+activos_disponibilidad      qué hay disponible por referencia
+activo_observaciones_todas  las 3 fuentes de observaciones, unidas
 ```
 
-**Las tres decisiones que hay que justificar:**
+**Las cuatro decisiones que hay que justificar:**
 
 **a) `condicion` y `estado` son campos distintos.** Parecen lo mismo y no lo son:
 
@@ -129,8 +133,45 @@ presente y pierde el pasado.
 no un campo que la app calcula. Si la app lo calculara, dos pantallas podrían
 mostrar números distintos del mismo equipo. La base es la única fuente.
 
+**d) Las observaciones se UNEN en una vista, no se copian a una tabla.**
+*(Agregado el 2026-09-10.)*
+
+La ficha mostraba **una sola** observación, la del alta. Los comentarios que el
+usuario escribía al cambiar el estado o la ubicación no se veían por ninguna
+parte: el de ubicación quedaba enterrado en `activo_ubicaciones.detalle`, y el
+de estado no tenía ni dónde guardarse.
+
+Lo obvio era crear `activo_observaciones` y que **todas** las pantallas
+escribieran ahí. Se descartó: el texto de un cambio de ubicación ya vive en
+`activo_ubicaciones.detalle`, que es lo que muestra el historial de ubicaciones.
+Escribirlo también en otra tabla serían **dos copias del mismo texto** que se
+desincronizan a la primera corrección.
+
+Lo que se hizo: una tabla **solo para lo que no tenía casa** (el comentario de
+un cambio de estado) y una **vista** que une los tres orígenes:
+
+```sql
+create view activo_observaciones_todas
+with (security_invoker = true) as
+  select ... from activo_observaciones            -- origen 'estado' / 'manual'
+  union all
+  select ... from activo_ubicaciones              -- origen 'ubicacion'
+   where detalle is not null and btrim(detalle) <> ''
+  union all
+  select ... from activos where observacion <> '' -- origen 'alta'
+```
+
+Cada texto sigue teniendo **un solo dueño**. Y hubo un premio inesperado: al
+crear la vista aparecieron de una **8 observaciones de ubicación y 2 de alta**
+que ya existían y nadie estaba viendo. Cero migración de datos.
+
+> `security_invoker = true` no es decorativo: sin eso la vista corre con los
+> permisos de su dueño y se salta la RLS de las tablas de abajo. Misma
+> convención que `activos_disponibilidad`.
+
 > **Patrón general:** todo dato que se pueda DERIVAR, se deriva — nunca se
-> guarda a mano. Aplica a `valor_actual`, y también a `disponible`.
+> guarda a mano. Aplica a `valor_actual`, a `disponible`, y ahora al listado
+> de observaciones.
 
 ---
 
@@ -238,7 +279,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los cuatro errores reales — y qué enseña cada uno
+## 9. Los cinco errores reales — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -298,6 +339,74 @@ número correcto.
 > **Lección doble:** (1) el SQL de un documento de diseño **no está probado** —
 > trátalo como borrador. (2) Cuando calcules una cifra nueva, **compárala contra
 > una que ya sea confiable**.
+
+### 9.5 El error que introdujo el arreglo del 9.1
+
+*Detectado el 2026-09-10, corregido el mismo día.*
+
+El 9.1 se arregló unificando estado y ubicación: mandar un equipo a un taller
+pasó a ser **una sola acción**, y para eso la hoja empezó a exigir que se
+eligiera el taller del catálogo.
+
+La regla quedó escrita así:
+
+```dart
+bool get _faltaTaller =>
+    _estado == 'mantenimiento_externo' && _taller == null;
+```
+
+Léela con un equipo que **ya estaba** en un taller. El usuario abre la hoja solo
+para cambiar la condición de *usado* a *para repuestos*. `_estado` arranca en
+`mantenimiento_externo` — no lo cambió nadie, ya era así — y `_taller` arranca
+en `null`, porque nunca se precargaba. Entonces `_faltaTaller` es verdadero, y
+`_guardar()` se devolvía en su primera línea:
+
+```dart
+if (_faltaTaller) { setState(() {}); return; }
+```
+
+**Sin guardar y sin decir nada.** El usuario oprimía Guardar y no pasaba
+absolutamente nada. Ni error, ni cierre de la hoja, ni cambio en la ficha.
+
+Dos defectos distintos en cuatro líneas:
+
+1. **La condición confundió "estar" con "entrar".** Se exige el taller cuando el
+   equipo **entra** a un taller, no mientras esté en uno. Corregido comparando
+   contra el estado con el que se abrió la hoja:
+   `_estado == 'mantenimiento_externo' && widget.activo.estado != 'mantenimiento_externo'`.
+2. **Falló en silencio.** `setState(() {})` repinta el campo en rojo, pero la
+   hoja está scrolleada y el usuario nunca ve el rojo. Ahora hay un
+   `SnackBar` que dice qué falta.
+
+**Y el arreglo casi introduce un tercero.** Al precargar el taller para que
+quedara seleccionado, guardar un simple cambio de condición habría vuelto a
+llamar `cambiarUbicacion()` — registrando **otra vez la misma ubicación** y
+llenando de filas repetidas justo el historial que el 9.1 vino a arreglar. Se
+cerró guardando el taller original y comparando: solo se registra ubicación si
+el taller **cambió**.
+
+> **Lección triple:**
+> (1) **El arreglo de un error es código nuevo, y puede traer su propio error.**
+> El 9.1 y el 9.5 son la misma pantalla, con seis días de diferencia.
+> (2) **Un campo obligatorio hay que leerlo en el estado que ya existe**, no
+> solo en el flujo feliz de crear algo desde cero. La pregunta que faltó fue:
+> *"¿y si el equipo ya está así?"*.
+> (3) **Nada puede fallar en silencio.** Si una acción no se puede completar,
+> tiene que decirlo. Un botón que no hace nada es peor que un error.
+
+**Post-scriptum del mismo día:** al buscar el patrón en el resto del archivo
+apareció **el mismo `return` mudo** en la hoja de "Cambiar ubicación", que
+nadie había reportado todavía:
+
+```dart
+if (_enBodega && _bodega == null) return;
+if (!_enBodega && _tercero == null) return;
+```
+
+Corregido igual, con su mensaje. **Cuando encuentres un defecto, búscalo en
+todo el archivo antes de darlo por cerrado** — es la misma lección del 9.3, y
+el usuario ya la había tenido que dar una vez ("le pusiste la X a 2 de 6
+hojas").
 
 ---
 

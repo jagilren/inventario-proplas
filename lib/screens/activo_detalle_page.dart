@@ -277,10 +277,8 @@ class _Ficha extends StatelessWidget {
             label: const Text('Cambiar estado o condición'),
           ),
 
-        if (activo.observacion != null && activo.observacion!.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _bloque(context, 'Observación', [Text(activo.observacion!)]),
-        ],
+        const SizedBox(height: 12),
+        _Observaciones(activoId: activo.id),
 
         const SizedBox(height: 24),
         if (_permiteMovimiento)
@@ -363,6 +361,207 @@ class _Ficha extends StatelessWidget {
 /// entrada o una salida. Sin esta pantalla, un equipo que entra a
 /// mantenimiento se queda atrapado ahí para siempre: no hay movimiento que
 /// lo saque, porque nunca salió de la bodega.
+/// Listado cronológico de observaciones del equipo, del más reciente al más
+/// antiguo (regla de históricos del proyecto).
+///
+/// Antes la ficha mostraba UNA sola observación, la del alta, y los
+/// comentarios de cada cambio de estado o de ubicación no se veían por
+/// ninguna parte. Ahora las tres fuentes salen juntas de la vista
+/// `activo_observaciones_todas`.
+class _Observaciones extends StatefulWidget {
+  final String activoId;
+  const _Observaciones({required this.activoId});
+  @override
+  State<_Observaciones> createState() => _ObservacionesState();
+}
+
+class _ObservacionesState extends State<_Observaciones> {
+  List<ActivoObservacion> _lista = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+    ActivosService.revision.addListener(_cargar);
+  }
+
+  @override
+  void dispose() {
+    ActivosService.revision.removeListener(_cargar);
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final l = await ActivosService.observaciones(widget.activoId);
+      if (!mounted) return;
+      setState(() { _lista = l; _cargando = false; });
+    } catch (_) {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  static IconData _icono(String origen) => switch (origen) {
+    'alta' => Icons.add_circle_outline,
+    'ubicacion' => Icons.place_outlined,
+    'estado' => Icons.tune,
+    _ => Icons.notes,
+  };
+
+  Future<void> _agregar() async {
+    final texto = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _HojaNota(),
+    );
+    if (texto == null || texto.trim().isEmpty) return;
+    try {
+      await ActivosService.agregarObservacion(
+        activoId: widget.activoId,
+        texto: texto,
+        origen: 'manual',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo guardar: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Observaciones',
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_comment_outlined),
+                  tooltip: 'Agregar una observación',
+                  onPressed: _agregar,
+                ),
+              ],
+            ),
+            if (_cargando)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_lista.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('Todavía no hay observaciones.',
+                    style: TextStyle(color: Colors.grey)),
+              )
+            else
+              for (final o in _lista) ...[
+                const Divider(height: 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(_icono(o.origen), size: 18, color: Colors.grey),
+                    const SizedBox(width: 10),
+                    // Expanded: en 360 px un texto largo sin esto desborda
+                    // la fila y Flutter pinta la franja amarilla y negra.
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(o.texto),
+                          const SizedBox(height: 2),
+                          Text(
+                            [
+                              o.etiquetaOrigen,
+                              if (o.contexto != null && o.contexto!.isNotEmpty)
+                                o.contexto!,
+                              _cuando(o.fecha),
+                              if (o.usuarioEmail != null) o.usuarioEmail!,
+                            ].join(' · '),
+                            style: const TextStyle(
+                                fontSize: 11.5, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Hoja mínima para escribir una observación suelta.
+class _HojaNota extends StatefulWidget {
+  const _HojaNota();
+  @override
+  State<_HojaNota> createState() => _HojaNotaState();
+}
+
+class _HojaNotaState extends State<_HojaNota> {
+  final _texto = TextEditingController();
+
+  @override
+  void dispose() {
+    _texto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Nueva observación',
+                    style: Theme.of(context).textTheme.titleLarge),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Cerrar sin guardar',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _texto,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Observación',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _texto.text),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HojaEstado extends StatefulWidget {
   final Activo activo;
   const _HojaEstado({required this.activo});
@@ -374,6 +573,7 @@ class _HojaEstadoState extends State<_HojaEstado> {
   late String _estado;
   late String _condicion;
   late final TextEditingController _actor;
+  final _observacion = TextEditingController();
   bool _guardando = false;
   // Mandar un equipo a un taller externo es, para el usuario, UNA sola
   // acción. Antes eran dos pantallas distintas que no se hablaban: el
@@ -382,6 +582,8 @@ class _HojaEstadoState extends State<_HojaEstado> {
   // se registra la ubicación en el mismo paso.
   List<ActivoTercero> _terceros = [];
   ActivoTercero? _taller;
+  /// El taller con el que se abrió la hoja, para saber si de verdad cambió.
+  ActivoTercero? _tallerOriginal;
   bool _cargandoTerceros = true;
 
   static const _etiquetasEstado = {
@@ -411,10 +613,43 @@ class _HojaEstadoState extends State<_HojaEstado> {
     try {
       final t = await ActivosService.todosLosTerceros();
       if (!mounted) return;
-      setState(() { _terceros = t; _cargandoTerceros = false; });
+      setState(() {
+        _terceros = t;
+        _cargandoTerceros = false;
+        _preseleccionarTaller();
+      });
     } catch (_) {
       if (mounted) setState(() => _cargandoTerceros = false);
     }
+  }
+
+  /// El equipo pudo llegar aquí ya estando en un taller. `mantenimiento_actor`
+  /// guarda "TALLER · qué le hacen" en un solo texto, así que se separa para
+  /// preseleccionar el taller y dejar en el campo solo la descripción.
+  ///
+  /// Sin esto pasaban dos cosas: el taller quedaba sin seleccionar (y no se
+  /// podía guardar nada más), y al volver a guardar el nombre del taller se
+  /// anteponía por segunda vez.
+  void _preseleccionarTaller() {
+    if (_estado != 'mantenimiento_externo') return;
+    final actor = widget.activo.mantenimientoActor ?? '';
+    if (actor.isEmpty) return;
+    for (final t in _terceros) {
+      if (actor == t.nombre) {
+        _taller = t;
+        _tallerOriginal = t;
+        _actor.text = '';
+        return;
+      }
+      if (actor.startsWith('${t.nombre} · ')) {
+        _taller = t;
+        _tallerOriginal = t;
+        _actor.text = actor.substring(t.nombre.length + 3);
+        return;
+      }
+    }
+    // Si no coincide con ningún tercero es texto libre de antes de unificar
+    // estado y ubicación. Se deja tal cual y NO se exige elegir taller.
   }
 
   /// Crea un taller sin salir de aquí: si el catálogo está vacío, obligar a
@@ -461,26 +696,46 @@ class _HojaEstadoState extends State<_HojaEstado> {
   @override
   void dispose() {
     _actor.dispose();
+    _observacion.dispose();
     super.dispose();
   }
 
-  bool get _faltaTaller =>
-      _estado == 'mantenimiento_externo' && _taller == null;
+  /// Solo se exige taller cuando el equipo ENTRA a un taller ahora. Si ya
+  /// estaba en mantenimiento externo y solo se viene a cambiar la condición,
+  /// pedirlo bloquearía un cambio que no tiene nada que ver con la ubicación.
+  bool get _entraATaller =>
+      _estado == 'mantenimiento_externo' &&
+      widget.activo.estado != 'mantenimiento_externo';
+
+  bool get _faltaTaller => _entraATaller && _taller == null;
 
   Future<void> _guardar() async {
     if (_faltaTaller) {
+      // Nunca fallar en silencio: antes solo se repintaba y el usuario
+      // oprimía Guardar sin que pasara nada visible.
       setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Elige a qué taller se va el equipo.')),
+      );
       return;
     }
     setState(() => _guardando = true);
     try {
       // El nombre del taller se guarda junto al detalle, para que la ficha
-      // muestre de un vistazo dónde está y por qué.
-      final actor = _estado == 'mantenimiento_externo'
-          ? [_taller?.nombre, _actor.text.trim()]
-              .where((e) => e != null && e.isNotEmpty)
-              .join(' · ')
-          : null;
+      // muestre de un vistazo dónde está y por qué. Si no se eligió taller
+      // (texto libre de antes), se respeta lo que ya estaba en vez de
+      // borrarlo.
+      final String? actor;
+      if (_estado != 'mantenimiento_externo') {
+        actor = null;
+      } else if (_taller != null) {
+        actor = [_taller!.nombre, _actor.text.trim()]
+            .where((e) => e.isNotEmpty)
+            .join(' · ');
+      } else {
+        actor = widget.activo.mantenimientoActor;
+      }
       if (_estado != widget.activo.estado ||
           (actor ?? '') != (widget.activo.mantenimientoActor ?? '')) {
         await ActivosService.cambiarEstado(
@@ -491,7 +746,13 @@ class _HojaEstadoState extends State<_HojaEstado> {
       }
       // UNA sola acción para el usuario: si el equipo se fue a un taller,
       // eso ES un cambio de ubicación y tiene que quedar en el historial.
-      if (_estado == 'mantenimiento_externo' && _taller != null) {
+      //
+      // Solo si el taller CAMBIÓ. Desde que el taller se precarga, guardar
+      // un cambio de condición volvería a registrar la misma ubicación y
+      // llenaría el historial de filas repetidas.
+      if (_estado == 'mantenimiento_externo' &&
+          _taller != null &&
+          _taller!.id != _tallerOriginal?.id) {
         await ActivosService.cambiarUbicacion(
           activoId: widget.activo.id,
           terceroId: _taller!.id,
@@ -500,6 +761,21 @@ class _HojaEstadoState extends State<_HojaEstado> {
       }
       if (_condicion != widget.activo.condicion) {
         await ActivosService.cambiarCondicion(widget.activo.id, _condicion);
+      }
+      // La observación se guarda de últimas, con el contexto de lo que
+      // acabó de cambiar, para que dentro de un año se entienda sola.
+      if (_observacion.text.trim().isNotEmpty) {
+        final cambios = <String>[
+          if (_estado != widget.activo.estado)
+            'Estado: ${_etiquetasEstado[_estado] ?? _estado}',
+          if (_condicion != widget.activo.condicion)
+            'Condición: ${_etiquetasCondicion[_condicion] ?? _condicion}',
+        ];
+        await ActivosService.agregarObservacion(
+          activoId: widget.activo.id,
+          texto: _observacion.text,
+          contexto: cambios.isEmpty ? null : cambios.join(' · '),
+        );
       }
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -574,7 +850,8 @@ class _HojaEstadoState extends State<_HojaEstado> {
                 // los centros de costo y a las referencias.
                 SelectorRecargable<ActivoTercero>(
                   forzarBuscador: true,
-                  etiqueta: '¿En qué taller está? *',
+                  etiqueta:
+                      _entraATaller ? '¿A qué taller se va? *' : '¿En qué taller está?',
                   icono: Icons.build,
                   valor: _taller,
                   opciones: _terceros,
@@ -621,6 +898,24 @@ class _HojaEstadoState extends State<_HojaEstado> {
             const Text(
               'La condición es la clasificación comercial (cuánto vale). El '
               'estado es si se puede usar ahora. Son cosas distintas.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey),
+            ),
+            const Divider(height: 28),
+            TextField(
+              controller: _observacion,
+              minLines: 2,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Observación',
+                hintText: '¿Por qué cambia? Ej: se quemó el devanado',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Queda en el listado de observaciones de la ficha, con la fecha '
+              'y tu nombre.',
               style: TextStyle(fontSize: 11.5, color: Colors.grey),
             ),
             const SizedBox(height: 20),
@@ -728,8 +1023,18 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
   }
 
   Future<void> _guardar() async {
-    if (_enBodega && _bodega == null) return;
-    if (!_enBodega && _tercero == null) return;
+    // Mismo criterio que la hoja de estado: nunca devolverse en silencio.
+    // Un botón que no hace nada es peor que un error.
+    if ((_enBodega && _bodega == null) || (!_enBodega && _tercero == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_enBodega
+              ? 'Elige a qué bodega se va el equipo.'
+              : 'Elige a qué tercero se va el equipo.'),
+        ),
+      );
+      return;
+    }
     setState(() => _guardando = true);
     try {
       await ActivosService.cambiarUbicacion(
@@ -850,11 +1155,20 @@ class _HojaCambiarUbicacionState extends State<_HojaCambiarUbicacion> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _detalle,
+                    minLines: 2,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(
-                      labelText: 'Detalle',
+                      labelText: 'Observación',
                       hintText: 'Ej: en reparación del impulsor',
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Queda en el listado de observaciones de la ficha, con la '
+                    'fecha y tu nombre.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
                   FilledButton(
