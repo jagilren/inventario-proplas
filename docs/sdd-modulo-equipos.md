@@ -538,6 +538,7 @@ seguridad: cualquiera con el token puede llamar la API igual.
 |---|:---:|:---:|:---:|
 | Agregar una observación | ✔ | ✔ | ✔ |
 | **Modificar** una observación ya escrita | ✔ | ✔ | **✘** |
+| **Anular** un movimiento de equipo o de componente de un kit | ✔ | **✘** | **✘** |
 
 Los roles de operario (`operario_mas`, `operario_menos`) son del Inventario y
 **no entran** al módulo de Equipos. Hoy los tres bodegueros entran porque
@@ -606,7 +607,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los siete errores reales, dos que se atajaron — y qué enseña cada uno
+## 9. Los siete errores reales, los que se atajaron — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -877,7 +878,7 @@ contradicción.
 > así se programó tres veces en la pantalla. **Escribir un principio no es lo
 > mismo que aplicarlo.**
 
-### 9.8 Los dos que se atajaron antes de publicar
+### 9.8 Los que se atajaron antes de publicar
 
 *2026-09-10, Fase 2 de Referencias KITZABLES.*
 
@@ -914,6 +915,22 @@ commit.
 > **Lección:** verifica **exactamente lo mismo que verifica el CI**, con los
 > mismos comandos. Una verificación local "parecida" da una confianza que no
 > corresponde.
+
+**c) La regla que no se copió al concepto hermano.** Al diseñar la pantalla
+para anular movimientos de componentes de un kit (Fase 5), se revisó quién
+anula un movimiento de **equipo**: la base solo se lo deja al administrador.
+La Fase 1 de los kits había copiado de los movimientos de equipo casi todo —la
+anulación con movimiento contrario, el índice que impide anular dos veces, el
+candado que no deja editarlos— **menos el permiso**. Un coordinador podía anular
+un movimiento de componente pero no uno de equipo: dos reglas distintas para lo
+mismo, en el mismo módulo. Se corrigió en la base (`schema_v66`) antes de que
+existiera la pantalla que lo usaría.
+
+> **Lección:** cuando construyas algo **paralelo** a lo que ya existe (aquí,
+> movimientos de componente al lado de movimientos de equipo), haz la lista de
+> **todas** las reglas del hermano —cómo se valida, cómo se anula, qué candado
+> tiene y **quién puede**— y revisa una por una. El permiso es la que más se
+> olvida, porque no se ve en el código de la tabla sino en el de la función.
 
 Y un detalle de método que se agregó ese día al validar consultas contra la
 API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a

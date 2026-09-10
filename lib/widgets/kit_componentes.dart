@@ -7,9 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:intl/intl.dart';
 import '../activos_service.dart';
+import '../util/tiempo.dart';
+import 'selector_recargable.dart';
 
 final _money =
     NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
+final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
+String _cuando(DateTime f) => _fechaHora.format(horaColombia(f));
 
 /// "2" y no "2.0"; "2,5" con coma, como se escribe en Colombia.
 String textoCantidad(num n) =>
@@ -60,10 +64,13 @@ class TarjetaComponente extends StatelessWidget {
   /// El porcentaje del equipo. Si es menor que 100 se muestra también el
   /// subtotal ponderado.
   final num porcentaje;
+  /// Abrir el componente: su historia y registrar movimientos (Fase 5).
+  final VoidCallback? onTap;
   const TarjetaComponente({
     super.key,
     required this.componente,
     required this.porcentaje,
+    this.onTap,
   });
 
   /// Toda la tarjeta en UNA frase para el lector de pantalla. Sin esto leería
@@ -92,10 +99,21 @@ class TarjetaComponente extends StatelessWidget {
     return Semantics(
       container: true,
       label: fraseAccesible,
+      // excludeSemantics se "come" la acción de tocar del InkWell de adentro:
+      // hay que declararla aquí, o para el lector de pantalla la tarjeta no
+      // se podría abrir.
+      button: onTap != null,
+      onTap: onTap,
+      hint: onTap == null
+          ? null
+          : 'Toca para ver su historia y registrar movimientos',
       excludeSemantics: true,
       child: Card(
         margin: const EdgeInsets.only(top: 10),
-        child: Padding(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,6 +142,9 @@ class TarjetaComponente extends StatelessWidget {
                               color: gris,
                               fontWeight: FontWeight.w600)),
                     ),
+                  // Señal visual de que se puede abrir.
+                  if (onTap != null)
+                    Icon(Icons.chevron_right, size: 20, color: gris),
                 ],
               ),
               const SizedBox(height: 6),
@@ -154,6 +175,7 @@ class TarjetaComponente extends StatelessWidget {
               ],
             ],
           ),
+        ),
         ),
       ),
     );
@@ -214,6 +236,336 @@ class PieTotalKit extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Íconos de cada tipo de movimiento: acompañan a la palabra, nunca la
+/// reemplazan.
+IconData iconoMovComponente(TipoMovComponente? t) => switch (t) {
+      TipoMovComponente.alta => Icons.add_box_outlined,
+      TipoMovComponente.aumento => Icons.add_circle_outline,
+      TipoMovComponente.disminucion => Icons.remove_circle_outline,
+      TipoMovComponente.salidaVenta => Icons.sell_outlined,
+      TipoMovComponente.salidaGarantia => Icons.handshake_outlined,
+      TipoMovComponente.bajaDano => Icons.report_problem_outlined,
+      TipoMovComponente.anulacion => Icons.undo,
+      null => Icons.help_outline,
+    };
+
+/// Hoja para registrar la vida de un componente: se agrega, se retira, se
+/// vende, se va en garantía o se daña (Fase 5).
+///
+/// Las funciones que hablan con la base llegan como parámetros opcionales:
+/// por defecto usan el servicio real, y las pruebas les pasan unas simuladas
+/// para poder probar la hoja entera, guardado incluido, sin Supabase.
+class HojaMovimientoComponente extends StatefulWidget {
+  final ActivoComponente componente;
+  final Future<List<ActivoTercero>> Function()? cargarTerceros;
+  final Future<ActivoTercero> Function(String nombre, String tipo)? crearTercero;
+  final Future<void> Function({
+    required String componenteId,
+    required TipoMovComponente tipo,
+    required num cantidad,
+    String? terceroId,
+    String? observacion,
+  })? registrar;
+
+  const HojaMovimientoComponente({
+    super.key,
+    required this.componente,
+    this.cargarTerceros,
+    this.crearTercero,
+    this.registrar,
+  });
+
+  @override
+  State<HojaMovimientoComponente> createState() =>
+      _HojaMovimientoComponenteState();
+}
+
+class _HojaMovimientoComponenteState extends State<HojaMovimientoComponente> {
+  /// Sin opción por defecto a propósito: que "Retirar" quede marcado solo
+  /// porque era el primero es la forma de registrar lo que no pasó.
+  TipoMovComponente? _tipo;
+  final _cantidad = TextEditingController();
+  final _observacion = TextEditingController();
+  List<ActivoTercero> _terceros = [];
+  bool _cargandoTerceros = true;
+  ActivoTercero? _tercero;
+  bool _guardando = false;
+  bool _mostrarErrores = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarTerceros();
+  }
+
+  @override
+  void dispose() {
+    _cantidad.dispose();
+    _observacion.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarTerceros() async {
+    setState(() => _cargandoTerceros = true);
+    try {
+      final t = await (widget.cargarTerceros ?? ActivosService.todosLosTerceros)();
+      if (!mounted) return;
+      setState(() {
+        _terceros = t;
+        _cargandoTerceros = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _cargandoTerceros = false);
+    }
+  }
+
+  /// Crear el tercero sin salir de aquí: si el cliente no está en el
+  /// catálogo, obligar a ir a otra pantalla y volver a empezar empuja a no
+  /// registrar a quién se vendió (lección del error 9.1).
+  Future<void> _nuevoTercero() async {
+    final nombre = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Nuevo tercero'),
+          content: TextField(
+            controller: c,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+                labelText: 'Nombre', hintText: 'Ej: TINTEXA'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, c.text.trim()),
+                child: const Text('Crear')),
+          ],
+        );
+      },
+    );
+    if (nombre == null || nombre.isEmpty) return;
+    // A quien se le vende es un cliente; una garantía puede ir a un cliente
+    // o a un proveedor, así que queda como "otro" (se corrige en Terceros).
+    final tipo = _tipo == TipoMovComponente.salidaVenta ? 'cliente' : 'otro';
+    try {
+      final nuevo = await (widget.crearTercero ??
+          (n, t) => ActivosService.crearTercero(nombre: n, tipo: t))(nombre, tipo);
+      if (!mounted) return;
+      setState(() {
+        _terceros = [..._terceros, nuevo];
+        _tercero = nuevo;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo crear: $e')));
+    }
+  }
+
+  num? get _cant => num.tryParse(_cantidad.text.trim().replaceAll(',', '.'));
+
+  /// Cuántos quedarían, si la cantidad es un número.
+  num? get _quedarian {
+    final c = _cant;
+    final t = _tipo;
+    if (c == null || t == null) return null;
+    return widget.componente.cantidad + (t.suma ? c : -c);
+  }
+
+  String? get _errorTipo => _tipo == null ? 'Elige qué pasó' : null;
+
+  String? get _errorCantidad {
+    final c = _cant;
+    if (_cantidad.text.trim().isEmpty) return 'Escribe cuántos';
+    if (c == null) return 'No es un número';
+    if (c <= 0) return 'Tiene que ser mayor que cero';
+    final t = _tipo;
+    if (t != null && !t.suma && c > widget.componente.cantidad) {
+      return 'Solo hay ${textoCantidad(widget.componente.cantidad)}';
+    }
+    return null;
+  }
+
+  String? get _errorTercero =>
+      (_tipo?.pideTercero ?? false) && _tercero == null
+          ? 'Elige a quién'
+          : null;
+
+  bool get _valido =>
+      _errorTipo == null && _errorCantidad == null && _errorTercero == null;
+
+  Future<void> _guardar() async {
+    if (!_valido) {
+      setState(() => _mostrarErrores = true);
+      return;
+    }
+    setState(() => _guardando = true);
+    try {
+      final registrar = widget.registrar ?? ActivosService.moverComponente;
+      await registrar(
+        componenteId: widget.componente.id,
+        tipo: _tipo!,
+        cantidad: _cant!,
+        terceroId: _tipo!.pideTercero ? _tercero?.id : null,
+        observacion: _observacion.text,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      // ErrorEquipos ya trae el mensaje listo; la hoja queda abierta.
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo registrar: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.componente;
+    final esquema = Theme.of(context).colorScheme;
+    final quedarian = _quedarian;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Registrar movimiento',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Cerrar sin guardar',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${c.nombre} · hay ${textoCantidad(c.cantidad)}',
+              style: TextStyle(color: esquema.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            Text('¿Qué pasó? *', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
+            // Wrap: en 360 px las opciones bajan de línea en vez de apretarse.
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final t in TipoMovComponente.elegibles)
+                  ChoiceChip(
+                    avatar: Icon(iconoMovComponente(t), size: 18),
+                    label: Text(t.accion),
+                    selected: _tipo == t,
+                    onSelected: (_) => setState(() {
+                      _tipo = t;
+                      if (!t.pideTercero) _tercero = null;
+                    }),
+                  ),
+              ],
+            ),
+            if (_tipo != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(_tipo!.ayuda,
+                    style: TextStyle(
+                        fontSize: 12.5, color: esquema.onSurfaceVariant)),
+              ),
+            if (_mostrarErrores && _errorTipo != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(_errorTipo!,
+                      style: TextStyle(fontSize: 12.5, color: esquema.error)),
+                ),
+              ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _cantidad,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Cantidad *',
+                border: const OutlineInputBorder(),
+                // El error de "no alcanza" se ve al escribir, no al guardar.
+                errorText: (_mostrarErrores ||
+                        (_errorCantidad?.startsWith('Solo hay') ?? false))
+                    ? _errorCantidad
+                    : null,
+                helperText: (quedarian != null && quedarian >= 0)
+                    ? 'Quedarán ${textoCantidad(quedarian)}'
+                    : null,
+              ),
+            ),
+            if (_tipo?.pideTercero ?? false) ...[
+              const SizedBox(height: 12),
+              if (_cargandoTerceros)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                SelectorRecargable<ActivoTercero>(
+                  // Con buscador siempre: el catálogo de terceros crece.
+                  forzarBuscador: true,
+                  etiqueta: _tipo == TipoMovComponente.salidaVenta
+                      ? '¿A quién se vendió? *'
+                      : '¿A quién se entrega en garantía? *',
+                  icono: Icons.person_outline,
+                  valor: _tercero,
+                  opciones: _terceros,
+                  textoDe: (t) => t.nombre,
+                  onRecargar: _cargarTerceros,
+                  onChanged: (v) => setState(() => _tercero = v),
+                  onAgregar: _nuevoTercero,
+                  tooltipAgregar: 'Crear un tercero nuevo',
+                  textoVacio: 'No hay terceros. Crea uno con el botón +.',
+                  error: _mostrarErrores && _errorTercero != null,
+                ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _observacion,
+              minLines: 1,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Observación',
+                hintText: 'Ej: remisión 3147',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _guardando ? null : _guardar,
+              child: _guardando
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Registrar'),
+            ),
+          ],
         ),
       ),
     );
@@ -657,6 +1009,116 @@ class _HojaComponenteState extends State<HojaComponente> {
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : Text(widget.inicial == null ? 'Agregar' : 'Guardar cambios'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Una línea del historial de un componente.
+class LineaMovimientoComponente extends StatelessWidget {
+  final MovimientoComponente movimiento;
+  final bool anulado;
+  final VoidCallback? onAnular;
+  const LineaMovimientoComponente({
+    super.key,
+    required this.movimiento,
+    required this.anulado,
+    required this.onAnular,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m = movimiento;
+    final esquema = Theme.of(context).colorScheme;
+    final gris = esquema.onSurfaceVariant;
+    final detalle = [
+      _cuando(m.fecha),
+      if (m.usuarioEmail != null) m.usuarioEmail!,
+    ].join(' · ');
+
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Semantics(
+                // La línea completa en una frase, EN PALABRAS: "Venta,
+                // salieron 1, a TINTEXA", y no "−1".
+                label: [
+                  m.descripcionAccesible,
+                  detalle,
+                  if (anulado) 'anulado',
+                  if (m.observacion != null && m.observacion!.isNotEmpty)
+                    'observación: ${m.observacion}',
+                ].join('. '),
+                excludeSemantics: true,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 10),
+                      child: Icon(iconoMovComponente(m.tipo),
+                          size: 20, color: gris),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(m.etiqueta,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              Text(m.textoCantidad,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures()
+                                      ])),
+                              // ANULADO con texto, no solo tachado o en rojo.
+                              if (anulado)
+                                Text('ANULADO',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: esquema.error)),
+                            ],
+                          ),
+                          if (m.terceroNombre != null)
+                            Text('A ${m.terceroNombre}',
+                                style: const TextStyle(fontSize: 13)),
+                          Text(detalle,
+                              style: TextStyle(fontSize: 12, color: gris)),
+                          if (m.observacion != null &&
+                              m.observacion!.isNotEmpty)
+                            Text(m.observacion!,
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontStyle: FontStyle.italic,
+                                    color: gris)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (onAnular != null)
+              IconButton(
+                icon: const Icon(Icons.undo),
+                // Dice QUÉ se anula: con varios movimientos, "Anular" a secas
+                // no le dice nada a quien usa lector de pantalla.
+                tooltip: 'Anular ${m.etiqueta.toLowerCase()} del '
+                    '${_cuando(m.fecha)}',
+                onPressed: onAnular,
+              ),
           ],
         ),
       ),

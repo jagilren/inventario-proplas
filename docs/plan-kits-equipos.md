@@ -159,6 +159,49 @@ ellas que la hoja en modo borrador devuelve lo escrito **sin ir a la base**, y
 las pruebas de accesibilidad sobre la lista del borrador (cada botón dice de
 qué componente es: "Quitar Tela filtros de los medios").
 
+### Fase 5 (la vida del kit) — 2026-09-10
+
+Tocar un componente en la pestaña Componentes abre **su pantalla**: cuántos
+hay y cuánto valen, el botón **Registrar movimiento** y su **historial** del más
+reciente al más antiguo. Pantalla completa y no una hoja: tiene una lista que
+crece y acciones sobre cada línea.
+
+**Registrar movimiento** es una hoja con: qué pasó (Agregar, Retirar, Vender,
+Garantía, Daño — **sin opción marcada por defecto**, para no registrar un
+"Retirar" solo porque era el primero), una frase que explica cada opción,
+la cantidad con **"Quedarán N"** en vivo y **"Solo hay 24"** apenas se escribe de
+más, y —en venta y garantía— **a quién**, con buscador y la opción de crear el
+tercero ahí mismo (si el cliente no está en el catálogo, obligar a ir a otra
+pantalla empuja a no registrarlo: la lección del error 9.1).
+
+**Anular** abre una confirmación que dice qué se va a anular, y registra un
+movimiento contrario: **nada se borra**, los dos quedan en el historial, y el
+anulado se marca con la palabra ANULADO.
+
+**Lo que cambió del plan: quién anula.** Al diseñar esta pantalla se revisó
+quién anula un movimiento de **equipo**: la base solo se lo deja al
+**administrador**. La Fase 1 de los kits no había copiado esa regla y dejaba
+anular un movimiento de **componente** a cualquiera del módulo — dos reglas
+distintas para lo mismo. Se corrigió en la base (`schema_v66`) antes de que
+nadie pudiera usar la pantalla, y se probó con dos personas reales: el
+coordinador registra un daño pero no lo puede anular; el admin sí. El botón
+Anular solo se le muestra al admin.
+
+**Accesibilidad.** La tarjeta del componente le daba al lector de pantalla una
+sola frase (Fase 3), y eso **ocultaba su acción de tocar**: para quien usa
+lector, la tarjeta no se habría podido abrir. La acción se declaró
+explícitamente, con la pista "Toca para ver su historia y registrar
+movimientos", y se comprobó que la prueba lo detecta **quitando el arreglo a
+propósito**: falló; restaurado, pasó. Cada línea del historial se oye en
+palabras ("Venta, salieron 1, a TINTEXA… anulado"), y su botón dice qué anula
+("Anular venta del 10/09/2026 13:12").
+
+**Probado:** 96 pruebas en la app. La hoja se prueba **entera, guardado
+incluido**, pasándole funciones simuladas en vez de la base: sin elegir qué
+pasó no registra; no deja sacar de más; vender sin tercero no registra; vender
+a TINTEXA manda el tercero; y pasar de Vender a Daño no arrastra el tercero de
+antes.
+
 ---
 
 ## 1. Objetivo y alcance
@@ -567,7 +610,7 @@ nueva `equipos_comp`.
 | 2 ✔ | `ActivosService`: modelos y CRUD — **hecha el 2026-09-10** (ver §0) | No | Bajo |
 | 3 ✔ | Switch en referencias + ficha Componentes — **hecha el 2026-09-10**, con "agregar componente" y el valor bloqueado en el alta adelantados (ver §0) | **Sí** | Bajo |
 | 4 ✔ | Alta con plantilla del kit anterior — **hecha el 2026-09-10**, con los componentes guardados todos o ninguno (`schema_v65`, ver §0) | **Sí** | Medio |
-| 5 | Movimientos de componente (la vida del kit) | **Sí** | Medio |
+| 5 ✔ | Movimientos de componente (la vida del kit) — **hecha el 2026-09-10**, con anular solo para el admin (`schema_v66`, ver §0) | **Sí** | Medio |
 | 6 | Valorizado con desglose de kits | Sí | Bajo |
 
 **La fase peligrosa es la 1**, y hay que tratarla distinto: probar la cadena

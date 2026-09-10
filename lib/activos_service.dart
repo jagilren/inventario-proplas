@@ -327,24 +327,57 @@ String? validarComposicionKit(List<ComponentePlantilla> lista) {
 /// lección de la etiqueta de REINGRESO, schema_v63). Todas en palabras
 /// completas, sin abreviaturas: también las lee un lector de pantalla.
 enum TipoMovComponente {
-  alta('alta', accion: 'Alta', historial: 'Alta', suma: true),
-  aumento('aumento', accion: 'Agregar', historial: 'Se agregó', suma: true),
+  alta('alta',
+      accion: 'Alta',
+      historial: 'Alta',
+      ayuda: 'Entró con el kit al crearlo.',
+      suma: true),
+  aumento('aumento',
+      accion: 'Agregar',
+      historial: 'Se agregó',
+      ayuda: 'Entran más unidades al kit.',
+      suma: true),
   disminucion('disminucion',
-      accion: 'Retirar', historial: 'Se retiró', suma: false),
+      accion: 'Retirar',
+      historial: 'Se retiró',
+      ayuda: 'Salen del kit sin destino: una corrección o un retiro.',
+      suma: false),
   salidaVenta('salida_venta',
-      accion: 'Vender', historial: 'Venta', suma: false, pideTercero: true),
+      accion: 'Vender',
+      historial: 'Venta',
+      ayuda: 'Se vendieron a un tercero. Hay que decir a quién.',
+      suma: false,
+      pideTercero: true),
   salidaGarantia('salida_garantia',
-      accion: 'Garantía', historial: 'Garantía', suma: false, pideTercero: true),
-  bajaDano('baja_dano', accion: 'Daño', historial: 'Daño', suma: false),
-  anulacion('anulacion', accion: 'Anular', historial: 'Anulación', suma: false);
+      accion: 'Garantía',
+      historial: 'Garantía',
+      ayuda: 'Se entregan como garantía a un tercero. Hay que decir a quién.',
+      suma: false,
+      pideTercero: true),
+  bajaDano('baja_dano',
+      accion: 'Daño',
+      historial: 'Daño',
+      ayuda: 'Se dañaron y salen del kit.',
+      suma: false),
+  anulacion('anulacion',
+      accion: 'Anular',
+      historial: 'Anulación',
+      ayuda: 'Deshace un movimiento anterior con uno contrario.',
+      suma: false);
 
   const TipoMovComponente(
     this.valor, {
     required this.accion,
     required this.historial,
+    required this.ayuda,
     required this.suma,
     this.pideTercero = false,
   });
+
+  /// Qué significa, en una frase. Se muestra al elegir la opción: la
+  /// diferencia entre "Retirar" y "Daño" no es obvia para quien la ve la
+  /// primera vez.
+  final String ayuda;
 
   /// Como lo guarda la base.
   final String valor;

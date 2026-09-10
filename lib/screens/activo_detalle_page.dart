@@ -7,6 +7,7 @@ import '../util/tiempo.dart';
 import '../widgets/kit_componentes.dart';
 import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
+import 'componente_kit_page.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -160,7 +161,8 @@ class _ActivoDetallePageState extends State<ActivoDetallePage> {
               editaObservaciones: _editaObservaciones,
               onCambio: _cargar,
             ),
-            if (muestraComponentes) _Componentes(activo: a, onCambio: _cargar),
+            if (muestraComponentes)
+              _Componentes(activo: a, esAdmin: _admin, onCambio: _cargar),
             if (muestraPiezas) _Piezas(activoId: a.id),
             _Mantenimientos(activoId: a.id),
             _Movimientos(
@@ -463,8 +465,14 @@ class _Ficha extends StatelessWidget {
 /// llega en la Fase 5.
 class _Componentes extends StatefulWidget {
   final Activo activo;
+  /// Anular un movimiento de componente: solo el admin (schema_v66).
+  final bool esAdmin;
   final Future<void> Function() onCambio;
-  const _Componentes({required this.activo, required this.onCambio});
+  const _Componentes({
+    required this.activo,
+    required this.esAdmin,
+    required this.onCambio,
+  });
   @override
   State<_Componentes> createState() => _ComponentesState();
 }
@@ -517,6 +525,24 @@ class _ComponentesState extends State<_Componentes> {
     );
     // Recargar el equipo: su valor a nuevo cambió, y la Ficha lo muestra.
     if (agregado == true) await widget.onCambio();
+  }
+
+  /// La vida de un componente: su historia y registrar movimientos (Fase 5).
+  Future<void> _abrir(ActivoComponente c) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ComponenteKitPage(
+          componente: c,
+          serialKit: widget.activo.serial,
+          kitEntregado: _entregado,
+          esAdmin: widget.esAdmin,
+        ),
+      ),
+    );
+    // Lo que se haya movido allá cambia el valor del kit: se recarga el
+    // equipo para que la Ficha no quede mostrando el viejo.
+    await widget.onCambio();
   }
 
   @override
@@ -603,13 +629,21 @@ class _ComponentesState extends State<_Componentes> {
                   ),
                 ),
               for (final c in vivos)
-                TarjetaComponente(componente: c, porcentaje: _porcentaje),
+                TarjetaComponente(
+                    componente: c,
+                    porcentaje: _porcentaje,
+                    onTap: () => _abrir(c)),
               if (agotados.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Text('Agotados',
                     style: Theme.of(context).textTheme.labelLarge),
+                // Un agotado también se abre: su historia sigue ahí, y un
+                // "Agregar" lo puede devolver al kit.
                 for (final c in agotados)
-                  TarjetaComponente(componente: c, porcentaje: _porcentaje),
+                  TarjetaComponente(
+                      componente: c,
+                      porcentaje: _porcentaje,
+                      onTap: () => _abrir(c)),
               ],
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:mi_app/activos_service.dart';
@@ -431,6 +432,280 @@ void main() {
 
     testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
       await _montar(t, lista(porcentaje: 70, error: 'Algo que corregir.'),
+          escalaTexto: 2.0);
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  group('HojaMovimientoComponente (la vida del kit, Fase 5)', () {
+    final guias = _componente(nombre: 'Guias filtro medios', cantidad: 24,
+        valor: 15000);
+    final tintexa = ActivoTercero.fromMap(
+        {'id': 't1', 'nombre': 'TINTEXA', 'tipo': 'cliente', 'activo': true});
+
+    /// Lo que la hoja le mandaría a la base, capturado por el simulador.
+    late List<Map<String, Object?>> registrados;
+    late bool? cerro;
+
+    Future<void> abrirHoja(WidgetTester t, {double escalaTexto = 1.0}) async {
+      registrados = [];
+      cerro = null;
+      t.view.physicalSize = const Size(360, 800);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(MaterialApp(
+        theme: _tema,
+        home: MediaQuery(
+          data: MediaQueryData(
+              size: const Size(360, 800),
+              textScaler: TextScaler.linear(escalaTexto)),
+          child: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () async {
+                  cerro = await showModalBottomSheet<bool>(
+                    context: ctx,
+                    isScrollControlled: true,
+                    builder: (_) => HojaMovimientoComponente(
+                      componente: guias,
+                      cargarTerceros: () async => [tintexa],
+                      crearTercero: (n, tipo) async => ActivoTercero.fromMap(
+                          {'id': 'nuevo', 'nombre': n, 'tipo': tipo}),
+                      registrar: ({
+                        required componenteId,
+                        required tipo,
+                        required cantidad,
+                        terceroId,
+                        observacion,
+                      }) async {
+                        registrados.add({
+                          'componente': componenteId,
+                          'tipo': tipo,
+                          'cantidad': cantidad,
+                          'tercero': terceroId,
+                        });
+                      },
+                    ),
+                  );
+                },
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await t.tap(find.text('abrir'));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('sin elegir qué pasó, no registra y lo dice', (t) async {
+      await abrirHoja(t);
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '3');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(find.text('Elige qué pasó'), findsOneWidget);
+      expect(registrados, isEmpty);
+    });
+
+    testWidgets('al elegir una opción explica qué significa', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Daño'));
+      await t.pumpAndSettle();
+      expect(find.text(TipoMovComponente.bajaDano.ayuda), findsOneWidget);
+    });
+
+    testWidgets('dice cuántos van a quedar, en vivo', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Daño'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '3');
+      await t.pump();
+      expect(find.text('Quedarán 21'), findsOneWidget);
+    });
+
+    testWidgets('no deja sacar más de lo que hay, y lo dice al escribir',
+        (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Retirar'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '30');
+      await t.pump();
+      expect(find.text('Solo hay 24'), findsOneWidget);
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados, isEmpty);
+    });
+
+    testWidgets('agregar sí puede pasar de lo que hay', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Agregar'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '30');
+      await t.pump();
+      expect(find.text('Quedarán 54'), findsOneWidget);
+      expect(find.text('Solo hay 24'), findsNothing);
+    });
+
+    testWidgets('un daño se registra completo y la hoja se cierra', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Daño'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '3');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados, [
+        {
+          'componente': guias.id,
+          'tipo': TipoMovComponente.bajaDano,
+          'cantidad': 3,
+          'tercero': null,
+        }
+      ]);
+      expect(cerro, isTrue);
+    });
+
+    testWidgets('vender SIN decir a quién no se registra', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Vender'));
+      await t.pumpAndSettle();
+      expect(find.text('¿A quién se vendió? *'), findsOneWidget);
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '1');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados, isEmpty);
+    });
+
+    testWidgets('vender a TINTEXA manda el tercero', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Vender'));
+      await t.pumpAndSettle();
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '1');
+      // El selector con buscador: se abre y se toca la opción.
+      await t.tap(find.text('¿A quién se vendió? *'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('TINTEXA').last);
+      await t.pumpAndSettle();
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados.single['tipo'], TipoMovComponente.salidaVenta);
+      expect(registrados.single['tercero'], 't1');
+      expect(cerro, isTrue);
+    });
+
+    testWidgets('pasar de Vender a Daño no manda el tercero de antes',
+        (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Vender'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('¿A quién se vendió? *'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('TINTEXA').last);
+      await t.pumpAndSettle();
+      await t.tap(find.text('Daño'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '2');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados.single['tercero'], isNull);
+    });
+
+    testWidgets('todo lo que se toca mide 48 dp, tiene nombre y contraste',
+        (t) async {
+      final h = t.ensureSemantics();
+      await abrirHoja(t);
+      await t.tap(find.text('Vender'));
+      await t.pumpAndSettle();
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+
+    testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
+      await abrirHoja(t, escalaTexto: 2.0);
+      await t.tap(find.text('Garantía'));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  group('TarjetaComponente que se abre (Fase 5)', () {
+    testWidgets('el lector de pantalla también la puede abrir', (t) async {
+      final h = t.ensureSemantics();
+      var abierta = 0;
+      await _montar(
+          t,
+          TarjetaComponente(
+              componente: _componente(),
+              porcentaje: 100,
+              onTap: () => abierta++));
+      // La acción de tocar tiene que estar en el nodo que el lector anuncia:
+      // si solo la tuviera el InkWell de adentro, excludeSemantics la ocultaría.
+      final nodo = t.getSemantics(find.byType(TarjetaComponente));
+      expect(nodo.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      expect(nodo.getSemanticsData().hint,
+          'Toca para ver su historia y registrar movimientos');
+      await t.tap(find.byType(TarjetaComponente));
+      expect(abierta, 1);
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      h.dispose();
+    });
+  });
+
+  group('LineaMovimientoComponente (historial, Fase 5)', () {
+    MovimientoComponente mov({
+      String tipo = 'salida_venta',
+      String? tercero = 'TINTEXA',
+    }) =>
+        MovimientoComponente.fromMap({
+          'id': 'm1',
+          'componente_id': 'c1',
+          'tipo': tipo,
+          'signo': -1,
+          'cantidad': 1,
+          'valor_unitario': 15000,
+          'anula_movimiento_id': null,
+          'observacion': 'remisión 3147',
+          'usuario_email': 'kuribe@rpci.com.co',
+          'fecha': '2026-09-10T18:12:00Z',
+          'activo_terceros': tercero == null ? null : {'nombre': tercero},
+        });
+
+    testWidgets('se oye en palabras, con lo anulado dicho', (t) async {
+      final h = t.ensureSemantics();
+      await _montar(t,
+          LineaMovimientoComponente(
+              movimiento: mov(), anulado: true, onAnular: null));
+      expect(find.text('ANULADO'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel(RegExp(
+              r'^Venta, salieron 1, a TINTEXA\. .*kuribe@rpci\.com\.co\. anulado\. observación: remisión 3147$')),
+          findsOneWidget);
+      h.dispose();
+    });
+
+    testWidgets('el botón de anular dice QUÉ anula', (t) async {
+      final h = t.ensureSemantics();
+      await _montar(t,
+          LineaMovimientoComponente(
+              movimiento: mov(), anulado: false, onAnular: () {}));
+      expect(find.byTooltip(RegExp(r'^Anular venta del ')), findsOneWidget);
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+
+    testWidgets('sin permiso de anular, no aparece el botón', (t) async {
+      await _montar(t,
+          LineaMovimientoComponente(
+              movimiento: mov(), anulado: false, onAnular: null));
+      expect(find.byIcon(Icons.undo), findsNothing);
+    });
+
+    testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
+      await _montar(
+          t,
+          LineaMovimientoComponente(
+              movimiento: mov(tercero: 'TALLER DE MECANIZADOS JUAN GABRIEL MONTOYA'),
+              anulado: true,
+              onAnular: () {}),
           escalaTexto: 2.0);
       expect(t.takeException(), isNull);
     });
