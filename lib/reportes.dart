@@ -631,7 +631,7 @@ class Reportes {
     final res = await supabase
         .from('activos_disponibilidad')
         .select(
-          '*, activo_referencias(nombre, activo), '
+          '*, activo_referencias(nombre, activo, es_kit), '
           'bodegas!activos_bodega_id_fkey(nombre), '
           'ubicacion_bodega:bodegas!activo_ubicaciones_bodega_id_fkey(nombre), '
           'activo_terceros(nombre)',
@@ -655,6 +655,12 @@ class Reportes {
         // TOTAL coincide con el "Valorizado total por bodega" en vez de dar
         // dos cifras distintas para lo mismo.
         'Cuenta en el valorizado',
+        // AL FINAL a propósito: una columna nueva en medio correría las que
+        // ya se usan en Excel. El desglose de un kit está en el informe
+        // "Composición de kits", NO aquí: si el kit y sus componentes
+        // estuvieran en el mismo archivo, sumar la columna de valor contaría
+        // el kit dos veces.
+        'Es kit',
       ],
     ];
     int total = 0;
@@ -683,10 +689,36 @@ class Reportes {
         valorActual,
         (r['disponible'] ?? false) == true ? 'Sí' : 'No',
         cuenta ? 'Sí' : 'No',
+        ((r['activo_referencias'] as Map?)?['es_kit'] ?? false) == true
+            ? 'Sí'
+            : 'No',
       ]);
     }
-    filas.add(['', '', '', '', '', '', '', '', 'TOTAL', total, '']);
+    filas.add(['', '', '', '', '', '', '', '', 'TOTAL', total, '', '']);
     await _descargar('equipos_valorizacion', filas);
+  }
+
+  /// Composición de los KITS: una fila por componente, y después de cada kit
+  /// una fila "Total del kit" con el valor que calculó la base — el mismo
+  /// que sale en "Valorización de activos". Fase 6 de
+  /// docs/plan-kits-equipos.md.
+  ///
+  /// Una sola consulta: los equipos cuya referencia es kit, cada uno con sus
+  /// componentes. Así también salen los kits SIN componentes (valen $0), que
+  /// consultando la tabla de componentes no aparecerían nunca.
+  static Future<void> composicionKits() async {
+    final res = await supabase
+        .from('activos')
+        .select(
+          'serial, estado, porcentaje_valor, valor_nuevo, valor_actual, '
+          'activo_referencias!inner(nombre, activo, es_kit), '
+          'bodegas(nombre), '
+          'activo_componentes(nombre, cantidad, valor_unitario, subtotal, orden)',
+        )
+        .eq('activo_referencias.es_kit', true)
+        .order('serial');
+    await _descargar('equipos_composicion_kits',
+        filasComposicionKits((res as List).cast<Map<String, dynamic>>()));
   }
 
   /// Valorizado total por bodega: inventario + equipos. La única excepción
@@ -708,4 +740,89 @@ class Reportes {
     filas.add(['TOTAL', totalInv, totalEq, totalInv + totalEq]);
     await _descargar('valorizado_total_por_bodega', filas);
   }
+}
+
+/// Las filas del informe "Composición de kits", a partir de lo que devuelve
+/// la base. Función pura, sin red: test/kits_informe_test.dart comprueba que
+/// cuadra al peso con el ejemplo real.
+///
+/// El "Total del kit" NO se suma aquí a partir de los componentes: se toma de
+/// la base (valor_nuevo / valor_actual). Es el mismo número del informe de
+/// valorización, y el porcentaje se aplica UNA vez al total — la suma de los
+/// ponderados por componente, redondeados cada uno, podría diferir en un peso.
+List<List<dynamic>> filasComposicionKits(List<Map<String, dynamic>> kits) {
+  final filas = <List<dynamic>>[
+    [
+      'Referencia',
+      'Serial del kit',
+      'Estado',
+      'Bodega dueña',
+      'Componente',
+      'Cantidad',
+      'Valor unitario',
+      'Subtotal a nuevo',
+      '% del kit',
+      'Subtotal al %',
+      'Cuenta en el valorizado',
+    ],
+  ];
+  var total = 0;
+  for (final k in kits) {
+    final ref = k['activo_referencias'] as Map?;
+    final estado = (k['estado'] ?? '') as String;
+    final refActiva = (ref?['activo'] ?? true) == true;
+    // La misma regla que "Valorización de activos" y "Valorizado total por
+    // bodega": un kit entregado, de baja o de un modelo retirado no suma.
+    final cuenta = estado != 'entregado' && estado != 'baja' && refActiva;
+    final pct = (k['porcentaje_valor'] ?? 100) as num;
+    final comunes = [
+      ref?['nombre'] ?? '',
+      k['serial'] ?? '',
+      estado,
+      (k['bodegas'] as Map?)?['nombre'] ?? '',
+    ];
+    final comps = ((k['activo_componentes'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>()
+        .toList()
+      ..sort((a, b) {
+        final o = ((a['orden'] ?? 0) as int).compareTo((b['orden'] ?? 0) as int);
+        return o != 0
+            ? o
+            : ((a['nombre'] ?? '') as String)
+                .compareTo((b['nombre'] ?? '') as String);
+      });
+    if (comps.isEmpty) {
+      // Que un kit vacío se VEA: vale $0 y no puede pasar desapercibido.
+      filas.add([...comunes, '(sin componentes: vale \$0)',
+          0, 0, 0, pct, 0, cuenta ? 'Sí' : 'No']);
+    }
+    for (final c in comps) {
+      final subtotal = (c['subtotal'] ?? 0) as num;
+      filas.add([
+        ...comunes,
+        c['nombre'] ?? '',
+        (c['cantidad'] ?? 0) as num,
+        ((c['valor_unitario'] ?? 0) as num).round(),
+        subtotal.round(),
+        pct,
+        (subtotal * pct / 100).round(),
+        cuenta ? 'Sí' : 'No',
+      ]);
+    }
+    final valorActual = ((k['valor_actual'] ?? 0) as num).round();
+    if (cuenta) total += valorActual;
+    filas.add([
+      ...comunes,
+      'TOTAL DEL KIT',
+      '',
+      '',
+      ((k['valor_nuevo'] ?? 0) as num).round(),
+      pct,
+      valorActual,
+      cuenta ? 'Sí' : 'No',
+    ]);
+  }
+  filas.add(['', '', '', '', 'TOTAL DE LOS KITS QUE CUENTAN', '', '', '', '',
+      total, '']);
+  return filas;
 }

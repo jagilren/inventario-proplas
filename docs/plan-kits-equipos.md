@@ -1,7 +1,7 @@
 # Plan: Referencias KITZABLES
 
 **Estado:** diseñado 2026-09-10 · **Fase 1 (SQL) en producción el 2026-09-10**
-(`schema_v64_kits_fase1`) · Fases 2 a 6 pendientes.
+(`schema_v64_kits_fase1`) · **las seis fases en producción el 2026-09-10**.
 **Extiende:** el Módulo de Equipos (`docs/plan-modulo-equipos.md`).
 **Sigue la plantilla de 10 secciones de** `docs/sdd-modulo-equipos.md`.
 
@@ -201,6 +201,35 @@ incluido**, pasándole funciones simuladas en vez de la base: sin elegir qué
 pasó no registra; no deja sacar de más; vender sin tercero no registra; vender
 a TINTEXA manda el tercero; y pasar de Vender a Daño no arrastra el tercero de
 antes.
+
+### Fase 6 (el valorizado con el desglose) — 2026-09-10
+
+Un informe nuevo, **Composición de kits**: una fila por componente de cada kit
+(cantidad, valor unitario, subtotal a nuevo y al porcentaje del kit) y, después
+de cada kit, una fila **TOTAL DEL KIT** con el valor que calculó la base.
+
+**La decisión: informe aparte, no filas dentro de la valorización.** Si en el
+mismo archivo estuvieran el kit y sus componentes, quien sumara la columna de
+valor en Excel **contaría cada kit dos veces**. "Valorización de activos" sigue
+con una fila por equipo y el mismo total; solo gana, **al final**, una columna
+"Es kit" — al final para no correr las columnas que ya se usan.
+
+Tres detalles que hacen que cuadre:
+- El **total del kit sale de la base**, no de sumar aquí los componentes: el
+  porcentaje se aplica una sola vez al total, así que es el mismo número de la
+  valorización, al peso.
+- Los **kits sin componentes también salen**, diciendo que valen $0. Se
+  consulta desde los equipos (con sus componentes anidados) y no desde la tabla
+  de componentes, donde un kit vacío no aparecería nunca.
+- **Cuenta en el valorizado** con la misma regla de los otros dos informes: un
+  kit entregado, de baja o de una referencia retirada sale, pero no suma.
+
+**Probado:** con el ejemplo real, los componentes suman $1.540.000 a nuevo y
+$1.078.000 al 70%, igual que el total del kit; y de cuatro kits (normal,
+entregado, de baja, de referencia retirada) solo suma el primero. 99 pruebas en
+total; la consulta nueva, contra la API real, HTTP 200.
+
+**Con esto quedan hechas las seis fases.**
 
 ---
 
@@ -611,7 +640,7 @@ nueva `equipos_comp`.
 | 3 ✔ | Switch en referencias + ficha Componentes — **hecha el 2026-09-10**, con "agregar componente" y el valor bloqueado en el alta adelantados (ver §0) | **Sí** | Bajo |
 | 4 ✔ | Alta con plantilla del kit anterior — **hecha el 2026-09-10**, con los componentes guardados todos o ninguno (`schema_v65`, ver §0) | **Sí** | Medio |
 | 5 ✔ | Movimientos de componente (la vida del kit) — **hecha el 2026-09-10**, con anular solo para el admin (`schema_v66`, ver §0) | **Sí** | Medio |
-| 6 | Valorizado con desglose de kits | Sí | Bajo |
+| 6 ✔ | Valorizado con desglose de kits — **hecha el 2026-09-10**: informe "Composición de kits" (ver §0) | Sí | Bajo |
 
 **La fase peligrosa es la 1**, y hay que tratarla distinto: probar la cadena
 completa dentro de `BEGIN … ROLLBACK` antes de aplicar, incluyendo alta,

@@ -118,8 +118,8 @@ class _EquiposReportesPageState extends State<EquiposReportesPage> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'El rango solo aplica al informe de movimientos. Los otros '
-                    'dos son una foto del estado actual.',
+                    'El rango solo aplica al informe de movimientos. Los demás '
+                    'son una foto del estado actual.',
                     style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
                 ],
@@ -142,6 +142,15 @@ class _EquiposReportesPageState extends State<EquiposReportesPage> {
                 'valor, con fila TOTAL.',
             Icons.attach_money,
             () => Reportes.valorizacionActivos(),
+          ),
+          _reporte(
+            'eq_composicion_kits',
+            'Composición de kits',
+            'Una fila por componente de cada kit, con cantidad, valor unitario '
+                'y subtotal, y el total de cada kit — el mismo de la '
+                'valorización.',
+            Icons.inventory_2_outlined,
+            () => Reportes.composicionKits(),
           ),
           _reporte(
             'eq_total_bodega',
