@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../data.dart';
 import '../reportes.dart';
+import '../util/plantilla_import.dart';
 import 'escaner_page.dart';
 
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -130,12 +131,26 @@ class _RemisionDevolucionPageState extends State<RemisionDevolucionPage> {
     if (_items.isEmpty) return;
     setState(() => _generando = true);
     try {
-      final filas = <List<dynamic>>[
-        ['ELEMENTO', 'CANTIDAD'],
-        for (final it in _items) [it.elemento.nombre, it.cantidad],
-      ];
+      // El costo promedio se lee AHORA del servidor: la lista se pudo armar
+      // hace horas y el costo cambia con cada compra. Sin señal se usa el
+      // que se tenía al agregar cada elemento, y se avisa.
+      Map<String, num> costos = const {};
+      var costoAlDia = true;
+      try {
+        costos = await InventarioService.costosPromedio(
+            [for (final it in _items) it.elemento.id]);
+      } catch (_) {
+        costoAlDia = false;
+      }
+      final filas = filasCsvDevolucion(
+        [for (final it in _items) (it.elemento, it.cantidad)],
+        costos: costos,
+      );
       await Reportes.descargarCsv('remision_devolucion', filas);
-      _msg('✓ CSV generado. Puedes importarlo en "Devoluciones".');
+      _msg(costoAlDia
+          ? '✓ CSV generado. Puedes importarlo en "Devoluciones".'
+          : '✓ CSV generado SIN conexión: el costo promedio es el de cuando '
+              'agregaste cada elemento, puede no estar al día.');
     } catch (e) {
       _msg('Error al generar: $e');
     } finally {
@@ -160,7 +175,8 @@ class _RemisionDevolucionPageState extends State<RemisionDevolucionPage> {
             color: const Color(0xFFE3F2FD),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: const Text(
-                'Agrega elementos con su cantidad y genera el CSV. Ese archivo '
+                'Agrega elementos con su cantidad y genera el CSV: lleva el '
+                'elemento, la cantidad y su costo promedio actual. Ese archivo '
                 'se puede cargar luego en "Devoluciones".',
                 style: TextStyle(fontSize: 12, color: Color(0xFF1565C0))),
           ),

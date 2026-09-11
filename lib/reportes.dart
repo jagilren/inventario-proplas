@@ -11,10 +11,10 @@ import 'util/movimiento_fmt.dart';
 
 class Reportes {
   /// Convierte las filas a CSV y dispara la descarga (web y móvil).
-  static Future<void> _descargar(
-    String nombre,
-    List<List<dynamic>> filas,
-  ) async {
+  /// Los bytes exactos del CSV que se descarga. Aparte de [_descargar] para
+  /// poder probar que un archivo generado por la app se vuelve a leer bien
+  /// al cargarlo (remisión → Devoluciones).
+  static Uint8List bytesCsv(List<List<dynamic>> filas) {
     // Configuración regional: separador de decimales en los números.
     final dec = Ajustes.decSep;
     final fmt = filas
@@ -26,7 +26,14 @@ class Reportes {
         .toList();
     final csv = ListToCsvConverter(fieldDelimiter: Ajustes.csvSep).convert(fmt);
     // BOM UTF-8 para que Excel muestre bien las tildes.
-    final bytes = Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
+    return Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
+  }
+
+  static Future<void> _descargar(
+    String nombre,
+    List<List<dynamic>> filas,
+  ) async {
+    final bytes = bytesCsv(filas);
     final fecha = DateTime.now().toIso8601String().substring(0, 10);
     await guardarArchivo(
       nombre: '${nombre}_$fecha',

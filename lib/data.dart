@@ -876,6 +876,22 @@ class InventarioService {
 
   /// Todos los elementos activos (para emparejar la carga de devoluciones).
   /// Excluye los de aprovechamiento (no pertenecen al inventario oficial).
+  /// El costo promedio ACTUAL de varios elementos, leído del servidor en
+  /// este momento (no del caché). Lo usa la remisión de devolución al
+  /// generar su CSV: la lista se pudo armar hace horas y el costo cambia con
+  /// cada compra. Sin señal lanza el error; quien llama decide qué hacer.
+  static Future<Map<String, num>> costosPromedio(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final res = await supabase
+        .from('elementos')
+        .select('id, costo_promedio')
+        .inFilter('id', ids);
+    return {
+      for (final r in (res as List))
+        r['id'] as String: (r['costo_promedio'] ?? 0) as num,
+    };
+  }
+
   static Future<List<Elemento>> todosElementos() async {
     final res = await supabase
         .from('elementos')

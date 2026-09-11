@@ -174,7 +174,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
             const Text('Formato esperado:',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            const Text('• Dos columnas: ELEMENTO y CANTIDAD (con encabezado).\n'
+            const Text('• Columnas ELEMENTO y CANTIDAD (con encabezado).\n'
+                '• COSTO PROMEDIO puede venir o no: es informativa, no se usa '
+                'al cargar.\n'
                 '• Si trae columnas de más, no hay problema: se ignoran.\n'
                 '• Excel (.xlsx) o CSV.'),
           ]),
@@ -487,12 +489,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               // equivocarse (antes esto solo salía si el archivo fallaba).
               TextButton.icon(
                 onPressed: () => descargarPlantillaImport(context,
-                    nombreArchivo: 'plantilla_devoluciones'),
+                    nombreArchivo: 'plantilla_devoluciones', devolucion: true),
                 icon: const Icon(Icons.download, size: 18),
                 label: const Text('Plantilla'),
               ),
               IconButton(
-                onPressed: () => mostrarAyudaFormato(context),
+                onPressed: () => mostrarAyudaFormato(context, devolucion: true),
                 icon: const Icon(Icons.info_outline),
                 tooltip: 'Cómo armar el archivo',
                 // Área táctil cómoda en móvil sin robarle ancho a la fila.
