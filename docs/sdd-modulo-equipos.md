@@ -1241,6 +1241,22 @@ estado y la ubicación los cambia un trigger que solo corre al insertar).
 Queda anotado y se le preguntó al usuario antes de cerrarlo. (La tabla de
 componentes no tiene ese hueco: no tiene política de borrado.)
 
+**f) Las ocho migraciones que no estaban en el repo.** *(Corregido el
+2026-09-11.)* La carpeta `supabase/` saltaba de la `v46` a la `v54`: las
+`v47` a `v53` (con la `v49b`) se habían aplicado a la base desde el MCP **sin
+escribir antes su archivo**. La base funcionaba, pero reconstruirla desde los
+archivos —la razón de tenerlos— habría dejado fuera el resumen por
+referencia, la auditoría de Equipos, las referencias sin duplicados y la
+búsqueda de seriales sin tildes. Se recuperaron de
+`supabase_migrations.schema_migrations`, que guarda el texto **exacto** que
+corrió, en vez de reescribirlas de memoria.
+
+> **Lección:** el archivo de la migración se escribe **antes** de aplicarla,
+> no después. Aplicarla primero "para probar" es como se pierde: funciona, y
+> ya nadie vuelve a escribir el archivo. Desde la `v54` todas se escriben
+> primero, se prueban en una transacción que se deshace, y solo entonces se
+> aplican.
+
 Y un detalle de método que se agregó ese día al validar consultas contra la
 API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a
 propósito**, que respondió 400. Una prueba que nunca ha fallado no demuestra
