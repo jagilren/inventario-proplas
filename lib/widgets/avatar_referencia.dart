@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../util/import_archivo.dart' show normalizarTexto;
 
-/// ADORNO de la lista "Por referencia" de Equipos (2026-09-11): un círculo de
-/// color con un ícono según el tipo de equipo, o su inicial.
+/// ADORNO de las listas "Por referencia" y "Disponibles" de Equipos
+/// (2026-09-11): un círculo de color con un ícono según el tipo de equipo, o
+/// su inicial.
 ///
 /// Es solo visual y se puede QUITAR sin tocar nada más:
-/// - apagarlo: poner [mostrarAvatarReferencias] en false;
-/// - borrarlo del todo: este archivo y su única línea en
-///   `lib/screens/equipos_home_page.dart` (`leading:` de la lista).
+/// - apagarlo en las dos listas: poner [mostrarAvatarReferencias] en false;
+/// - borrarlo del todo: este archivo y sus dos usos en
+///   `lib/screens/equipos_home_page.dart` (el `leading:` de cada lista).
 ///
 /// No consulta la base: sale del NOMBRE de la referencia, que la lista ya
 /// tiene. Por eso adivina por palabras ("bomba", "kit"…); si no reconoce el

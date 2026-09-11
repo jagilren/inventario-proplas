@@ -621,6 +621,11 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
           }
           final d = _filas[i];
           return ListTile(
+            // El mismo adorno de "Por referencia", con el nombre de la
+            // referencia de esta unidad (ver widgets/avatar_referencia.dart).
+            leading: mostrarAvatarReferencias
+                ? AvatarReferencia(nombre: d.activo.referenciaNombre ?? '')
+                : null,
             title: Text(d.activo.serial),
             subtitle: Text(
                 '${d.activo.referenciaNombre ?? '—'} · ${d.activo.bodegaNombre ?? '—'}'),

@@ -689,7 +689,12 @@ Tres condiciones que puso el usuario, y cómo se cumplen:
 |---|---|
 | **No cargar la base** | El tipo se adivina por palabras del **nombre**, que la lista ya tiene. Cero consultas nuevas, cero columnas |
 | **Que se vea bien en el celular** | Colores oscuros con blanco encima: la prueba de contraste de Flutter mide cada color de la paleta. Una fila en 360 px con la letra al doble no se desborda |
-| **Poderlo quitar después** | Todo vive en `lib/widgets/avatar_referencia.dart`. Se **apaga** con `mostrarAvatarReferencias = false`; se **borra** quitando ese archivo y su única línea en la lista |
+| **Poderlo quitar después** | Todo vive en `lib/widgets/avatar_referencia.dart`. Se **apaga** en las dos listas con `mostrarAvatarReferencias = false`; se **borra** quitando ese archivo y sus dos usos |
+
+El mismo ícono se puso después en la pestaña **"Disponibles"**, a pedido del
+usuario: allí cada fila es una unidad, y el ícono sale del nombre de su
+referencia — así una bomba se ve igual en las dos listas. Tampoco consulta
+nada: ese nombre ya venía en la lista (y en el caché sin señal).
 
 Dos detalles:
 

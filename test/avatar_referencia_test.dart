@@ -118,4 +118,21 @@ void main() {
         escala: 2.0);
     expect(t.takeException(), isNull);
   });
+
+  testWidgets('en "Disponibles": fila de una unidad, sin nombre de referencia',
+      (t) async {
+    // Sin señal y con el caché viejo podría llegar sin nombre: no debe
+    // romper ni dejar el círculo vacío.
+    expect(aspectoReferencia('').inicial, '#');
+    await _montar(
+        t,
+        const ListTile(
+          leading: AvatarReferencia(nombre: ''),
+          title: Text('A9772113810000036'),
+          subtitle: Text('BOMBA DE DIAFRAGMA ELECTRICA · Bodega RPCI'),
+          trailing: Text('\$ 1.540.000'),
+        ),
+        escala: 2.0);
+    expect(t.takeException(), isNull);
+  });
 }
