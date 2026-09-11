@@ -9,10 +9,13 @@ import 'activo_detalle_page.dart';
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
 /// Nivel 2 del módulo: las unidades individuales de una referencia, con los
-/// filtros rápidos Todas / Disponibles / No disponibles.
+/// filtros rápidos Todas / Disponibles / No disponibles / Vendidos.
 ///
 /// "Disponible" se lee de la vista `activos_disponibilidad`, donde es una
 /// regla derivada (operativo + ubicado en bodega propia), no un campo suelto.
+/// "Vendido" es un equipo entregado a un centro de costo (estado
+/// `entregado`): ya no es nuestro, y antes se contaba como "no disponible"
+/// junto con los que están en el taller (schema_v68).
 class ActivosDeReferenciaPage extends StatefulWidget {
   final String referenciaId;
   final String titulo;
@@ -29,8 +32,10 @@ class ActivosDeReferenciaPage extends StatefulWidget {
 class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
   static const _porPagina = 50;
 
-  /// null = todas; true = disponibles; false = no disponibles.
-  bool? _filtro;
+  FiltroEquipos _filtro = FiltroEquipos.todas;
+  /// Cuántas unidades hay en cada filtro, para mostrarlo en los chips. Null
+  /// sin señal: los chips salen sin número.
+  ResumenReferencia? _cuentas;
   final _buscador = TextEditingController();
   // Espera a que el usuario deje de escribir antes de consultar. Sin esto
   // habría una consulta por cada letra; con Enter obligatorio, en un móvil
@@ -47,6 +52,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
   void initState() {
     super.initState();
     _cargar();
+    _cargarCuentas();
     // Cualquier cambio de estado, condición o ubicación empuja este
     // contador; así la lista se entera aunque el cambio venga de otra
     // pantalla o de otro usuario.
@@ -61,9 +67,30 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
     super.dispose();
   }
 
-  void _alCambiarAlgo() { if (mounted) _recargar(); }
+  void _alCambiarAlgo() {
+    if (!mounted) return;
+    _recargar();
+    _cargarCuentas();
+  }
 
   Future<void> _recargar() => _cargar(desdeCero: true);
+
+  /// Las cuentas salen de la MISMA función que la lista de referencias
+  /// (activos_resumen_por_referencia): así los números de los chips y los de
+  /// la pantalla anterior no se pueden contradecir.
+  Future<void> _cargarCuentas() async {
+    try {
+      final todas = await ActivosService.resumenPorReferencia();
+      if (!mounted) return;
+      setState(() {
+        _cuentas = todas
+            .where((r) => r.referenciaId == widget.referenciaId)
+            .firstOrNull;
+      });
+    } catch (_) {
+      // Sin señal: los chips se quedan sin número; la lista funciona igual.
+    }
+  }
 
   Future<void> _cargar({bool desdeCero = false}) async {
     if (_cargandoMas) return;
@@ -81,7 +108,7 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
     try {
       final res = await ActivosService.disponibles(
         referenciaId: widget.referenciaId,
-        disponible: _filtro,
+        filtro: _filtro,
         serial: _buscador.text,
         offset: _offset,
         limit: _porPagina,
@@ -153,25 +180,13 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
           ),
           Padding(
             padding: const EdgeInsets.all(12),
-            // Wrap: en un teléfono angosto los filtros bajan de línea en vez
-            // de apretarse.
-            child: Wrap(
-              spacing: 8,
-              children: [
-                for (final opcion in [null, true, false])
-                  ChoiceChip(
-                    label: Text(switch (opcion) {
-                      null => 'Todas',
-                      true => 'Disponibles',
-                      _ => 'No disponibles',
-                    }),
-                    selected: _filtro == opcion,
-                    onSelected: (_) {
-                      setState(() => _filtro = opcion);
-                      _recargar();
-                    },
-                  ),
-              ],
+            child: FiltrosEquipos(
+              valor: _filtro,
+              cuentas: _cuentas,
+              onCambio: (f) {
+                setState(() => _filtro = f);
+                _recargar();
+              },
             ),
           ),
           Expanded(child: _cuerpo()),
@@ -206,7 +221,16 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
           padding: const EdgeInsets.all(24),
           child: Text(
             _buscador.text.trim().isEmpty
-                ? 'No hay unidades que cumplan ese filtro.'
+                ? switch (_filtro) {
+                    FiltroEquipos.vendidos =>
+                      'De esta referencia no se ha vendido ninguna unidad.',
+                    FiltroEquipos.disponibles =>
+                      'No hay unidades disponibles de esta referencia.',
+                    FiltroEquipos.noDisponibles =>
+                      'No hay unidades no disponibles: ninguna está en '
+                          'taller, de baja ni para repuestos.',
+                    FiltroEquipos.todas => 'No hay unidades de esta referencia.',
+                  }
                 : 'Ningún serial coincide con la búsqueda.',
             textAlign: TextAlign.center,
           ),
@@ -227,25 +251,13 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
             );
           }
           final d = _filas[i];
-          final a = d.activo;
-          return ListTile(
-            leading: Icon(
-              d.disponible ? Icons.check_circle : Icons.remove_circle_outline,
-              color: d.disponible ? Colors.green : Colors.grey,
-            ),
-            title: Text(a.serial),
-            subtitle: Text([
-              a.estadoEtiqueta,
-              a.condicionEtiqueta,
-              if (a.bodegaNombre != null) a.bodegaNombre!,
-            ].join(' · ')),
-            trailing: Text(_money.format(a.valorActual),
-                style: const TextStyle(fontSize: 12)),
+          return LineaUnidad(
+            unidad: d,
             onTap: () async {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => ActivoDetallePage(activoId: a.id)),
+                    builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
               );
               // _recargar y NO _cargar: sin reiniciar, al haber una página
               // ya cargada esto se tomaba como "cargar más" y AÑADÍA las
@@ -255,6 +267,97 @@ class _ActivosDeReferenciaPageState extends State<ActivosDeReferenciaPage> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Los cuatro filtros de EQUIPOS POR REFERENCIA. En un Wrap: en un teléfono
+/// angosto bajan de línea en vez de apretarse. Con "Vendidos" elegido, una
+/// línea dice qué es un vendido: la palabra sola no dice que ya no es nuestro.
+class FiltrosEquipos extends StatelessWidget {
+  final FiltroEquipos valor;
+  final ValueChanged<FiltroEquipos> onCambio;
+  /// Si se da, cada chip dice cuántas: "No disponibles (1)", "Vendidas (2)".
+  /// Así se ve que las vendidas ya no cuentan como no disponibles.
+  final ResumenReferencia? cuentas;
+
+  const FiltrosEquipos({
+    super.key,
+    required this.valor,
+    required this.onCambio,
+    this.cuentas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final f in FiltroEquipos.values)
+              ChoiceChip(
+                label: Text(cuentas == null
+                    ? f.etiqueta
+                    : '${f.etiqueta} (${cuentas!.cuantas(f)})'),
+                selected: valor == f,
+                onSelected: (_) => onCambio(f),
+              ),
+          ],
+        ),
+        if (valor == FiltroEquipos.vendidos)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Entregadas a un centro de costo: ya no son nuestras, salieron '
+              'del inventario.',
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Una unidad de la referencia. Un VENDIDO lo dice con texto y con su propio
+/// ícono (no solo con un color), y no muestra bodega: ya no está en ninguna.
+class LineaUnidad extends StatelessWidget {
+  final ActivoDisponibilidad unidad;
+  final VoidCallback? onTap;
+
+  const LineaUnidad({super.key, required this.unidad, this.onTap});
+
+  bool get vendido => unidad.activo.estado == 'entregado';
+
+  @override
+  Widget build(BuildContext context) {
+    final a = unidad.activo;
+    final esquema = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(
+        vendido
+            ? Icons.sell_outlined
+            : (unidad.disponible
+                ? Icons.check_circle
+                : Icons.remove_circle_outline),
+        color: vendido
+            ? esquema.tertiary
+            : (unidad.disponible ? Colors.green : Colors.grey),
+      ),
+      title: Text(a.serial),
+      subtitle: Text([
+        if (vendido) 'Vendido' else a.estadoEtiqueta,
+        a.condicionEtiqueta,
+        if (!vendido && a.bodegaNombre != null) a.bodegaNombre!,
+      ].join(' · ')),
+      trailing: Text(_money.format(a.valorActual),
+          style: const TextStyle(fontSize: 12)),
+      onTap: onTap,
     );
   }
 }

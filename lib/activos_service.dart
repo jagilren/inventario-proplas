@@ -701,6 +701,8 @@ class ResumenReferencia {
   final String? modelo;
   final int total;
   final int disponibles;
+  /// Entregados a un centro de costo: ya no son nuestros (schema_v68).
+  final int vendidos;
 
   ResumenReferencia.fromMap(Map<String, dynamic> m)
     : referenciaId = m['referencia_id'] as String,
@@ -708,15 +710,61 @@ class ResumenReferencia {
       marca = m['marca'] as String?,
       modelo = m['modelo'] as String?,
       total = ((m['total'] ?? 0) as num).toInt(),
-      disponibles = ((m['disponibles'] ?? 0) as num).toInt();
+      disponibles = ((m['disponibles'] ?? 0) as num).toInt(),
+      vendidos = ((m['vendidos'] ?? 0) as num).toInt();
 
-  int get noDisponibles => total - disponibles;
+  /// En taller, de baja, para repuestos… Antes era total − disponibles y
+  /// metía aquí también los VENDIDOS, que ya ni siquiera son nuestros.
+  int get noDisponibles => total - disponibles - vendidos;
+
+  /// "3 disponibles · 1 no disponible · 2 vendidas" (unidades): los tres
+  /// siempre, aunque sean cero, para que la línea se lea igual en todas las
+  /// referencias y los tres sumen el total.
+  String get textoCuentas => [
+        '$disponibles ${disponibles == 1 ? 'disponible' : 'disponibles'}',
+        '$noDisponibles ${noDisponibles == 1 ? 'no disponible' : 'no disponibles'}',
+        '$vendidos ${vendidos == 1 ? 'vendida' : 'vendidas'}',
+      ].join(' · ');
+
+  /// Cuántas unidades caen en cada filtro de EQUIPOS POR REFERENCIA.
+  int cuantas(FiltroEquipos f) => switch (f) {
+        FiltroEquipos.todas => total,
+        FiltroEquipos.disponibles => disponibles,
+        FiltroEquipos.noDisponibles => noDisponibles,
+        FiltroEquipos.vendidos => vendidos,
+      };
 
   String get etiqueta => [
     nombre,
     marca,
     modelo,
   ].where((e) => e != null && e.isNotEmpty).join(' · ');
+}
+
+/// Los filtros de las unidades de una referencia (EQUIPOS POR REFERENCIA).
+/// Se excluyen entre sí: un equipo es disponible, no disponible o vendido.
+enum FiltroEquipos {
+  todas('Todas'),
+  disponibles('Disponibles'),
+  noDisponibles('No disponibles'),
+  vendidos('Vendidas');
+
+  const FiltroEquipos(this.etiqueta);
+  final String etiqueta;
+
+  /// Si una fila de `activos_disponibilidad` entra en el filtro. La MISMA
+  /// regla que la consulta a la base (`ActivosService.disponibles`): la usa
+  /// el caché sin señal, y así las dos listas no se contradicen.
+  bool incluye(Map<String, dynamic> fila) {
+    final vendido = fila['estado'] == 'entregado';
+    final disponible = fila['disponible'] == true;
+    return switch (this) {
+      FiltroEquipos.todas => true,
+      FiltroEquipos.disponibles => disponible,
+      FiltroEquipos.noDisponibles => !disponible && !vendido,
+      FiltroEquipos.vendidos => vendido,
+    };
+  }
 }
 
 /// Deja el texto como lo guarda la columna `serial_busqueda` de la base:
@@ -1072,6 +1120,9 @@ class ActivosService {
     int offset = 0,
     int limit = 50,
     bool? disponible = true,
+    // Si se da, manda sobre [disponible]: separa los VENDIDOS de los no
+    // disponibles (schema_v68). La usa EQUIPOS POR REFERENCIA.
+    FiltroEquipos? filtro,
     String? bodegaId,
     String? referenciaId,
     // El serial se filtra CONTRA LA BASE, no en memoria: esta consulta
@@ -1087,7 +1138,20 @@ class ActivosService {
         .from('activos_disponibilidad')
         .select('*, activo_referencias(nombre), '
             'bodegas!activos_bodega_id_fkey(nombre)');
-    if (disponible != null) q = q.eq('disponible', disponible);
+    if (filtro != null) {
+      switch (filtro) {
+        case FiltroEquipos.todas:
+          break;
+        case FiltroEquipos.disponibles:
+          q = q.eq('disponible', true);
+        case FiltroEquipos.noDisponibles:
+          q = q.eq('disponible', false).neq('estado', 'entregado');
+        case FiltroEquipos.vendidos:
+          q = q.eq('estado', 'entregado');
+      }
+    } else if (disponible != null) {
+      q = q.eq('disponible', disponible);
+    }
     if (bodegaId != null) q = q.eq('ubicacion_actual_bodega_id', bodegaId);
     if (referenciaId != null) q = q.eq('referencia_id', referenciaId);
     if (serial != null && serial.trim().isNotEmpty) {
@@ -1105,7 +1169,10 @@ class ActivosService {
       final filas = await LocalStore.leerActivos();
       final q = serial == null ? null : normalizarSerial(serial.trim());
       final filtradas = filas.where((a) {
-        if (disponible != null && (a['disponible'] == true) != disponible) {
+        if (filtro != null) {
+          if (!filtro.incluye(a)) return false;
+        } else if (disponible != null &&
+            (a['disponible'] == true) != disponible) {
           return false;
         }
         if (bodegaId != null && a['ubicacion_actual_bodega_id'] != bodegaId) {

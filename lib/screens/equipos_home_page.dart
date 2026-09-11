@@ -325,8 +325,9 @@ class _PorReferenciaState extends State<_PorReferencia> {
           final f = visibles[i];
           return ListTile(
             title: Text(f.etiqueta),
-            subtitle: Text(
-                '${f.disponibles} disponibles · ${f.noDisponibles} no disponibles'),
+            // Los tres, siempre: disponibles, no disponibles y vendidos.
+            // Antes "no disponibles" incluía también los vendidos.
+            subtitle: Text(f.textoCuentas),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

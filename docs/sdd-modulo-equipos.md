@@ -596,6 +596,67 @@ Y cuatro decisiones de diseño que salen de lo mismo:
 > blanco, una fila más ancha que la pantalla— y las tres verificaciones los
 > atraparon.
 
+
+### 5.4 Equipos por referencia: disponibles, no disponibles y vendidas
+
+*(2026-09-11, pedido del usuario, `schema_v68`.)* La vista **EQUIPOS POR
+REFERENCIA** decía *"3 disponibles · 3 no disponibles"*, y la pantalla de
+cada referencia tenía los filtros Todas / Disponibles / No disponibles. Pero
+"no disponibles" se calculaba como **total − disponibles**: metía en el mismo
+grupo un equipo que está en el taller y uno que ya se **vendió**, que ni
+siquiera es nuestro. Para quien busca un equipo para despachar, son cosas
+opuestas: uno vuelve pronto, el otro no vuelve.
+
+**Qué es "vendida".** Una unidad con `estado = 'entregado'`: salió a un centro
+de costo y dejó de ser nuestra (la tercera regla central de la §4). Las tres
+categorías **no se pisan**, porque "disponible" exige `estado = 'operativo'`:
+
+| Categoría | Regla |
+|---|---|
+| Disponible | La de siempre: operativo, ni de baja ni para repuestos, y en una bodega (§4) |
+| **Vendida** | `estado = 'entregado'` |
+| No disponible | Todo lo demás: en taller, de baja, para repuestos |
+
+Y así los tres números **suman el total**: *3 disponibles · 1 no disponible · 2
+vendidas*, con las **6 unidades** al lado.
+
+**Dónde vive cada cosa:**
+
+| Qué | Dónde |
+|---|---|
+| Las tres cuentas de la lista de referencias | La función `activos_resumen_por_referencia()`, que ganó la columna `vendidos` |
+| Los cuatro filtros de una referencia, con su número | Los números salen de **esa misma función**: así los de los filtros y los de la lista anterior no se pueden contradecir |
+| El filtro con señal | La consulta a `activos_disponibilidad` (`ActivosService.disponibles`, `filtro:`) |
+| El filtro **sin** señal | `FiltroEquipos.incluye`, sobre el caché: la misma regla, escrita una vez para el caché y probada contra las mismas filas |
+
+**Tres detalles de la construcción:**
+
+- **La función cambió lo que devuelve**, y eso Postgres no lo permite con
+  `create or replace`: se borró y se creó en la misma migración. La columna
+  nueva va **al final**: la app que ya estaba publicada lee por nombre y la
+  ignoró sin romperse mientras llegaba la nueva. Al recrearla se le quitó el
+  permiso a `anon` (antes lo tenía; no le servía de nada porque la RLS no le
+  devolvía filas, pero tampoco tenía por qué tenerlo).
+- **Una unidad vendida no muestra bodega.** La lista decía "Bodega RPCI" al
+  lado de un equipo vendido: es su bodega *dueña*, no donde está. Ahora dice
+  **"Vendido"** con su propio ícono (no solo un color), y con el filtro
+  "Vendidas" elegido una línea explica qué es: *entregadas a un centro de
+  costo, ya no son nuestras*. En la ficha del equipo el estado sigue
+  diciéndose "Entregado": es el mismo estado, visto desde el equipo.
+- **Cómo se probó.** En la base, deshecho al final: al simular la venta de la
+  bomba de diafragma, su referencia pasó a 0 disponibles · 0 no disponibles ·
+  1 vendida, y la bomba dosificadora que está en el taller siguió como no
+  disponible. En la app, 14 pruebas: cada unidad cae en **una sola**
+  categoría, las cuentas suman el total, una respuesta de la base vieja (sin
+  `vendidos`) no rompe, y los filtros con su número en 360 px con la letra al
+  doble. Control negativo: al volver al cálculo viejo (total − disponibles),
+  **fallaron cuatro pruebas**.
+
+> **Lección:** un "resto" (*total menos lo que sí me interesa*) es una
+> categoría que nadie diseñó. Mete en el mismo grupo todo lo que no es lo otro,
+> y tarde o temprano junta cosas opuestas. Cada categoría que se muestra
+> merece su propia regla.
+
 ---
 
 ## 6. Permisos
