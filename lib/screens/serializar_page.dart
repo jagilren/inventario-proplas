@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../util/dinero.dart';
 
 /// Convierte un elemento a serializado: se registran los seriales de las
 /// unidades que ya tiene en stock (uno por unidad, con su bodega y costo).
@@ -32,7 +33,7 @@ class _SerializarPageState extends State<SerializarPage> {
 
   void _agregar() {
     final s = _serial.text.trim();
-    final c = num.tryParse(_costo.text.replaceAll(',', '.')) ?? 0;
+    final c = leerPesos(_costo.text) ?? 0;
     if (_bodega == null || s.isEmpty) {
       setState(() => _mostrarErrores = true);
       return;
@@ -99,8 +100,10 @@ class _SerializarPageState extends State<SerializarPage> {
               const SizedBox(width: 8),
               Expanded(child: TextField(controller: _costo,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Costo',
-                      border: OutlineInputBorder()))),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(labelText: 'Costo',
+                      helperText: pesosEntendidos(_costo.text),
+                      border: const OutlineInputBorder()))),
               IconButton(iconSize: 32, icon: const Icon(Icons.add_circle),
                   onPressed: _agregar),
             ]),

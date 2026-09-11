@@ -9,6 +9,7 @@ import '../util/import_archivo.dart';
 import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/confirmar_descarte.dart';
+import '../util/dinero.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -210,6 +211,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     final sinCosto = (fila.match?.costoPromedio ?? 0) == 0;
     final costoCtrl = TextEditingController(
         text: fila.costoManual == null ? '' : fila.costoManual.toString());
+    // Si el costo no se toca, se conserva el número original EXACTO en vez
+    // de volver a leer su texto: un costo importado de 12.345 pesos
+    // (3 decimales) se leería como doce mil (ver util/dinero.dart).
+    final textoCostoInicial = costoCtrl.text;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -224,14 +229,24 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           ),
           if (sinCosto) ...[
             const SizedBox(height: 10),
-            TextField(
-              controller: costoCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Costo unitario',
-                helperText: 'Este elemento está en \$0 · sin esto la '
-                    'devolución no resta consumo del centro de costo',
-                border: OutlineInputBorder(),
+            // StatefulBuilder: el diálogo no se redibuja solo, y el campo
+            // tiene que mostrar en vivo cómo quedó entendido el valor.
+            StatefulBuilder(
+              builder: (ctx, redibujar) => TextField(
+                controller: costoCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => redibujar(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Costo unitario',
+                  // Vacío: el aviso de siempre. Con algo escrito: cómo quedó
+                  // entendido ("45.000" = $45.000, no 45).
+                  helperText: pesosEntendidos(costoCtrl.text) ??
+                      'Este elemento está en \$0 · sin esto la '
+                          'devolución no resta consumo del centro de costo',
+                  helperMaxLines: 2,
+                  border: const OutlineInputBorder(),
+                ),
               ),
             ),
           ],
@@ -258,7 +273,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       setState(() {
         fila.cantidad = num.tryParse(cantCtrl.text.replaceAll(',', '.')) ?? fila.cantidad;
         if (sinCosto) {
-          final c = num.tryParse(costoCtrl.text.replaceAll(',', '.'));
+          final c = costoCtrl.text == textoCostoInicial
+              ? fila.costoManual
+              : leerPesos(costoCtrl.text);
           fila.costoManual = (c != null && c > 0) ? c : null;
         }
       });

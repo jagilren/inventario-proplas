@@ -7,6 +7,7 @@ import '../widgets/campo_obligatorio.dart';
 import '../widgets/kit_componentes.dart';
 import 'activo_detalle_page.dart';
 import 'activo_referencias_page.dart';
+import '../util/dinero.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -23,7 +24,10 @@ final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigit
 /// condición decide si el equipo queda disponible o entra a mantenimiento
 /// (esa regla la aplica el trigger de la base, no esta pantalla).
 class ActivoAltaPage extends StatefulWidget {
-  const ActivoAltaPage({super.key});
+  /// Abrir con esta referencia ya elegida (por ejemplo desde "Crear un equipo
+  /// de este kit"): si es un kit, la sección de componentes sale de una vez.
+  final ActivoReferencia? referenciaInicial;
+  const ActivoAltaPage({super.key, this.referenciaInicial});
   @override
   State<ActivoAltaPage> createState() => _ActivoAltaPageState();
 }
@@ -95,6 +99,8 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
         _centroDestino = _porCodigo(_codigoDestinoPorDefecto);
         _cargandoCatalogos = false;
       });
+      final inicial = widget.referenciaInicial;
+      if (inicial != null) _elegirReferencia(_fresca(inicial));
     } catch (e) {
       if (!mounted) return;
       setState(() => _cargandoCatalogos = false);
@@ -123,7 +129,7 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
   CentroCosto? get _origenEfectivo =>
       _esCompra ? _porCodigo(_codigoCompra) : _centroOrigen;
 
-  num get _valorNuevoNum => num.tryParse(_valorNuevo.text.replaceAll(',', '.')) ?? 0;
+  num get _valorNuevoNum => leerPesos(_valorNuevo.text) ?? 0;
   num get _porcentajeNum =>
       num.tryParse(_porcentaje.text.replaceAll(',', '.')) ?? 0;
   num get _totalComposicion =>
@@ -282,13 +288,27 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
     });
   }
 
+  /// La versión de la lista cargada (la más reciente) de una referencia.
+  ActivoReferencia _fresca(ActivoReferencia r) {
+    for (final x in _referencias) {
+      if (x.id == r.id) return x;
+    }
+    return r;
+  }
+
   /// Crear una referencia sin abandonar el formulario: se abre el catálogo y
-  /// al volver se recarga la lista, conservando lo ya escrito.
+  /// al volver se recarga la lista, conservando lo ya escrito. Si allí se
+  /// creó una, vuelve YA ELEGIDA: antes había que buscarla en el selector, y
+  /// quien creaba un kit no veía por dónde agregarle los componentes.
   Future<void> _agregarReferencia() async {
-    await Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const ActivoReferenciasPage()));
+    final creada = await Navigator.push<ActivoReferencia>(
+        context,
+        MaterialPageRoute(
+            builder: (_) => const ActivoReferenciasPage(elegirAlCrear: true)));
     if (!mounted) return;
     await _recargarReferencias();
+    if (!mounted || creada == null) return;
+    _elegirReferencia(_fresca(creada));
   }
 
   /// La referencia elegida es un kit: su valor lo calcula la base sumando los
@@ -570,7 +590,9 @@ class _ActivoAltaPageState extends State<ActivoAltaPage> {
                     helperText: _esKit
                         ? 'Es un kit: su valor es la suma de los componentes '
                             'de abajo.'
-                        : null,
+                        // Cómo quedó entendido: "1.540.000" = $1.540.000,
+                        // no $0 (util/dinero.dart).
+                        : pesosEntendidos(_valorNuevo.text),
                     helperMaxLines: 3,
                     border: const OutlineInputBorder(),
                   ),

@@ -8,6 +8,7 @@ import '../widgets/kit_componentes.dart';
 import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
 import 'componente_kit_page.dart';
+import '../util/dinero.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -2147,7 +2148,7 @@ class _HojaMantenimientoState extends State<_HojaMantenimiento> {
         tipo: _tipo.text.trim().isEmpty ? null : _tipo.text.trim(),
         responsable: _responsable.text.trim().isEmpty
             ? null : _responsable.text.trim(),
-        costo: num.tryParse(_costo.text.replaceAll(',', '.')) ?? 0,
+        costo: leerPesos(_costo.text) ?? 0,
       );
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2215,10 +2216,12 @@ class _HojaMantenimientoState extends State<_HojaMantenimiento> {
               controller: _costo,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
                   labelText: 'Costo',
                   prefixText: '\$ ',
-                  border: OutlineInputBorder()),
+                  helperText: pesosEntendidos(_costo.text),
+                  border: const OutlineInputBorder()),
             ),
             const SizedBox(height: 20),
             FilledButton(

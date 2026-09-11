@@ -4,6 +4,7 @@ import '../data.dart';
 import '../activos_service.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../util/dinero.dart';
 
 // Formato de dinero de toda la app: signo peso y separador de miles.
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -143,10 +144,13 @@ class _ActivoMovimientoPageState extends State<ActivoMovimientoPage> {
   List<CentroCosto> get _centrosExternos =>
       _centros.where((c) => !c.esInterno).toList();
 
-  num? get _valorNum =>
-      _valor.text.trim().isEmpty
-          ? null
-          : num.tryParse(_valor.text.replaceAll(',', '.'));
+  /// Si el valor precargado no se tocó, el de la base EXACTO; solo lo que se
+  /// escribe de nuevo pasa por leerPesos (ver util/dinero.dart).
+  num? get _valorNum => _valor.text.trim().isEmpty
+      ? null
+      : (_valor.text == '${widget.activo.valorActual}'
+          ? widget.activo.valorActual
+          : leerPesos(_valor.text));
   num get _porcentajeNum =>
       num.tryParse(_porcentaje.text.replaceAll(',', '.')) ?? 0;
   bool get _porcentajeValido => _porcentajeNum >= 0 && _porcentajeNum <= 100;
@@ -345,12 +349,13 @@ class _ActivoMovimientoPageState extends State<ActivoMovimientoPage> {
                     controller: _valor,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
                       labelText: 'Valor de la salida',
                       prefixText: '\$ ',
-                      helperText:
+                      helperText: pesosEntendidos(_valor.text) ??
                           'Si lo dejas vacío se toma el valorizado actual.',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ],

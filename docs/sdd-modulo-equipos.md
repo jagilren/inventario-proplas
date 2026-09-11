@@ -608,7 +608,7 @@ sección es la que más se omite y la que más vale.
 
 ---
 
-## 9. Los siete errores reales, los que se atajaron — y qué enseña cada uno
+## 9. Los errores reales, los que se atajaron — y qué enseña cada uno
 
 Esta es la sección más útil del documento. **Un SDD también sirve para escribir
 lo que salió mal**, no solo lo que se planeó.
@@ -937,6 +937,54 @@ Y un detalle de método que se agregó ese día al validar consultas contra la
 API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a
 propósito**, que respondió 400. Una prueba que nunca ha fallado no demuestra
 que sepa detectar un fallo.
+
+
+### 9.9 El punto de miles que valía $0
+
+*Hallado el 2026-09-10 al construir los kits; corregido el mismo día. No dañó
+datos: se revisó la base.*
+
+Cada pantalla que capturaba dinero lo leía así:
+
+```dart
+num.tryParse(texto.replaceAll(',', '.'))
+```
+
+La idea era aceptar la coma decimal. Pero en Colombia **el punto separa
+miles**, y ese código trata el punto como decimal:
+
+| Escrito | Quería decir | Se guardaba |
+|---|---|---|
+| `45.000` | cuarenta y cinco mil | **45** |
+| `1.540.000` | un millón quinientos cuarenta mil | **$0** (no se puede leer) |
+
+Las dos cosas pasaban **en silencio**. Estaba en siete pantallas, incluido el
+costo unitario de los movimientos de Inventario, que se usa todos los días;
+allí `num.parse` además se reventaba con "1.540.000".
+
+**El arreglo** (`lib/util/dinero.dart`): un solo lector de pesos para toda la
+app, `leerPesos()`, con las reglas de cómo escribe una persona en Colombia —
+varios puntos son miles; un punto seguido de tres dígitos son miles (un valor en
+pesos no tiene tres decimales); uno o dos dígitos después, decimal; si hay punto
+y coma, el último es el decimal. Y debajo de cada campo de dinero, **cómo quedó
+entendido lo escrito**: *"= $1.540.000"*. Así el valor que se va a guardar se
+ve antes de guardarlo.
+
+Tres cuidados:
+- **Solo dinero.** Las cantidades y longitudes no se tocaron: ahí "2.5" puede
+  ser, de verdad, dos metros y medio.
+- **Lo precargado que no se toca, no se vuelve a leer.** Un costo importado de
+  12,345 pesos, convertido a texto como "12.345", se leería como doce mil. Si el
+  campo queda igual a como vino, se guarda el número original exacto.
+- **Se revisó si ya había daño**: costos con tres decimales exactos (la huella
+  de un "12.345" mal leído), equipos y mantenimientos con valores sospechosamente
+  pequeños. No apareció ninguno.
+
+> **Lección:** el formato de los números es **del usuario, no del
+> programador**. `replaceAll(',', '.')` resolvía el caso que el programador
+> imaginó (la coma decimal) y rompía el que el usuario escribe todos los días
+> (el punto de miles). Un número que se lee distinto de como se escribió tiene
+> que **mostrarse** antes de guardarse.
 
 ---
 

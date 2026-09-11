@@ -231,6 +231,30 @@ total; la consulta nueva, contra la API real, HTTP 200.
 
 **Con esto quedan hechas las seis fases.**
 
+### Después de publicar: "no veo por dónde agregarle los componentes"
+
+*2026-09-10, reportado por el usuario al probar.* Creó la referencia "KIT DE
+PRUEBA01" marcada como kit y no encontró dónde ponerle los componentes. El
+diseño era correcto —los componentes van en cada **equipo**, no en la
+referencia, porque cada kit es dueño de lo suyo— pero **nada le decía el paso
+siguiente**. Se agregaron tres caminos:
+
+- Si la referencia se crea desde **"Nuevo equipo"** (el + junto al selector),
+  al guardarla vuelve al formulario **ya elegida**, con la sección de
+  componentes abierta.
+- Si se crea desde el **catálogo de referencias**, sale un aviso con el botón
+  **"Crear equipo"**, que abre el alta con esa referencia puesta.
+- En la **lista de referencias**, cada kit tiene el botón **"Crear un equipo de
+  este kit"**.
+
+Y el interruptor "Es un kit" dice dónde se agregan los componentes. De paso,
+registrar un movimiento de componente ahora **confirma** con un mensaje: *"Registrado:
+Tela Filtro Mesh 100 Medios −2. Ahora hay 22."*
+
+> **Lección:** un diseño correcto que el usuario no sabe usar sigue siendo un
+> problema. Cuando una acción deja algo **a medias a propósito** (una referencia
+> kit sin equipos), la pantalla tiene que decir cuál es el paso siguiente.
+
 ---
 
 ## 1. Objetivo y alcance

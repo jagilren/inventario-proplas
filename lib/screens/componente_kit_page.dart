@@ -91,12 +91,27 @@ class _ComponenteKitPageState extends State<ComponenteKitPage> {
       };
 
   Future<void> _registrar() async {
+    final antes = _componente.cantidad;
     final hecho = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (_) => HojaMovimientoComponente(componente: _componente),
     );
-    if (hecho == true) await _cargar();
+    if (hecho != true) return;
+    await _cargar();
+    if (!mounted) return;
+    // Confirmación explícita, con la cantidad que dice la BASE después del
+    // movimiento (no la que calculó la hoja): la hoja se cierra y sin esto
+    // solo cambiaba un número, fácil de no notar.
+    final ahora = _componente.cantidad;
+    final dif = ahora - antes;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        'Registrado: ${_componente.nombre} '
+        '${dif >= 0 ? "+" : "−"}${textoCantidad(dif.abs())}. '
+        'Ahora hay ${textoCantidad(ahora)}.',
+      ),
+    ));
   }
 
   Future<void> _anular(MovimientoComponente m) async {

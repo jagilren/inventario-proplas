@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../activos_service.dart';
+import 'activo_alta_page.dart';
 import '../util/import_archivo.dart';
 import '../widgets/campo_obligatorio.dart';
 import '../widgets/kit_componentes.dart';
@@ -14,7 +15,10 @@ import '../widgets/pie_cargar_mas.dart';
 /// Siguiendo la regla del proyecto: una referencia con equipos asociados no se
 /// borra, se inactiva.
 class ActivoReferenciasPage extends StatefulWidget {
-  const ActivoReferenciasPage({super.key});
+  /// Abierta desde el alta de un equipo: al crear una referencia se vuelve
+  /// allá con ella, para seguir sin tener que buscarla.
+  final bool elegirAlCrear;
+  const ActivoReferenciasPage({super.key, this.elegirAlCrear = false});
   @override
   State<ActivoReferenciasPage> createState() => _ActivoReferenciasPageState();
 }
@@ -68,12 +72,41 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
   }
 
   Future<void> _abrirFormulario({ActivoReferencia? ref}) async {
-    final guardado = await showModalBottomSheet<bool>(
+    // Devuelve la referencia CREADA, o true si se editó una.
+    final guardado = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true, // el teclado no debe tapar los campos
       builder: (_) => _FormularioReferencia(referencia: ref),
     );
-    if (guardado == true) _recargar();
+    if (guardado == null || !mounted) return;
+    if (guardado is ActivoReferencia && widget.elegirAlCrear) {
+      Navigator.pop(context, guardado);
+      return;
+    }
+    _recargar();
+    // Un kit recién creado todavía no tiene componentes: se agregan a cada
+    // EQUIPO. Sin este aviso, quien lo creaba no veía cuál era el paso
+    // siguiente (pasó el 2026-09-10 con "KIT DE PRUEBA01").
+    if (guardado is ActivoReferencia && guardado.esKit) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Kit "${guardado.nombre}" creado. Sus componentes se '
+            'agregan a cada equipo de este kit.'),
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'Crear equipo',
+          onPressed: () => _crearEquipo(guardado),
+        ),
+      ));
+    }
+  }
+
+  /// El alta de un equipo con esta referencia ya elegida.
+  Future<void> _crearEquipo(ActivoReferencia r) async {
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => ActivoAltaPage(referenciaInicial: r)));
+    if (mounted) _recargar();
   }
 
   @override
@@ -167,9 +200,18 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
               ],
             ),
             subtitle: detalle.isEmpty ? null : Text(detalle),
-            trailing: r.activo
-                ? const Icon(Icons.chevron_right)
-                : const Text('Inactiva', style: TextStyle(fontSize: 12)),
+            // Un kit activo ofrece el paso siguiente: crear un equipo, que es
+            // donde van sus componentes. Con tooltip, que el lector de
+            // pantalla lee como nombre del botón.
+            trailing: !r.activo
+                ? const Text('Inactiva', style: TextStyle(fontSize: 12))
+                : r.esKit
+                    ? IconButton(
+                        icon: const Icon(Icons.add_box_outlined),
+                        tooltip: 'Crear un equipo de este kit',
+                        onPressed: () => _crearEquipo(r),
+                      )
+                    : const Icon(Icons.chevron_right),
             onTap: () => _abrirFormulario(ref: r),
           );
         },
@@ -228,8 +270,8 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
     true => 'No se puede cambiar: esta referencia ya tiene equipos. Si te '
         'equivocaste, crea otra referencia.',
     false => _esKit
-        ? 'Sus equipos valdrán la suma de sus componentes: el valor no se '
-            'escribe a mano.'
+        ? 'Sus equipos valdrán la suma de sus componentes. Los componentes se '
+            'agregan a cada equipo, al crearlo en "Nuevo equipo".'
         : 'Actívalo si el equipo está hecho de varias partes que se cuentan '
             'y se valoran por separado.',
   };
@@ -322,13 +364,18 @@ class _FormularioReferenciaState extends State<_FormularioReferencia> {
           if (mounted) setState(() => _guardando = false);
           return;
         }
-        await ActivosService.crearReferencia(
+        final creada = await ActivosService.crearReferencia(
           nombre: _nombre.text.trim(),
           marca: _t(_marca),
           modelo: _t(_modelo),
           tipo: _t(_tipo),
           esKit: _esKit,
         );
+        if (!mounted) return;
+        // La creada, no un true: la lista la usa para ofrecer el siguiente
+        // paso de un kit (crear un equipo).
+        Navigator.pop(context, creada);
+        return;
       } else {
         await ActivosService.editarReferencia(
           r.id,

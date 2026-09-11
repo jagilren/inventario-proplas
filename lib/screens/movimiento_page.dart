@@ -11,6 +11,7 @@ import '../util/tiempo.dart';
 import '../util/movimiento_fmt.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../util/dinero.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -226,7 +227,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
       _marcarErrores(); return _msg('Selecciona el centro de costo');
     }
     if (!_esSalida) {
-      final c = num.tryParse(_costo.text.replaceAll(',', '.'));
+      final c = leerPesos(_costo.text);
       if (c == null || c < 0) {
         _marcarErrores(); return _msg('Costo unitario inválido');
       }
@@ -249,7 +250,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
         centroCostoDestinoId: _esSalida ? null : _ccDestino?.id,
         costoUnitario: _esSalida
             ? null
-            : num.parse(_costo.text.replaceAll(',', '.')),
+            : leerPesos(_costo.text)!,
         observacion: _obs.text.trim().isEmpty ? null : _obs.text.trim(),
       );
       if (!mounted) return;
@@ -281,7 +282,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
       if (_serialesNuevos.isEmpty) {
         _marcarErrores(); return _msg('Ingresa al menos un serial');
       }
-      final c = num.tryParse(_costo.text.replaceAll(',', '.'));
+      final c = leerPesos(_costo.text);
       if (c == null || c < 0) {
         _marcarErrores(); return _msg('Costo unitario inválido');
       }
@@ -297,7 +298,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
       await InventarioService.moverSerie(
         tipo: widget.tipoInicial, elementoId: el.id, bodegaId: _bodega!.id,
         serials: _esSalida ? _serialSel.toList() : List.of(_serialesNuevos),
-        costo: _esSalida ? null : num.parse(_costo.text.replaceAll(',', '.')),
+        costo: _esSalida ? null : leerPesos(_costo.text)!,
         centroCostoId: _cc?.id,
         centroCostoDestinoId: _esSalida ? null : _ccDestino?.id,
         observacion: _obs.text.trim().isEmpty ? null : _obs.text.trim(),
@@ -328,7 +329,7 @@ class _MovimientoPageState extends State<MovimientoPage> {
     final cantActual = num.tryParse(_cantidad.text.replaceAll(',', '.'));
     final cantInvalida =
         _mostrarErrores && !_serial && (cantActual == null || cantActual <= 0);
-    final costoActual = num.tryParse(_costo.text.replaceAll(',', '.'));
+    final costoActual = leerPesos(_costo.text);
     final costoInvalida =
         _mostrarErrores && !_esSalida && (costoActual == null || costoActual < 0);
     final serialesVacios =
@@ -511,10 +512,13 @@ class _MovimientoPageState extends State<MovimientoPage> {
               controller: _costo,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => setState(() {}),
-              decoration: marcarError(const InputDecoration(
+              decoration: marcarError(InputDecoration(
                 labelText: 'Costo unitario',
                 prefixText: r'$ ',
-                border: OutlineInputBorder(),
+                // Cómo quedó entendido lo escrito: "45.000" = $45.000, no 45
+                // (util/dinero.dart).
+                helperText: pesosEntendidos(_costo.text),
+                border: const OutlineInputBorder(),
               ), costoInvalida),
             ),
             // Antes el selector solo salía en las salidas, así que estos dos

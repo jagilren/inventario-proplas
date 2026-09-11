@@ -6,6 +6,7 @@ import 'escaner_page.dart';
 import 'materiales_page.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/campo_obligatorio.dart';
+import '../util/dinero.dart';
 
 /// Crea o edita un elemento (admin / coordinador).
 /// Si [elemento] es null, es creación. Devuelve true si guardó.
@@ -252,7 +253,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
 
         // Existencia inicial, si la indicó
         final cant = num.tryParse(_cantIni.text.replaceAll(',', '.'));
-        final costo = num.tryParse(_costoIni.text.replaceAll(',', '.'));
+        final costo = leerPesos(_costoIni.text);
         // La bodega es la que eligió el usuario (validada arriba), nunca la
         // primera de la lista: eso dejaba el saldo inicial en una bodega
         // que nadie escogió y obligaba a corregirlo después a mano.
@@ -272,7 +273,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         // Unidades iniciales serializadas: se registran con su serial en la
         // bodega elegida (la existencia la deriva el trigger de series).
         if (_serializado && _serialesIni.isNotEmpty && _bodegaIni != null) {
-          final costoS = num.tryParse(_costoIni.text.replaceAll(',', '.')) ?? 0;
+          final costoS = leerPesos(_costoIni.text) ?? 0;
           await InventarioService.serializarElemento(
             elementoId,
             _serialesIni
@@ -509,6 +510,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               _costoIni,
               'Costo unitario',
               teclado: const TextInputType.numberWithOptions(decimal: true),
+              ayuda: pesosEntendidos(_costoIni.text),
             ),
             // Antes esta bodega NO se preguntaba: se tomaba la primera de la
             // lista en silencio, y el elemento terminaba en una bodega que
@@ -584,6 +586,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               _costoIni,
               'Costo por serial',
               teclado: const TextInputType.numberWithOptions(decimal: true),
+              ayuda: pesosEntendidos(_costoIni.text),
             ),
             Row(
               children: [
@@ -760,6 +763,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
     String label, {
     TextInputType? teclado,
     String? hint,
+    String? ayuda,
     bool error = false,
   }) {
     return Padding(
@@ -771,6 +775,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
         decoration: marcarError(InputDecoration(
           labelText: label,
           hintText: hint,
+          helperText: ayuda,
           border: const OutlineInputBorder(),
         ), error),
       ),
