@@ -742,6 +742,13 @@ Dos detalles:
 > puede quitar, adivinar bien la mayoría basta; si algún día se vuelve algo
 > serio, lo correcto es una lista de tipos en la base, no más palabras aquí.
 
+### 5.6 Ajustes de texto
+
+- *(2026-09-11.)* En el catálogo de referencias, el botón **"Nueva"** pasó a
+  decir **"Nueva Ref."**, a pedido del usuario: "Nueva" a secas no decía nueva
+  qué. Como "Ref." es una abreviatura, el botón lleva la descripción completa
+  para el lector de pantalla (*"Crear una nueva referencia"*).
+
 ---
 
 ## 6. Permisos

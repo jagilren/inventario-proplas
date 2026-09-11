@@ -132,7 +132,9 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _abrirFormulario(),
         icon: const Icon(Icons.add),
-        label: const Text('Nueva'),
+        label: const Text('Nueva Ref.'),
+        // "Ref." es abreviatura: el lector de pantalla la diría a medias.
+        tooltip: 'Crear una nueva referencia',
       ),
       body: _cuerpo(),
     );
@@ -164,7 +166,7 @@ class _ActivoReferenciasPageState extends State<ActivoReferenciasPage> {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'Todavía no hay referencias.\nCrea la primera con el botón "Nueva".',
+            'Todavía no hay referencias.\nCrea la primera con el botón "Nueva Ref."',
             textAlign: TextAlign.center,
           ),
         ),
