@@ -243,7 +243,7 @@ class _ComponenteKitPageState extends State<ComponenteKitPage> {
                         FilledButton.icon(
                           onPressed: _registrar,
                           icon: const Icon(Icons.swap_vert),
-                          label: const Text('Registrar movimiento'),
+                          label: const Text('Registrar movimiento componente'),
                         ),
                       const SizedBox(height: 24),
                       Text('Historial',
