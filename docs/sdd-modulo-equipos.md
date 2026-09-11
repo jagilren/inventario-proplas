@@ -112,7 +112,7 @@ activo_componentes            de qué está hecho un KIT (extensión)
 activo_componente_movimientos la vida de cada componente (extensión)
 
 activos_disponibilidad      qué hay disponible por referencia
-activo_observaciones_todas  las 3 fuentes de observaciones, unidas
+activo_observaciones_todas  las 4 fuentes de observaciones, unidas
 ```
 
 > Las dos últimas tablas son la extensión **Referencias KITZABLES**: una
@@ -122,7 +122,7 @@ activo_observaciones_todas  las 3 fuentes de observaciones, unidas
 > sigue la plantilla de la sección 10 de este SDD — y su sección 0 cuenta qué
 > cambió del diseño al construirlas, a la luz de los errores de la §9.
 
-**Las cinco decisiones que hay que justificar:**
+**Las decisiones que hay que justificar:**
 
 **a) `condicion` y `estado` son campos distintos.** Parecen lo mismo y no lo son:
 
@@ -227,6 +227,81 @@ dejar rastro visible.
 > **Lección:** antes de construir un sistema de auditoría, **mira si ya lo
 > tienes**. El trabajo aquí no fue guardar los cambios —eso ya pasaba— sino
 > abrir una ventana segura para mirarlos.
+
+**f) La novedad de un componente de un kit también es una observación.**
+*(2026-09-10, `schema_v67`.)*
+
+El usuario lo pidió así: cuando a un componente de un kit le **entran o le
+salen** unidades, eso tiene que quedar en el **listado de observaciones** del
+equipo, con la fecha, el usuario, el componente, si fue adición o resta, las
+cantidades y **el motivo, escrito por quien lo registra**. Su ejemplo: un kit
+con 24 "Tela Filtro Mesh 100 Medios"; se retiran 2; quedan 22 — y hay que
+poder leer **por qué**.
+
+La historia ya existía en la pantalla de cada componente. Pero ahí solo la ve
+quien entra a buscarla, componente por componente. El listado de
+observaciones es lo que se lee al abrir el equipo.
+
+Se aplicó la misma decisión (d): **no se copia nada**. El motivo vive en
+`activo_componente_movimientos.observacion`, su único dueño, y la vista gana un
+**cuarto origen**, `'componente'`:
+
+```sql
+  union all
+  select c.activo_id, m.fecha, m.observacion, 'componente', ...
+         c.nombre, m.tipo, m.signo, m.cantidad,
+         sum(signo × cantidad) over (partition by componente
+                                     order by fecha, (tipo <> 'alta'),
+                                              creado_en, id)  -- cuántos quedaron
+    from activo_componente_movimientos m join activo_componentes c ...
+   where m.tipo <> 'alta'
+```
+
+Tres decisiones dentro de esta:
+
+- **La base entrega datos crudos, la app redacta.** La vista no arma la frase
+  "Se retiró: salieron 2"; entrega el tipo, el signo y la cantidad. Las
+  palabras de cada tipo ya existían en la app (`TipoMovComponente`): si la
+  vista las escribiera también, habría **dos traducciones** de lo mismo, y a la
+  primera corrección dirían cosas distintas. Las columnas nuevas van **al
+  final** de la vista y valen `null` en los otros tres orígenes, así la app que
+  ya estaba publicada siguió funcionando mientras llegaba la nueva.
+- **"Quedan 22" es el saldo de ESE momento, no el de hoy.** Si se mostrara la
+  cantidad actual del componente, una novedad de hace un mes diría cuántos hay
+  hoy, que es otra cosa. La vista lo calcula con una suma acumulada: la misma
+  regla con que la base calcula la cantidad (`suma(signo × cantidad)`), cortada
+  en ese movimiento. Derivado, como todo lo demás (decisión d).
+- **El alta no sale.** Las cantidades con que nació el kit ya se ven en la
+  pestaña Componentes; poner una línea por componente al crearlo llenaría el
+  listado de ruido.
+
+**El motivo es obligatorio, y lo exige la base.** Un movimiento que no dice
+por qué es justo lo que el usuario pidió evitar. La app no deja registrar sin
+motivo (el campo se llama **"Motivo \*"** y dice *"Queda en las observaciones
+del equipo"*), pero el candado es un `raise exception` en el trigger que
+prepara el movimiento: *"Escribe el motivo: por qué cambia la cantidad de
+«…»"*. Aplica a **todos** los tipos menos el alta —también a la anulación, que
+ahora pide su propio motivo en el diálogo de confirmación— y a la edición: el
+candado de inmutabilidad deja cambiar el motivo, pero no dejarlo vacío. Se
+revisó antes de exigirlo: no había **ningún** movimiento de componente sin
+motivo que hubiera quedado huérfano de la regla.
+
+El motivo se edita con el mismo **lápiz** de las demás observaciones —solo
+admin y coordinador, como cualquier observación (§6)— y el cambio queda en la
+auditoría: `observacion_historial` ganó el origen `'componente'`.
+
+**En pantalla**, cada novedad lleva el icono de su tipo (daño, venta, retiro…)
+y se lee de arriba abajo: el componente en negrita, lo que pasó **en
+palabras** —*"Se retiró: salieron 2 · quedan 22"*, y *"a TINTEXA"* si fue una
+venta o una garantía—, *"Anulado después"* si se deshizo, y el **Motivo**. Debajo,
+como en las demás, *"Componente del kit · fecha · usuario"*. Para el lector de
+pantalla es **una sola frase** en ese orden; sin eso leería cuatro textos
+sueltos. Con palabras y no con "−2" en rojo: un signo y un color no se oyen, y
+en el sol de una bodega el rojo tampoco se ve.
+
+> **Lección:** cuando el usuario pide ver algo **en otra parte**, casi nunca
+> pide un dato nuevo: pide que lo que ya existe **aparezca donde él mira**. Lo
+> que había que construir no era una tabla, era una puerta más a la misma.
 
 ---
 
@@ -540,6 +615,11 @@ seguridad: cualquiera con el token puede llamar la API igual.
 | Agregar una observación | ✔ | ✔ | ✔ |
 | **Modificar** una observación ya escrita | ✔ | ✔ | **✘** |
 | **Anular** un movimiento de equipo o de componente de un kit | ✔ | **✘** | **✘** |
+| Mover un componente de un kit **sin escribir el motivo** | ✘ | ✘ | ✘ |
+
+El motivo de un movimiento de componente es una observación más (§3, decisión
+f): se edita con las mismas reglas que las otras —admin y coordinador— y
+**nadie** puede registrarlo ni dejarlo vacío (`schema_v67`).
 
 Los roles de operario (`operario_mas`, `operario_menos`) son del Inventario y
 **no entran** al módulo de Equipos. Hoy los tres bodegueros entran porque
@@ -883,7 +963,7 @@ contradicción.
 
 *2026-09-10, Fase 2 de Referencias KITZABLES.*
 
-Los siete errores de arriba llegaron a producción. Estos dos **no**, y vale la
+Los siete errores de arriba llegaron a producción. Estos **no**, y vale la
 pena contarlos porque enseñan lo mismo desde el otro lado: **qué verificación
 los paró**. En este proyecto el push a `main` publica solo (CI/CD), así que lo
 que no se ataje antes del commit lo ve el usuario.
@@ -932,6 +1012,24 @@ existiera la pantalla que lo usaría.
 > **todas** las reglas del hermano —cómo se valida, cómo se anula, qué candado
 > tiene y **quién puede**— y revisa una por una. El permiso es la que más se
 > olvida, porque no se ve en el código de la tabla sino en el de la función.
+
+**d) "Quedan −2": el empate que desordenó la historia.** *(`schema_v67`.)*
+Para mostrar cuántos quedaban después de cada novedad de un componente, la
+vista suma los movimientos en orden de fecha. La prueba en `rollback` creó el
+componente con 24 y le retiró 2… y la vista dijo **"quedan −2"**. En la prueba,
+el alta y el retiro estaban en la misma transacción, y en Postgres `now()`
+devuelve **la misma hora** durante toda una transacción: empate. El desempate
+era el `id`, un UUID **aleatorio**, así que a veces el retiro "pasaba" antes
+del alta. Se arregló poniendo como segundo criterio lo que sí tiene sentido —el
+alta va primero— y la prueba dio 22, 23 y 25 donde tenía que darlos.
+
+En producción era difícil que pasara (cada movimiento es su propia
+transacción), pero **no imposible**, y el día que pasara el número estaría mal
+sin que nadie supiera por qué.
+
+> **Lección:** ordenar por fecha no es ordenar. Cuando el orden **decide un
+> número**, pregúntate qué pasa con dos filas de la misma hora, y desempata con
+> algo que signifique algo — nunca con un identificador al azar.
 
 Y un detalle de método que se agregó ese día al validar consultas contra la
 API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a

@@ -714,7 +714,9 @@ class _ObservacionesState extends State<_Observaciones> {
       context: context,
       isScrollControlled: true,
       builder: (_) => _HojaNota(
-        titulo: 'Editar observación',
+        titulo: o.esDeComponente
+            ? 'Editar el motivo · ${o.compNombre ?? 'componente'}'
+            : 'Editar observación',
         inicial: o.texto,
         aviso: 'El cambio queda registrado: fecha, tu nombre y lo que decía '
             'antes.',
@@ -803,7 +805,13 @@ class _ObservacionesState extends State<_Observaciones> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(_icono(o.origen), size: 18, color: Colors.grey),
+                    Icon(
+                        o.esDeComponente
+                            ? iconoMovComponente(
+                                TipoMovComponente.desde(o.compTipo ?? ''))
+                            : _icono(o.origen),
+                        size: 18,
+                        color: Colors.grey),
                     const SizedBox(width: 10),
                     // Expanded: en 360 px un texto largo sin esto desborda
                     // la fila y Flutter pinta la franja amarilla y negra.
@@ -811,7 +819,10 @@ class _ObservacionesState extends State<_Observaciones> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(o.texto),
+                          if (o.esDeComponente)
+                            LineaObservacionComponente(observacion: o)
+                          else
+                            Text(o.texto),
                           const SizedBox(height: 2),
                           Text(
                             [

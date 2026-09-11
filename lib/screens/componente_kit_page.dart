@@ -115,29 +115,18 @@ class _ComponenteKitPageState extends State<ComponenteKitPage> {
   }
 
   Future<void> _anular(MovimientoComponente m) async {
-    final si = await showDialog<bool>(
+    // El motivo se pide aquí mismo (schema_v67): la anulación también sale
+    // en las observaciones del equipo y ahí tiene que decir por qué.
+    final motivo = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('¿Anular este movimiento?'),
-        content: Text(
-          '${m.descripcionAccesible}, el ${_cuando(m.fecha)}.\n\n'
-          'Se registra un movimiento contrario que lo deshace. Nada se borra: '
-          'los dos quedan en el historial.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('No')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sí, anular')),
-        ],
+      builder: (_) => DialogoAnularComponente(
+        descripcion: '${m.descripcionAccesible}, el ${_cuando(m.fecha)}.',
       ),
     );
-    if (si != true || !mounted) return;
+    if (motivo == null || !mounted) return;
     setState(() => _anulando = true);
     try {
-      await ActivosService.anularMovimientoComponente(m);
+      await ActivosService.anularMovimientoComponente(m, observacion: motivo);
       await _cargar();
     } catch (e) {
       if (!mounted) return;

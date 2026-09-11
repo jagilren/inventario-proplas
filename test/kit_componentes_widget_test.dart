@@ -483,6 +483,7 @@ void main() {
                           'tipo': tipo,
                           'cantidad': cantidad,
                           'tercero': terceroId,
+                          'motivo': observacion,
                         });
                       },
                     ),
@@ -497,6 +498,9 @@ void main() {
       await t.tap(find.text('abrir'));
       await t.pumpAndSettle();
     }
+
+    Future<void> escribirMotivo(WidgetTester t, String motivo) =>
+        t.enterText(find.widgetWithText(TextField, 'Motivo *'), motivo);
 
     testWidgets('sin elegir qué pasó, no registra y lo dice', (t) async {
       await abrirHoja(t);
@@ -547,6 +551,7 @@ void main() {
       await abrirHoja(t);
       await t.tap(find.text('Daño'));
       await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '3');
+      await escribirMotivo(t, 'Se rompieron al lavarlas');
       await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
       await t.pumpAndSettle();
       expect(registrados, [
@@ -555,6 +560,7 @@ void main() {
           'tipo': TipoMovComponente.bajaDano,
           'cantidad': 3,
           'tercero': null,
+          'motivo': 'Se rompieron al lavarlas',
         }
       ]);
       expect(cerro, isTrue);
@@ -581,6 +587,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('TINTEXA').last);
       await t.pumpAndSettle();
+      await escribirMotivo(t, 'Remisión 3147');
       await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
       await t.pumpAndSettle();
       expect(registrados.single['tipo'], TipoMovComponente.salidaVenta);
@@ -599,9 +606,39 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(find.text('Daño'));
       await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '2');
+      await escribirMotivo(t, 'Se dañaron');
       await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
       await t.pumpAndSettle();
       expect(registrados.single['tercero'], isNull);
+    });
+
+    // schema_v67: el motivo es lo que se lee en las observaciones del
+    // equipo; sin él no se registra.
+    testWidgets('sin motivo no registra, y lo dice en el campo', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Retirar'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '2');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(find.text('Escribe por qué cambia la cantidad'), findsOneWidget);
+      expect(registrados, isEmpty);
+      expect(cerro, isNull);
+    });
+
+    testWidgets('un motivo de puros espacios tampoco sirve', (t) async {
+      await abrirHoja(t);
+      await t.tap(find.text('Retirar'));
+      await t.enterText(find.widgetWithText(TextField, 'Cantidad *'), '2');
+      await escribirMotivo(t, '   ');
+      await t.tap(find.widgetWithText(FilledButton, 'Registrar'));
+      await t.pumpAndSettle();
+      expect(registrados, isEmpty);
+    });
+
+    testWidgets('el campo avisa que queda en las observaciones', (t) async {
+      await abrirHoja(t);
+      expect(find.text('Queda en las observaciones del equipo'),
+          findsOneWidget);
     });
 
     testWidgets('todo lo que se toca mide 48 dp, tiene nombre y contraste',
@@ -707,6 +744,154 @@ void main() {
               anulado: true,
               onAnular: () {}),
           escalaTexto: 2.0);
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  // schema_v67: la novedad de un componente en el listado de observaciones.
+  group('LineaObservacionComponente (observaciones del equipo)', () {
+    ActivoObservacion obs({bool anulado = false, String? tercero}) =>
+        ActivoObservacion.fromMap({
+          'id': 'm1',
+          'fecha': '2026-09-10T18:12:00Z',
+          'texto': 'Se rompieron al lavarlas en la planta',
+          'origen': 'componente',
+          'contexto': null,
+          'usuario_email': 'kuribe@rpci.com.co',
+          'editada': false,
+          'comp_nombre': 'Tela Filtro Mesh 100 Medios',
+          'comp_tipo': tercero == null ? 'disminucion' : 'salida_garantia',
+          'comp_signo': -1,
+          'comp_cantidad': 2,
+          'comp_saldo': 22,
+          'comp_tercero': tercero,
+          'comp_anulado': anulado,
+        });
+
+    testWidgets('se ve el componente, qué pasó, cuántos quedan y el motivo',
+        (t) async {
+      await _montar(t, LineaObservacionComponente(observacion: obs()));
+      expect(find.text('Tela Filtro Mesh 100 Medios'), findsOneWidget);
+      expect(find.text('Se retiró: salieron 2 · quedan 22'), findsOneWidget);
+      expect(find.textContaining('Se rompieron al lavarlas'), findsOneWidget);
+      expect(find.text('Anulado después'), findsNothing);
+    });
+
+    testWidgets('el lector de pantalla oye UNA frase, en orden', (t) async {
+      final h = t.ensureSemantics();
+      await _montar(
+          t, LineaObservacionComponente(observacion: obs(anulado: true)));
+      expect(
+          find.bySemanticsLabel('Tela Filtro Mesh 100 Medios. '
+              'Se retiró: salieron 2 · quedan 22. Anulado después. '
+              'Motivo: Se rompieron al lavarlas en la planta'),
+          findsOneWidget);
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+
+    testWidgets('lo anulado se DICE con texto, no solo con color', (t) async {
+      await _montar(
+          t, LineaObservacionComponente(observacion: obs(anulado: true)));
+      expect(find.text('Anulado después'), findsOneWidget);
+    });
+
+    testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
+      await _montar(
+          t,
+          LineaObservacionComponente(
+              observacion: obs(
+                  anulado: true,
+                  tercero: 'TALLER DE MECANIZADOS JUAN GABRIEL MONTOYA')),
+          escalaTexto: 2.0);
+      expect(t.takeException(), isNull);
+    });
+  });
+
+  group('DialogoAnularComponente (motivo obligatorio)', () {
+    late String? devuelto;
+    late bool cerro;
+
+    Future<void> abrir(WidgetTester t, {double escalaTexto = 1.0}) async {
+      devuelto = null;
+      cerro = false;
+      t.view.physicalSize = const Size(360, 800);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(MaterialApp(
+        theme: _tema,
+        home: MediaQuery(
+          data: MediaQueryData(
+              size: const Size(360, 800),
+              textScaler: TextScaler.linear(escalaTexto)),
+          child: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () async {
+                  devuelto = await showDialog<String>(
+                    context: ctx,
+                    builder: (_) => const DialogoAnularComponente(
+                        descripcion:
+                            'Daño, salieron 2, el 10/09/2026 13:12.'),
+                  );
+                  cerro = true;
+                },
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await t.tap(find.text('abrir'));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('sin motivo no anula: lo dice y el diálogo sigue abierto',
+        (t) async {
+      await abrir(t);
+      await t.tap(find.widgetWithText(FilledButton, 'Sí, anular'));
+      await t.pumpAndSettle();
+      expect(find.text('Escribe por qué se anula'), findsOneWidget);
+      expect(cerro, isFalse);
+    });
+
+    testWidgets('con motivo devuelve el motivo, sin espacios de sobra',
+        (t) async {
+      await abrir(t);
+      await t.enterText(
+          find.widgetWithText(TextField, 'Motivo de la anulación *'),
+          '  Se registró en el kit equivocado ');
+      await t.tap(find.widgetWithText(FilledButton, 'Sí, anular'));
+      await t.pumpAndSettle();
+      expect(cerro, isTrue);
+      expect(devuelto, 'Se registró en el kit equivocado');
+    });
+
+    testWidgets('"No" cierra sin anular', (t) async {
+      await abrir(t);
+      await t.tap(find.widgetWithText(TextButton, 'No'));
+      await t.pumpAndSettle();
+      expect(cerro, isTrue);
+      expect(devuelto, isNull);
+    });
+
+    testWidgets('todo lo que se toca mide 48 dp, tiene nombre y contraste',
+        (t) async {
+      final h = t.ensureSemantics();
+      await abrir(t);
+      await t.tap(find.widgetWithText(FilledButton, 'Sí, anular'));
+      await t.pumpAndSettle();
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+
+    testWidgets('360 px con la letra al DOBLE: nada se desborda', (t) async {
+      await abrir(t, escalaTexto: 2.0);
+      await t.tap(find.widgetWithText(FilledButton, 'Sí, anular'));
+      await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
   });

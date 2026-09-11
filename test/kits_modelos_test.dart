@@ -315,4 +315,123 @@ void main() {
           'No se pudo guardar: Este movimiento ya fue anulado.');
     });
   });
+
+  // schema_v67: la novedad de un componente sale en el listado de
+  // OBSERVACIONES del equipo, con fecha, usuario, componente, movimiento,
+  // cantidades y motivo. La base entrega los datos crudos; la app redacta.
+  group('ActivoObservacion de un componente (schema_v67)', () {
+    Map<String, dynamic> fila({
+      String tipo = 'disminucion',
+      int signo = -1,
+      num cantidad = 2,
+      num saldo = 22,
+      String? tercero,
+      bool anulado = false,
+      String texto = 'Se rompieron al lavarlas',
+    }) =>
+        {
+          'id': 'm1',
+          'fecha': '2026-09-10T18:12:00Z',
+          'texto': texto,
+          'origen': 'componente',
+          'contexto': null,
+          'usuario_email': 'kuribe@rpci.com.co',
+          'editada': false,
+          'comp_nombre': 'Tela Filtro Mesh 100 Medios',
+          'comp_tipo': tipo,
+          'comp_signo': signo,
+          'comp_cantidad': cantidad,
+          'comp_saldo': saldo,
+          'comp_tercero': tercero,
+          'comp_anulado': anulado,
+        };
+
+    test('el caso del usuario: 24, se retiran 2, quedan 22', () {
+      final o = ActivoObservacion.fromMap(fila());
+      expect(o.esDeComponente, isTrue);
+      expect(o.etiquetaOrigen, 'Componente del kit');
+      expect(o.compNombre, 'Tela Filtro Mesh 100 Medios');
+      expect(o.movimientoComponente, 'Se retiró: salieron 2 · quedan 22');
+      expect(o.usuarioEmail, 'kuribe@rpci.com.co');
+      expect(o.texto, 'Se rompieron al lavarlas');
+    });
+
+    test('una adición dice "entraron"', () {
+      final o = ActivoObservacion.fromMap(
+          fila(tipo: 'aumento', signo: 1, cantidad: 4, saldo: 26));
+      expect(o.movimientoComponente, 'Se agregó: entraron 4 · quedan 26');
+    });
+
+    test('una venta dice a quién', () {
+      final o = ActivoObservacion.fromMap(fila(
+          tipo: 'salida_venta', cantidad: 1, saldo: 21, tercero: 'TINTEXA'));
+      expect(o.movimientoComponente, 'Venta: salieron 1 a TINTEXA · quedan 21');
+    });
+
+    test('cantidades con decimales van con coma y sin ".0"', () {
+      final o = ActivoObservacion.fromMap(
+          fila(cantidad: 2.5, saldo: 21.0));
+      expect(o.movimientoComponente, 'Se retiró: salieron 2,5 · quedan 21');
+    });
+
+    test('el lector de pantalla oye todo en una frase, con lo anulado', () {
+      final o = ActivoObservacion.fromMap(fila(anulado: true));
+      expect(
+          o.descripcionAccesible,
+          'Tela Filtro Mesh 100 Medios. Se retiró: salieron 2 · quedan 22. '
+          'Anulado después. Motivo: Se rompieron al lavarlas');
+    });
+
+    test('las demás observaciones no cambian', () {
+      final o = ActivoObservacion.fromMap({
+        'id': 'o1',
+        'fecha': '2026-09-10T18:12:00Z',
+        'texto': 'Llegó con un golpe',
+        'origen': 'manual',
+        'contexto': null,
+        'usuario_email': 'kuribe@rpci.com.co',
+        'editada': false,
+      });
+      expect(o.esDeComponente, isFalse);
+      expect(o.movimientoComponente, isNull);
+      expect(o.compAnulado, isFalse);
+      expect(o.descripcionAccesible, 'Llegó con un golpe');
+      expect(o.etiquetaOrigen, 'Nota');
+    });
+  });
+
+  group('El motivo es obligatorio (schema_v67), antes de ir a la base', () {
+    test('registrar un movimiento sin motivo', () async {
+      for (final motivo in [null, '', '   ']) {
+        await expectLater(
+            ActivosService.moverComponente(
+                componenteId: 'c1',
+                tipo: TipoMovComponente.disminucion,
+                cantidad: 2,
+                observacion: motivo),
+            throwsA(isA<ErrorEquipos>()
+                .having((e) => '$e', 'mensaje', contains('motivo'))));
+      }
+    });
+
+    test('anular sin motivo', () async {
+      final original = MovimientoComponente.fromMap({
+        'id': 'm1',
+        'componente_id': 'c1',
+        'tipo': 'baja_dano',
+        'signo': -1,
+        'cantidad': 2,
+        'valor_unitario': 45000,
+        'anula_movimiento_id': null,
+        'observacion': 'Se rompieron',
+        'usuario_email': 'kuribe@rpci.com.co',
+        'fecha': '2026-09-10T18:12:00Z',
+        'activo_terceros': null,
+      });
+      await expectLater(
+          ActivosService.anularMovimientoComponente(original, observacion: ' '),
+          throwsA(isA<ErrorEquipos>()
+              .having((e) => '$e', 'mensaje', contains('motivo'))));
+    });
+  });
 }

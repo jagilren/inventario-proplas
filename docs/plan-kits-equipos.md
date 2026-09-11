@@ -1,7 +1,8 @@
 # Plan: Referencias KITZABLES
 
 **Estado:** diseñado 2026-09-10 · **Fase 1 (SQL) en producción el 2026-09-10**
-(`schema_v64_kits_fase1`) · **las seis fases en producción el 2026-09-10**.
+(`schema_v64_kits_fase1`) · **las seis fases en producción el 2026-09-10** ·
+**novedades de componentes en las observaciones del equipo** (`schema_v67`).
 **Extiende:** el Módulo de Equipos (`docs/plan-modulo-equipos.md`).
 **Sigue la plantilla de 10 secciones de** `docs/sdd-modulo-equipos.md`.
 
@@ -254,6 +255,34 @@ Tela Filtro Mesh 100 Medios −2. Ahora hay 22."*
 > **Lección:** un diseño correcto que el usuario no sabe usar sigue siendo un
 > problema. Cuando una acción deja algo **a medias a propósito** (una referencia
 > kit sin equipos), la pantalla tiene que decir cuál es el paso siguiente.
+
+### Después de publicar: la novedad del componente, en las observaciones
+
+*2026-09-10, pedido del usuario (`schema_v67`).* Si a un kit con 24 telas se le
+retiran 2, eso tiene que leerse en las **observaciones del equipo**, con fecha,
+usuario, componente, adición o resta, cantidades y **el motivo**. La historia
+ya existía, pero solo dentro de cada componente.
+
+| Qué | Cómo quedó |
+|---|---|
+| El listado | La vista `activo_observaciones_todas` gana el origen `'componente'`. Nada se copia: el motivo sigue en `activo_componente_movimientos.observacion` (SDD §3, decisión f) |
+| Lo que se ve | *Tela Filtro Mesh 100 Medios* · *Se retiró: salieron 2 · quedan 22* · **Motivo:** … · *Componente del kit · fecha · usuario*. Una sola frase para el lector de pantalla |
+| Cuántos quedaron | El saldo **de ese momento** (suma acumulada), no la cantidad de hoy |
+| El motivo | **Obligatorio** en todo movimiento menos el alta, también en la anulación. Lo exige la base, no solo la hoja |
+| Editar el motivo | El lápiz de siempre, admin y coordinador; queda en la auditoría |
+| El alta | No sale: ya se ve en la pestaña Componentes |
+
+Atajado antes de publicar: la prueba en `rollback` mostró **"quedan −2"** por
+un empate de hora desempatado con un UUID al azar (SDD §9.8 d).
+
+**Cómo se probó.** En la base, con el kit real del usuario y deshecho al final:
+sin motivo → rechazado con el nombre del componente; con motivo → aparece en
+el listado con *quedan 22* y el usuario; editar el motivo → marcada como
+editada, con su historial; vaciarlo → rechazado. En la app, 20 pruebas nuevas
+(130 en total), con las guías de accesibilidad de Flutter y 360 px con la
+letra al doble; y un control negativo: al quitar a propósito la regla del
+motivo y la frase del lector de pantalla, **4 pruebas fallaron**, como tenían
+que fallar.
 
 ---
 
@@ -636,7 +665,8 @@ establecida en las 6 hojas del módulo):
 - Cantidad, con el máximo disponible visible.
 - Selector de tercero **con lupa**, obligatorio en venta y garantía — con
   buscador desde el principio, no cuando ya haya mil talleres.
-- Observación.
+- **Motivo, obligatorio** *(`schema_v67`; en el diseño original era una
+  observación opcional)*: sale en las observaciones del equipo.
 
 Y una ficha de historial, **del más reciente al más antiguo**, con fecha y
 usuario responsable, como manda la regla del proyecto.

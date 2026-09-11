@@ -201,6 +201,19 @@ class ActivoObservacion {
   /// Si el texto se cambió alguna vez después de escrito (schema_v60).
   final bool editada;
 
+  // Solo en las de origen 'componente' (schema_v67): la novedad de un
+  // componente de un kit. La base las entrega CRUDAS y aquí se redactan con
+  // las etiquetas de siempre (TipoMovComponente), una sola fuente.
+  final String? compNombre;
+  final String? compTipo;
+  final int? compSigno;
+  final num? compCantidad;
+  /// Cuántos quedaron DESPUÉS de ese movimiento (el saldo de ese momento,
+  /// no el de hoy).
+  final num? compSaldo;
+  final String? compTercero;
+  final bool compAnulado;
+
   ActivoObservacion.fromMap(Map<String, dynamic> m)
     : id = m['id'] as String,
       fecha = DateTime.parse(m['fecha'] as String),
@@ -208,12 +221,52 @@ class ActivoObservacion {
       origen = m['origen'] as String,
       contexto = m['contexto'] as String?,
       usuarioEmail = m['usuario_email'] as String?,
-      editada = (m['editada'] as bool?) ?? false;
+      editada = (m['editada'] as bool?) ?? false,
+      compNombre = m['comp_nombre'] as String?,
+      compTipo = m['comp_tipo'] as String?,
+      compSigno = (m['comp_signo'] as num?)?.toInt(),
+      compCantidad = m['comp_cantidad'] as num?,
+      compSaldo = m['comp_saldo'] as num?,
+      compTercero = m['comp_tercero'] as String?,
+      compAnulado = (m['comp_anulado'] as bool?) ?? false;
+
+  bool get esDeComponente => origen == 'componente';
+
+  static String _num(num? x) => x == null
+      ? '?'
+      : (x % 1 == 0 ? x.toInt().toString() : x.toString().replaceAll('.', ','));
+
+  /// El movimiento de un componente, EN PALABRAS ("Daño: salieron 2 ·
+  /// quedan 22"), no "−2": se lee igual con lector de pantalla y no depende
+  /// de ver un color o un signo. Null si no es de un componente.
+  String? get movimientoComponente {
+    if (!esDeComponente) return null;
+    final tipo = TipoMovComponente.desde(compTipo ?? '');
+    final verbo = (compSigno ?? -1) > 0 ? 'entraron' : 'salieron';
+    return [
+      '${tipo?.historial ?? compTipo}: $verbo ${_num(compCantidad)}'
+          '${compTercero != null ? ' a $compTercero' : ''}',
+      'quedan ${_num(compSaldo)}',
+    ].join(' · ');
+  }
+
+  /// Todo lo que dice la línea de un componente, en una frase, para el
+  /// lector de pantalla: "Tela Filtro Mesh 100 Medios. Daño: salieron 2 ·
+  /// quedan 22. Anulado después. Motivo: …".
+  String get descripcionAccesible => esDeComponente
+      ? [
+          compNombre ?? 'Componente',
+          movimientoComponente!,
+          if (compAnulado) 'Anulado después',
+          'Motivo: $texto',
+        ].join('. ')
+      : texto;
 
   String get etiquetaOrigen => switch (origen) {
     'alta' => 'Al crear el equipo',
     'ubicacion' => 'Cambio de ubicación',
     'estado' => 'Cambio de estado',
+    'componente' => 'Componente del kit',
     _ => 'Nota',
   };
 }
@@ -1440,7 +1493,9 @@ class ActivosService {
   }) async {
     final res = await supabase
         .from('activo_observaciones_todas')
-        .select('id, fecha, texto, origen, contexto, usuario_email, editada')
+        .select('id, fecha, texto, origen, contexto, usuario_email, editada, '
+            'comp_nombre, comp_tipo, comp_signo, comp_cantidad, comp_saldo, '
+            'comp_tercero, comp_anulado')
         .eq('activo_id', activoId)
         .order('fecha', ascending: false)
         .limit(limit);
@@ -1487,6 +1542,9 @@ class ActivosService {
     final (tabla, campo) = switch (origen) {
       'alta' => ('activos', 'observacion'),
       'ubicacion' => ('activo_ubicaciones', 'detalle'),
+      // El motivo de un movimiento de componente (schema_v67): lo único que
+      // su candado deja cambiar.
+      'componente' => ('activo_componente_movimientos', 'observacion'),
       _ => ('activo_observaciones', 'texto'),
     };
     await supabase.from(tabla).update({campo: t}).eq('id', id);
@@ -1688,16 +1746,18 @@ class ActivosService {
       throw const ErrorEquipos(
           'Para vender o dar en garantía hay que decir a quién (el tercero).');
     }
+    // El motivo es obligatorio (schema_v67): es lo que se lee en el listado
+    // de observaciones del equipo.
+    if (observacion == null || observacion.trim().isEmpty) {
+      throw const ErrorEquipos('Escribe el motivo: por qué cambia la cantidad.');
+    }
     await _conMensaje(
         () => supabase.from('activo_componente_movimientos').insert({
               'componente_id': componenteId,
               'tipo': tipo.valor,
               'cantidad': cantidad,
               'tercero_id': tipo.pideTercero ? terceroId : null,
-              'observacion':
-                  (observacion == null || observacion.trim().isEmpty)
-                      ? null
-                      : observacion.trim(),
+              'observacion': observacion.trim(),
             }));
     revision.value++;
   }
@@ -1713,6 +1773,9 @@ class ActivosService {
       throw const ErrorEquipos(
           'Una anulación no se anula: registra un movimiento nuevo.');
     }
+    if (observacion == null || observacion.trim().isEmpty) {
+      throw const ErrorEquipos('Escribe el motivo de la anulación.');
+    }
     await _conMensaje(
         () => supabase.from('activo_componente_movimientos').insert({
               'componente_id': original.componenteId,
@@ -1721,10 +1784,7 @@ class ActivosService {
               // columna no admite nulos antes de que corra el trigger.
               'cantidad': original.cantidad,
               'anula_movimiento_id': original.id,
-              'observacion':
-                  (observacion == null || observacion.trim().isEmpty)
-                      ? null
-                      : observacion.trim(),
+              'observacion': observacion.trim(),
             }));
     revision.value++;
   }

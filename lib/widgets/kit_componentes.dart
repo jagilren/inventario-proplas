@@ -401,8 +401,17 @@ class _HojaMovimientoComponenteState extends State<HojaMovimientoComponente> {
           ? 'Elige a quién'
           : null;
 
+  // El motivo es obligatorio (schema_v67): es lo que se lee en el listado
+  // de observaciones del equipo. La base también lo exige.
+  String? get _errorMotivo => _observacion.text.trim().isEmpty
+      ? 'Escribe por qué cambia la cantidad'
+      : null;
+
   bool get _valido =>
-      _errorTipo == null && _errorCantidad == null && _errorTercero == null;
+      _errorTipo == null &&
+      _errorCantidad == null &&
+      _errorTercero == null &&
+      _errorMotivo == null;
 
   Future<void> _guardar() async {
     if (!_valido) {
@@ -546,13 +555,20 @@ class _HojaMovimientoComponenteState extends State<HojaMovimientoComponente> {
             const SizedBox(height: 12),
             TextField(
               controller: _observacion,
-              minLines: 1,
-              maxLines: 3,
+              minLines: 2,
+              maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Observación',
-                hintText: 'Ej: remisión 3147',
-                border: OutlineInputBorder(),
+              onChanged: (_) {
+                if (_mostrarErrores) setState(() {});
+              },
+              decoration: InputDecoration(
+                labelText: 'Motivo *',
+                hintText: 'Ej: se rompieron al lavarlas en la planta',
+                // Se lee en las observaciones del equipo, con la fecha,
+                // quién y la cantidad: por eso se pide aquí.
+                helperText: 'Queda en las observaciones del equipo',
+                errorText: _mostrarErrores ? _errorMotivo : null,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 20),
@@ -1121,6 +1137,133 @@ class LineaMovimientoComponente extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Confirmar una anulación pidiendo el MOTIVO (schema_v67): devuelve el
+/// motivo escrito, o null si se cancela. La anulación sale en las
+/// observaciones del equipo y ahí tiene que decir por qué.
+class DialogoAnularComponente extends StatefulWidget {
+  /// Qué se anula, en palabras ("Daño, salieron 2, el 10/09/2026 14:05.").
+  final String descripcion;
+
+  const DialogoAnularComponente({super.key, required this.descripcion});
+
+  @override
+  State<DialogoAnularComponente> createState() =>
+      _DialogoAnularComponenteState();
+}
+
+class _DialogoAnularComponenteState extends State<DialogoAnularComponente> {
+  final _motivo = TextEditingController();
+  bool _mostrarError = false;
+
+  @override
+  void dispose() {
+    _motivo.dispose();
+    super.dispose();
+  }
+
+  void _confirmar() {
+    final m = _motivo.text.trim();
+    if (m.isEmpty) {
+      setState(() => _mostrarError = true);
+      return;
+    }
+    Navigator.pop(context, m);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('¿Anular este movimiento?'),
+      // Con scroll: en 360 px con letra grande el texto y el campo no caben.
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${widget.descripcion}\n\n'
+              'Se registra un movimiento contrario que lo deshace. Nada se '
+              'borra: los dos quedan en el historial.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _motivo,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) {
+                if (_mostrarError) setState(() {});
+              },
+              decoration: InputDecoration(
+                labelText: 'Motivo de la anulación *',
+                hintText: 'Ej: se registró en el kit equivocado',
+                errorText: _mostrarError && _motivo.text.trim().isEmpty
+                    ? 'Escribe por qué se anula'
+                    : null,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('No')),
+        FilledButton(onPressed: _confirmar, child: const Text('Sí, anular')),
+      ],
+    );
+  }
+}
+
+/// Lo que se ve de la novedad de un componente en el listado de
+/// OBSERVACIONES del equipo (schema_v67): qué componente, qué pasó y
+/// cuántos, cuántos quedaron y el motivo. La fecha y el usuario van en la
+/// línea gris de abajo, igual que en las demás observaciones.
+class LineaObservacionComponente extends StatelessWidget {
+  final ActivoObservacion observacion;
+
+  const LineaObservacionComponente({super.key, required this.observacion});
+
+  @override
+  Widget build(BuildContext context) {
+    final o = observacion;
+    final esquema = Theme.of(context).colorScheme;
+    // Una sola lectura, en orden, para el lector de pantalla: sin esto lee
+    // cuatro textos sueltos.
+    return Semantics(
+      container: true,
+      label: o.descripcionAccesible,
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(o.compNombre ?? 'Componente',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(o.movimientoComponente ?? '',
+              style: TextStyle(fontSize: 13.5, color: esquema.onSurface)),
+          // Dicho con palabras, no solo tachado: tachar no se oye.
+          if (o.compAnulado)
+            Text('Anulado después',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: esquema.error)),
+          const SizedBox(height: 4),
+          Text.rich(TextSpan(children: [
+            const TextSpan(
+                text: 'Motivo: ',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            TextSpan(text: o.texto),
+          ])),
+        ],
       ),
     );
   }
