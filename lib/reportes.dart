@@ -24,7 +24,10 @@ class Reportes {
               .toList(),
         )
         .toList();
-    final csv = ListToCsvConverter(fieldDelimiter: Ajustes.csvSep).convert(fmt);
+    // csv 8: un Csv configurado; comillas solo donde hacen falta y el fin de
+    // línea de Windows, como el ListToCsvConverter de antes.
+    final csv = Csv(fieldDelimiter: Ajustes.csvSep, lineDelimiter: '\r\n')
+        .encode(fmt);
     // BOM UTF-8 para que Excel muestre bien las tildes.
     return Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
   }

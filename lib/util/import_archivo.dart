@@ -299,8 +299,11 @@ List<List<dynamic>> _leerCsvInterno(Uint8List bytes) {
       .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
   final delim =
       primera.split(';').length > primera.split(',').length ? ';' : ',';
-  return const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
-      .convert(txt.replaceAll('\r\n', '\n'), fieldDelimiter: delim);
+  // csv 8: el delimitador lo decide la línea de arriba (no se deja
+  // adivinar), todo llega como TEXTO (sin dynamicTyping: "00123" no puede
+  // volverse 123) y las filas vacías se conservan; las descarta quien lee.
+  return Csv(fieldDelimiter: delim, autoDetect: false, skipEmptyLines: false)
+      .decode(txt);
 }
 
 /// Las filas del archivo como texto, sin interpretar: para las cargas que

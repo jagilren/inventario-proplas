@@ -17,12 +17,15 @@ Future<bool> guardarArchivo({
   required Uint8List bytes,
   required String mimeType,
 }) async {
-  final ruta = await FilePicker.platform.saveFile(
+  // file_picker 12: saveFile devuelve la Uri del archivo guardado, o null
+  // si se canceló el diálogo.
+  final uri = await FilePicker.saveFile(
     dialogTitle: 'Guardar $nombre.$extension',
     fileName: '$nombre.$extension',
     bytes: bytes,
+    mimeType: mimeType,
   );
-  return ruta != null;
+  return uri != null;
 }
 
 String comoTexto(Uint8List bytes) => utf8.decode(bytes, allowMalformed: true);

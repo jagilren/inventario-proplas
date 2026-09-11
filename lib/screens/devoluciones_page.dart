@@ -165,16 +165,15 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
         bytes = r.bytes;
       } else {
         // Móvil/escritorio: file_picker.
-        final res = await FilePicker.platform.pickFiles(
+        // file_picker 12: pickFile devuelve el archivo directo (o null si
+        // se canceló) y los bytes se leen aparte.
+        final f = await FilePicker.pickFile(
           type: FileType.custom,
           allowedExtensions: ['xlsx', 'csv'],
-          withData: true,
         );
-        if (res == null || res.files.isEmpty) return;
-        final f = res.files.first;
-        if (f.bytes == null) { _msg('No se pudo leer el archivo'); return; }
+        if (f == null) return;
         nombre = f.name;
-        bytes = f.bytes!;
+        bytes = await f.readAsBytes();
       }
     } catch (e) {
       _msg('No se pudo abrir el archivo: $e');

@@ -1344,6 +1344,20 @@ no tener nada — porque la gente le cree.
 - Cuando algo se descarte, **escribe por qué**.
 - Tachar lo superado (~~así~~) y dejarlo visible enseña más que borrarlo.
 
+**Mantenimiento de paquetes.** *(2026-09-11.)* Se subieron `file_picker`
+(8 → 12), `csv` (6 → 8), `connectivity_plus` (6 → 7), `intl` (0.19 → 0.20) y
+`supabase_flutter`. Los dos primeros cambiaron su forma de uso —
+`FilePicker.platform.pickFiles()` pasó a `FilePicker.pickFile()`, y los
+convertidores de CSV a un objeto `Csv`— y con ellos las cuatro pantallas de
+carga de archivos, la descarga y el lector de Excel/CSV. De paso, el mínimo de
+iOS subió a 14, que es lo que ahora exige `file_picker`. `image` sigue sin
+poder subir: `excel` (el que lee los .xlsx) exige versiones viejas de dos
+dependencias que comparten.
+
+> La red de pruebas fue lo que permitió hacerlo sin miedo: las 247 pruebas
+> —incluidas las de ida y vuelta de CSV— pasan igual antes y después, y la web
+> y la APK compilan.
+
 En este proyecto, `plan-modulo-equipos.md` se corrigió durante todo el
 desarrollo: fases tachadas al completarse, el SQL mal escrito corregido con una
 nota de por qué estaba mal, y las desviaciones del plan anotadas con su
