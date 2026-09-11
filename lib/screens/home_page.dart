@@ -16,6 +16,7 @@ import 'configuracion_page.dart';
 import 'gestion_usuarios_page.dart';
 import 'catalogo_admin_page.dart';
 import 'remision_devolucion_page.dart';
+import 'armar_salida_page.dart';
 import 'historial_page.dart';
 import 'sincronizacion_page.dart';
 import '../widgets/barra_sync.dart';
@@ -55,18 +56,18 @@ class _HomePageState extends State<HomePage> {
   bool get _gestiona => _admin || _coord;
   bool get _puedeExportar => _admin || _roles.contains(Roles.exportar);
   bool get _puedeRemisiones => _admin || _roles.contains(Roles.remisiones);
+  bool get _puedeSalida => _admin || _roles.contains(Roles.operarioMenos);
   // Solo tiene sentido ofrecer "Cambiar de módulo" a quien de verdad tiene
   // dos módulos disponibles; para los demás esta pantalla es la raíz y no
   // hay nada a dónde volver.
   bool get _puedeEquipos => _gestiona || _roles.contains(Roles.equipos);
 
   List<_Seccion> get _secciones {
-    final puedeSalida = _admin || _roles.contains(Roles.operarioMenos);
     final puedeEntrada = _admin || _roles.contains(Roles.operarioMas);
     return [
       const _Seccion('Inicio', Icons.dashboard, DashboardPage()),
       const _Seccion('Existencias', Icons.search, ElementosPage()),
-      if (puedeSalida)
+      if (_puedeSalida)
         const _Seccion('Salida', Icons.upload, MovimientoPage(tipoInicial: 'salida')),
       if (puedeEntrada)
         const _Seccion('Entrada', Icons.download, MovimientoPage(tipoInicial: 'entrada')),
@@ -195,6 +196,15 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Informes'),
                 subtitle: const Text('Descargar en Excel/CSV'),
                 onTap: () => _ir(const ReportesPage()),
+              ),
+            // Armar salida: visible para quien pueda registrar salidas, la
+            // misma regla que muestra la pestaña Salida.
+            if (_puedeSalida)
+              ListTile(
+                leading: const Icon(Icons.shopping_cart_checkout),
+                title: const Text('Armar salida'),
+                subtitle: const Text('Buscar o escanear y despachar'),
+                onTap: () => _ir(const ArmarSalidaPage()),
               ),
             // Remisión de devolución: visible para quien tenga el rol Remisiones.
             if (_puedeRemisiones)

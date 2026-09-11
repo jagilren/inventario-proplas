@@ -5,6 +5,7 @@ import 'escaner_page.dart';
 import 'devoluciones_page.dart';
 import 'remision_devolucion_page.dart';
 import 'salida_masiva_page.dart';
+import 'armar_salida_page.dart';
 import 'entrada_masiva_page.dart';
 import '../util/adjuntos_gate.dart';
 import '../util/tiempo.dart';
@@ -352,17 +353,41 @@ class _MovimientoPageState extends State<MovimientoPage> {
               // Simétrico al de Devoluciones: en SALIDA, acceso a la carga
               // masiva desde un archivo de Excel.
               trailing: _esSalida
-                  ? IconButton(
+                  // Dos caminos para una salida de varias líneas, como en
+                  // Devoluciones: armarla aquí mismo (buscando o escaneando)
+                  // o traerla hecha en un Excel.
+                  ? PopupMenuButton<String>(
                       icon: const Icon(Icons.playlist_add_check,
                           color: Color(0xFFE65100)),
-                      tooltip: 'Salida masiva desde Excel',
-                      onPressed: () async {
+                      tooltip: 'Salida de varias líneas',
+                      onSelected: (v) async {
                         await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SalidaMasivaPage()));
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => v == 'armar'
+                                  ? const ArmarSalidaPage()
+                                  : const SalidaMasivaPage()),
+                        );
                         if (mounted) _cargarRecientes(reset: true);
                       },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'armar',
+                          child: ListTile(
+                            leading: Icon(Icons.shopping_cart_checkout),
+                            title: Text('Armar salida'),
+                            subtitle: Text('Buscar o escanear los artículos'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'excel',
+                          child: ListTile(
+                            leading: Icon(Icons.table_chart),
+                            title: Text('Salida masiva'),
+                            subtitle: Text('Desde un Excel o CSV'),
+                          ),
+                        ),
+                      ],
                     )
                   : PopupMenuButton<String>(
                       icon: const Icon(Icons.assignment_return,
