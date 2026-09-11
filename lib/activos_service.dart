@@ -135,7 +135,10 @@ class Activo {
     'repuestos': 'Para repuestos',
     'baja': 'De baja',
   };
-  String get condicionEtiqueta => _etiquetasCondicion[condicion] ?? condicion;
+  String get condicionEtiqueta => etiquetaCondicion(condicion);
+  /// "usado" → "Usado". Para quien solo tiene el valor crudo (el listado de
+  /// observaciones, que trae la condición con la que volvió un reingreso).
+  static String etiquetaCondicion(String c) => _etiquetasCondicion[c] ?? c;
 }
 
 /// Fila de la vista `activos_disponibilidad`: el activo + su ubicación
@@ -234,9 +237,26 @@ class ActivoObservacion {
       compCantidad = m['comp_cantidad'] as num?,
       compSaldo = m['comp_saldo'] as num?,
       compTercero = m['comp_tercero'] as String?,
-      compAnulado = (m['comp_anulado'] as bool?) ?? false;
+      compAnulado = (m['comp_anulado'] as bool?) ?? false,
+      movCentro = m['mov_centro'] as String?,
+      movCentroDestino = m['mov_centro_destino'] as String?,
+      movBodega = m['mov_bodega'] as String?,
+      movCondicion = m['mov_condicion'] as String?,
+      movAnulado = (m['mov_anulado'] as bool?) ?? false;
+
+  // Solo en las de origen 'reingreso' (schema_v69): el REINGRESO de un
+  // equipo que se había entregado. Sale siempre, aunque no tenga texto.
+  /// Código del centro de costo de donde volvió.
+  final String? movCentro;
+  final String? movCentroDestino;
+  /// Bodega a la que volvió.
+  final String? movBodega;
+  /// Condición con la que volvió (valor crudo: 'usado').
+  final String? movCondicion;
+  final bool movAnulado;
 
   bool get esDeComponente => origen == 'componente';
+  bool get esReingreso => origen == 'reingreso';
 
   static String _num(num? x) => x == null
       ? '?'
@@ -259,20 +279,36 @@ class ActivoObservacion {
   /// Todo lo que dice la línea de un componente, en una frase, para el
   /// lector de pantalla: "Tela Filtro Mesh 100 Medios. Daño: salieron 2 ·
   /// quedan 22. Anulado después. Motivo: …".
-  String get descripcionAccesible => esDeComponente
-      ? [
-          compNombre ?? 'Componente',
-          movimientoComponente!,
-          if (compAnulado) 'Anulado después',
-          'Motivo: $texto',
-        ].join('. ')
-      : texto;
+  String get descripcionAccesible {
+    if (esDeComponente) {
+      return [
+        compNombre ?? 'Componente',
+        movimientoComponente!,
+        if (compAnulado) 'Anulado después',
+        'Motivo: $texto',
+      ].join('. ');
+    }
+    if (esReingreso) {
+      return [
+        ActivoMovimiento.etiquetaTipo('entrada', true),
+        'Desde ${movCentro ?? 'un centro de costo'}'
+            '${movBodega != null ? ' a $movBodega' : ''}',
+        if (movCondicion != null)
+          'Condición ${Activo.etiquetaCondicion(movCondicion!)}',
+        if (movAnulado) 'Anulado después',
+        texto.trim().isEmpty ? 'Sin observación' : 'Observación: $texto',
+      ].join('. ');
+    }
+    return texto;
+  }
 
   String get etiquetaOrigen => switch (origen) {
     'alta' => 'Al crear el equipo',
     'ubicacion' => 'Cambio de ubicación',
     'estado' => 'Cambio de estado',
     'componente' => 'Componente del kit',
+    // La misma palabra de la ficha y los informes, de la misma fuente.
+    'reingreso' => ActivoMovimiento.etiquetaTipo('entrada', true),
     _ => 'Nota',
   };
 }
@@ -1589,7 +1625,9 @@ class ActivosService {
         .from('activo_observaciones_todas')
         .select('id, fecha, texto, origen, contexto, usuario_email, editada, '
             'comp_nombre, comp_tipo, comp_signo, comp_cantidad, comp_saldo, '
-            'comp_tercero, comp_anulado')
+            'comp_tercero, comp_anulado, '
+            'mov_centro, mov_centro_destino, mov_bodega, mov_condicion, '
+            'mov_anulado')
         .eq('activo_id', activoId)
         .order('fecha', ascending: false)
         .limit(limit);
@@ -1639,6 +1677,9 @@ class ActivosService {
       // El motivo de un movimiento de componente (schema_v67): lo único que
       // su candado deja cambiar.
       'componente' => ('activo_componente_movimientos', 'observacion'),
+      // La observación de un reingreso (schema_v69). El candado del
+      // movimiento solo deja cambiar esta columna, y solo admin/coordinador.
+      'reingreso' => ('activo_movimientos', 'observacion'),
       _ => ('activo_observaciones', 'texto'),
     };
     await supabase.from(tabla).update({campo: t}).eq('id', id);

@@ -112,7 +112,7 @@ activo_componentes            de qué está hecho un KIT (extensión)
 activo_componente_movimientos la vida de cada componente (extensión)
 
 activos_disponibilidad      qué hay disponible por referencia
-activo_observaciones_todas  las 4 fuentes de observaciones, unidas
+activo_observaciones_todas  las 5 fuentes de observaciones, unidas
 ```
 
 > Las dos últimas tablas son la extensión **Referencias KITZABLES**: una
@@ -302,6 +302,34 @@ en el sol de una bodega el rojo tampoco se ve.
 > **Lección:** cuando el usuario pide ver algo **en otra parte**, casi nunca
 > pide un dato nuevo: pide que lo que ya existe **aparezca donde él mira**. Lo
 > que había que construir no era una tabla, era una puerta más a la misma.
+
+**g) El reingreso también es una observación.** *(2026-09-11, `schema_v69`.)*
+
+El usuario lo dijo así: *"al registrar el reingreso de un equipo, esto queda
+registrado en los movimientos pero también en el listado de observaciones como
+un elemento más… no olvides esto nunca"*. Lo había probado él mismo: vendió
+una bomba de prueba, la reingresó, y el reingreso **no aparecía** en las
+observaciones. Su texto vive en `activo_movimientos.observacion`, y la
+ubicación que abre el reingreso no lleva detalle: ninguno de los cuatro
+orígenes de la vista lo veía.
+
+La misma solución de las decisiones (d) y (f): **un quinto origen**,
+`'reingreso'`, sin copiar nada. Dos diferencias con los otros:
+
+- **Sale siempre, aunque no tenga texto.** Una nota sin texto no existe; un
+  reingreso sin texto **sí pasó**. Se muestra *"Sin observación"*, en cursiva,
+  y el lápiz permite escribírsela después (queda en la auditoría como
+  cualquier edición).
+- **Se ve igual que en la pestaña Movimientos**: el mismo ícono, el mismo
+  morado, *"Entrada · REINGRESO"* y el mismo flujo *🎯 NP00038 ➡️ 🎯 G000002*
+  (`flujoMovimiento`). La vista entrega los datos crudos (centro, bodega,
+  condición, si se anuló) y la app redacta con las palabras que ya usaba: una
+  sola fuente. Si después se anula el reingreso, lo dice: *"Anulado después"*.
+
+> **Regla del proyecto (el usuario la pidió explícita):** todo hecho de la vida
+> de un equipo que el usuario registra —un reingreso, una novedad de un
+> componente, un cambio de estado o de ubicación— tiene que aparecer en el
+> listado de observaciones de su ficha, **además** de donde se guarde.
 
 ---
 
@@ -1148,6 +1176,28 @@ sin que nadie supiera por qué.
 > **Lección:** ordenar por fecha no es ordenar. Cuando el orden **decide un
 > número**, pregúntate qué pasa con dos filas de la misma hora, y desempata con
 > algo que signifique algo — nunca con un identificador al azar.
+
+**e) La misma regla hermana, otra vez.** *(2026-09-11, `schema_v69`.)* Al
+poner el reingreso en el listado —con su lápiz para editar— se revisó quién
+puede cambiar el texto de un movimiento. La regla *"solo admin y coordinador
+modifican una observación ya escrita"* (`schema_v62`) estaba en las **cuatro**
+tablas que alimentaban el listado… y **no** en `activo_movimientos`, que nunca
+había sido una de ellas. Con el lápiz, el rol `equipos` habría podido cambiar
+el texto de un reingreso. Se le puso el mismo trigger y se probó con un usuario
+al que se le dejó **solo** el rol `equipos`: lo ve, pero no lo edita.
+
+Es la lección del (c) repetida: cuando una tabla **empieza a jugar un papel
+nuevo** (aquí, alimentar el listado de observaciones), hereda todas las reglas
+de ese papel, y hay que ir a ponérselas.
+
+**Y al lado, otro hueco — este sin cerrar todavía.** La tabla
+`activo_movimientos` tiene una política `equipos_del` que deja **borrar**
+movimientos a admin, coordinador y rol `equipos`, cuando la regla del módulo es
+que un movimiento **nunca se borra: se anula**. Ninguna pantalla borra, pero la
+API sí lo permitiría, y un borrado no deshace lo que el movimiento hizo (el
+estado y la ubicación los cambia un trigger que solo corre al insertar).
+Queda anotado y se le preguntó al usuario antes de cerrarlo. (La tabla de
+componentes no tiene ese hueco: no tiene política de borrado.)
 
 Y un detalle de método que se agregó ese día al validar consultas contra la
 API: además de las 8 consultas nuevas (HTTP 200), se mandó **una dañada a

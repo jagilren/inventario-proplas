@@ -5,6 +5,7 @@ import '../activos_service.dart';
 import '../util/movimiento_fmt.dart';
 import '../util/tiempo.dart';
 import '../widgets/kit_componentes.dart';
+import '../widgets/observacion_reingreso.dart';
 import '../widgets/selector_recargable.dart';
 import 'activo_movimiento_page.dart';
 import 'componente_kit_page.dart';
@@ -704,6 +705,7 @@ class _ObservacionesState extends State<_Observaciones> {
     'alta' => Icons.add_circle_outline,
     'ubicacion' => Icons.place_outlined,
     'estado' => Icons.tune,
+    'reingreso' => Icons.assignment_return,
     _ => Icons.notes,
   };
 
@@ -716,7 +718,11 @@ class _ObservacionesState extends State<_Observaciones> {
       builder: (_) => _HojaNota(
         titulo: o.esDeComponente
             ? 'Editar el motivo · ${o.compNombre ?? 'componente'}'
-            : 'Editar observación',
+            : o.esReingreso
+                ? (o.texto.trim().isEmpty
+                    ? 'Observación del reingreso'
+                    : 'Editar la observación del reingreso')
+                : 'Editar observación',
         inicial: o.texto,
         aviso: 'El cambio queda registrado: fecha, tu nombre y lo que decía '
             'antes.',
@@ -811,7 +817,11 @@ class _ObservacionesState extends State<_Observaciones> {
                                 TipoMovComponente.desde(o.compTipo ?? ''))
                             : _icono(o.origen),
                         size: 18,
-                        color: Colors.grey),
+                        // El reingreso, en su morado de la pestaña
+                        // Movimientos: se reconoce como el mismo hecho.
+                        color: o.esReingreso
+                            ? LineaObservacionReingreso.color
+                            : Colors.grey),
                     const SizedBox(width: 10),
                     // Expanded: en 360 px un texto largo sin esto desborda
                     // la fila y Flutter pinta la franja amarilla y negra.
@@ -821,12 +831,15 @@ class _ObservacionesState extends State<_Observaciones> {
                         children: [
                           if (o.esDeComponente)
                             LineaObservacionComponente(observacion: o)
+                          else if (o.esReingreso)
+                            LineaObservacionReingreso(observacion: o)
                           else
                             Text(o.texto),
                           const SizedBox(height: 2),
                           Text(
                             [
-                              o.etiquetaOrigen,
+                              // El reingreso ya lo dice arriba, en morado.
+                              if (!o.esReingreso) o.etiquetaOrigen,
                               if (o.contexto != null && o.contexto!.isNotEmpty)
                                 o.contexto!,
                               _cuando(o.fecha),
