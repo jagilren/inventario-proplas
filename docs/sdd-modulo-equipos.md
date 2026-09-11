@@ -657,6 +657,58 @@ vendidas*, con las **6 unidades** al lado.
 > y tarde o temprano junta cosas opuestas. Cada categoría que se muestra
 > merece su propia regla.
 
+**Qué significa cada filtro, a la mano.** *(2026-09-11.)* El usuario pidió un
+texto corto al pasar sobre cada tag. En el celular **no existe el "hover"**
+—no hay mouse—, así que se usó la pieza estándar de Flutter (`Tooltip`), que
+funciona según el aparato:
+
+| Dónde | Cómo aparece |
+|---|---|
+| PC (web) | Al pasar el mouse |
+| Celular (APK o web) | Al **mantener presionado** el tag |
+| Los dos | Se va solo a los **4 segundos**, y flota encima: no corre nada de la pantalla |
+
+Tocar el tag sigue filtrando; mantenerlo presionado **no** filtra (probado).
+El ícono de estado de cada unidad (disponible, no disponible, vendido) explica
+lo mismo, en singular. Los textos viven **una sola vez**, en `FiltroEquipos`
+(`explicacion` y `unidad`), y el lector de pantalla los lee junto con el nombre
+del tag. Control negativo: sin la explicación, y con una duración de 60
+segundos, fallaron las pruebas que lo cuidan.
+
+### 5.5 Un adorno que se puede quitar: el ícono de cada referencia
+
+*(2026-09-11, pedido del usuario.)* La lista "Por referencia" se veía pálida:
+solo texto gris. Ahora cada referencia lleva un círculo de color con un ícono
+según el tipo de equipo —una gota azul las bombas, una caja morada los kits;
+también motor, compresor, filtro, válvula, tanque, centrífuga y tablero— o su
+**inicial** si no se reconoce el tipo.
+
+Tres condiciones que puso el usuario, y cómo se cumplen:
+
+| Condición | Cómo |
+|---|---|
+| **No cargar la base** | El tipo se adivina por palabras del **nombre**, que la lista ya tiene. Cero consultas nuevas, cero columnas |
+| **Que se vea bien en el celular** | Colores oscuros con blanco encima: la prueba de contraste de Flutter mide cada color de la paleta. Una fila en 360 px con la letra al doble no se desborda |
+| **Poderlo quitar después** | Todo vive en `lib/widgets/avatar_referencia.dart`. Se **apaga** con `mostrarAvatarReferencias = false`; se **borra** quitando ese archivo y su única línea en la lista |
+
+Dos detalles:
+
+- **Es decorativo para el lector de pantalla.** El nombre ya está escrito al
+  lado; oír "B, bomba de diafragma" no ayuda a nadie. Una prueba revisa que la
+  fila se lea solo con su nombre — y la primera versión de esa prueba **no
+  servía**: al quitarle la marca de decorativo a propósito, siguió pasando.
+  Se reescribió para revisar exactamente lo que se oye en la fila, y ahí sí
+  falló cuando debía.
+- **El color de la inicial sale de sumar las letras del nombre, no de
+  `hashCode`**, que puede dar distinto en la web y en el celular: la misma
+  referencia tiene que verse igual en los dos.
+
+> **Por qué adivinar por el nombre y no usar el campo `tipo`:** `tipo` es texto
+> libre (hoy hay "BOMBA ELECTRICZA DOSIFICACION" y "Bomba dosificadora" para
+> lo mismo), y traerlo obligaba a cambiar la consulta. Para un adorno que se
+> puede quitar, adivinar bien la mayoría basta; si algún día se vuelve algo
+> serio, lo correcto es una lista de tipos en la base, no más palabras aquí.
+
 ---
 
 ## 6. Permisos

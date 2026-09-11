@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data.dart';
 import '../activos_service.dart';
 import '../util/import_archivo.dart';
+import '../widgets/avatar_referencia.dart';
 import 'perfil_page.dart';
 import 'activo_referencias_page.dart';
 import 'activo_terceros_page.dart';
@@ -324,6 +325,10 @@ class _PorReferenciaState extends State<_PorReferencia> {
         itemBuilder: (_, i) {
           final f = visibles[i];
           return ListTile(
+            // Adorno que se puede quitar: ver widgets/avatar_referencia.dart.
+            leading: mostrarAvatarReferencias
+                ? AvatarReferencia(nombre: f.nombre)
+                : null,
             title: Text(f.etiqueta),
             // Los tres, siempre: disponibles, no disponibles y vendidos.
             // Antes "no disponibles" incluía también los vendidos.
