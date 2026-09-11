@@ -1,0 +1,142 @@
+-- schema_v71_borrar_funciones_sin_uso
+--
+-- Limpieza pedida por el usuario (2026-09-11): borrar las funciones viejas
+-- de Supabase que no se usen. Se borra SOLO lo que no usa nadie, con
+-- evidencia, revisada una por una:
+--
+--   - la app (lib/): ninguna la llama por rpc(); la app las reemplazó por
+--     consultas o inserciones directas (trasladar y mover_serie: data.dart
+--     hace los inserts; kardex_elemento y existencias_por_bodega: selects);
+--   - ningún trigger, ninguna otra función, vista, política de seguridad,
+--     valor por defecto ni restricción las nombra (pg_proc, pg_views,
+--     pg_policies, pg_attrdef, pg_constraint);
+--   - no hay tareas programadas (pg_cron no está instalado) y las GitHub
+--     Actions y los scripts del repo no las llaman.
+--
+-- DROP sin CASCADE a propósito: si algo dependiera de ellas, la migración
+-- fallaría en vez de llevarse ese algo por delante.
+--
+-- La función Edge `web` (retirada el 2026-09-02) se borra aparte, con la
+-- API de administración: no es SQL.
+--
+-- PARA REVIVIRLAS: su definición exacta está abajo, comentada.
+
+drop function if exists public.existencias_por_bodega(p_elemento uuid);
+drop function if exists public.kardex_elemento(p_elemento uuid);
+drop function if exists public.mover_serie(p jsonb);
+drop function if exists public.trasladar(p_elemento text, p_cantidad text, p_origen text, p_destino text, p_obs text);
+
+-- ---------------------------------------------------------------------
+-- DEFINICIONES, por si alguna vez hiciera falta volver a crearlas.
+-- ---------------------------------------------------------------------
+
+-- ===== existencias_por_bodega(p_elemento uuid)  permisos: {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+-- CREATE OR REPLACE FUNCTION public.existencias_por_bodega(p_elemento uuid)
+--  RETURNS TABLE(bodega text, bodega_id uuid, existencia numeric, costo_promedio numeric)
+--  LANGUAGE sql
+--  STABLE
+-- AS $function$
+--     select b.nombre, b.id, x.existencia, x.costo_promedio
+--     from existencias x
+--     join bodegas b on b.id = x.bodega_id
+--     where x.elemento_id = p_elemento and x.existencia <> 0
+--     order by b.nombre;
+-- $function$
+--   ;
+
+-- ===== kardex_elemento(p_elemento uuid)  permisos: {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+-- CREATE OR REPLACE FUNCTION public.kardex_elemento(p_elemento uuid)
+--  RETURNS TABLE(id uuid, fecha timestamp with time zone, tipo text, cantidad numeric, costo_unitario numeric, centro_costo text, referencia text, observacion text)
+--  LANGUAGE sql
+--  STABLE
+-- AS $function$
+--     select m.id, m.fecha, m.tipo, m.cantidad, m.costo_unitario,
+--            cc.codigo, m.referencia, m.observacion
+--     from movimientos m
+--     left join centros_costo cc on cc.id = m.centro_costo_id
+--     where m.elemento_id = p_elemento
+--     order by m.fecha desc, m.created_at desc;
+-- $function$
+--   ;
+
+-- ===== mover_serie(p jsonb)  permisos: {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+-- CREATE OR REPLACE FUNCTION public.mover_serie(p jsonb)
+--  RETURNS void
+--  LANGUAGE plpgsql
+--  SECURITY DEFINER
+--  SET search_path TO 'public'
+-- AS $function$
+-- declare
+--     v_tipo text := p->>'tipo';
+--     v_el uuid := (p->>'elemento')::uuid;
+--     v_bod uuid := nullif(p->>'bodega','')::uuid;
+--     v_dest uuid := nullif(p->>'bodega_destino','')::uuid;
+--     v_costo numeric := coalesce(nullif(p->>'costo','')::numeric, 0);
+--     v_centro uuid := nullif(p->>'centro','')::uuid;
+--     v_obs text := p->>'obs';
+--     v_serials text[];
+--     v_mov uuid; v_mov2 uuid; v_tid uuid; v_serie uuid; s text; n int;
+-- begin
+--     select array_agg(x) into v_serials from jsonb_array_elements_text(p->'serials') as x;
+--     n := coalesce(array_length(v_serials,1),0);
+--     if n = 0 then raise exception 'Debes indicar al menos un serial'; end if;
+--     if v_tipo='entrada' and not (tiene_rol('admin') or tiene_rol('operario_mas')) then raise exception 'Sin permiso para entradas'; end if;
+--     if v_tipo='salida' and not (tiene_rol('admin') or tiene_rol('operario_menos')) then raise exception 'Sin permiso para salidas'; end if;
+--     if v_tipo='traslado' and not (tiene_rol('admin') or tiene_rol('coordinador')) then raise exception 'Sin permiso para traslados'; end if;
+-- 
+--     if v_tipo='entrada' then
+--         insert into movimientos(tipo,elemento_id,bodega_id,cantidad,costo_unitario,observacion,usuario_id)
+--             values('entrada',v_el,v_bod,n,v_costo,v_obs,auth.uid()) returning id into v_mov;
+--         foreach s in array v_serials loop
+--             insert into series(elemento_id,serial,bodega_id,estado,costo,movimiento_ingreso)
+--                 values(v_el,s,v_bod,'disponible',v_costo,v_mov) returning id into v_serie;
+--             insert into movimiento_series(movimiento_id,serie_id) values(v_mov,v_serie);
+--         end loop;
+--     elsif v_tipo='salida' then
+--         insert into movimientos(tipo,elemento_id,bodega_id,cantidad,centro_costo_id,observacion,usuario_id)
+--             values('salida',v_el,v_bod,n,v_centro,v_obs,auth.uid()) returning id into v_mov;
+--         foreach s in array v_serials loop
+--             update series set estado='consumido', movimiento_salida=v_mov
+--               where elemento_id=v_el and serial=s and bodega_id=v_bod and estado='disponible' returning id into v_serie;
+--             if v_serie is null then raise exception 'Serial % no disponible en la bodega', s; end if;
+--             insert into movimiento_series(movimiento_id,serie_id) values(v_mov,v_serie);
+--         end loop;
+--     elsif v_tipo='traslado' then
+--         if v_dest is null or v_dest=v_bod then raise exception 'Bodega destino invalida'; end if;
+--         v_tid := uuid_generate_v4();
+--         insert into movimientos(tipo,elemento_id,bodega_id,cantidad,referencia,observacion,usuario_id,traslado_id)
+--             values('salida',v_el,v_bod,n,'TRASLADO',v_obs,auth.uid(),v_tid) returning id into v_mov;
+--         insert into movimientos(tipo,elemento_id,bodega_id,cantidad,costo_unitario,referencia,observacion,usuario_id,traslado_id)
+--             values('entrada',v_el,v_dest,n,null,'TRASLADO',v_obs,auth.uid(),v_tid) returning id into v_mov2;
+--         foreach s in array v_serials loop
+--             update series set bodega_id=v_dest
+--               where elemento_id=v_el and serial=s and bodega_id=v_bod and estado='disponible' returning id into v_serie;
+--             if v_serie is null then raise exception 'Serial % no disponible en origen', s; end if;
+--             insert into movimiento_series(movimiento_id,serie_id) values(v_mov,v_serie);
+--             insert into movimiento_series(movimiento_id,serie_id) values(v_mov2,v_serie);
+--         end loop;
+--     else raise exception 'Tipo % no soportado', v_tipo; end if;
+-- end; $function$
+--   ;
+
+-- ===== trasladar(p_elemento text, p_cantidad text, p_origen text, p_destino text, p_obs text)  permisos: {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+-- CREATE OR REPLACE FUNCTION public.trasladar(p_elemento text, p_cantidad text, p_origen text, p_destino text, p_obs text DEFAULT NULL::text)
+--  RETURNS void
+--  LANGUAGE plpgsql
+--  SECURITY DEFINER
+--  SET search_path TO 'public'
+-- AS $function$
+-- declare costo_origen numeric(18,4); tid uuid := uuid_generate_v4();
+--         v_el uuid := p_elemento::uuid; v_or uuid := p_origen::uuid; v_de uuid := p_destino::uuid;
+--         v_cant numeric := p_cantidad::numeric;
+-- begin
+--     if not (public.tiene_rol('admin') or public.tiene_rol('coordinador')) then
+--         raise exception 'Solo admin o coordinador pueden trasladar'; end if;
+--     if v_or = v_de then raise exception 'Origen y destino no pueden ser la misma bodega'; end if;
+--     select costo_promedio into costo_origen from existencias where elemento_id=v_el and bodega_id=v_or;
+--     insert into movimientos(tipo,elemento_id,bodega_id,cantidad,referencia,observacion,usuario_id,traslado_id)
+--         values('salida',v_el,v_or,v_cant,'TRASLADO',p_obs,auth.uid(),tid);
+--     insert into movimientos(tipo,elemento_id,bodega_id,cantidad,costo_unitario,referencia,observacion,usuario_id,traslado_id)
+--         values('entrada',v_el,v_de,v_cant,coalesce(costo_origen,0),'TRASLADO',p_obs,auth.uid(),tid);
+-- end; $function$
+--   ;
