@@ -22,12 +22,18 @@ class ConfirmarDescarte extends StatefulWidget {
   /// Ej: '18 líneas emparejadas'.
   final String queSePierde;
 
+  /// Qué pasa si sale, cuando el consejo de siempre ("toca volver a subir
+  /// el archivo") no aplica. En Devoluciones, después de una carga parcial,
+  /// volver a subir el archivo completo REPETIRÍA lo que ya entró.
+  final String? siSale;
+
   final Widget child;
 
   const ConfirmarDescarte({
     super.key,
     required this.hayTrabajoSinGuardar,
     required this.queSePierde,
+    this.siSale,
     required this.child,
   });
 
@@ -69,8 +75,9 @@ class _ConfirmarDescarteState extends State<ConfirmarDescarte> {
             title: const Text('¿Salir sin registrar?'),
             content: Text(
               'Tienes $queSePierde sin registrar.\n\n'
-              'Si sales ahora se pierde ese trabajo y toca volver a subir '
-              'el archivo y corregir los emparejamientos otra vez.',
+              '${widget.siSale ?? 'Si sales ahora se pierde ese trabajo y '
+                  'toca volver a subir el archivo y corregir los '
+                  'emparejamientos otra vez.'}',
             ),
             actions: [
               // El botón seguro es el que se queda: es el de la derecha y el

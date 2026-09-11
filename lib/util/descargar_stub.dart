@@ -8,18 +8,21 @@ import 'package:file_picker/file_picker.dart';
 /// Plugin— en vez de `file_saver`. Desde la versión 8 escribe los bytes
 /// directamente en Android e iOS, así que no hace falta ningún paso extra.
 ///
-/// Si el usuario cancela el diálogo, no se guarda nada y no es un error.
-Future<void> guardarArchivo({
+/// Si el usuario cancela el diálogo, no se guarda nada y no es un error:
+/// devuelve false, para que quien llama no diga "✓ guardado" cuando no lo
+/// está (en el celular es fácil tocar "atrás" en el diálogo sin notarlo).
+Future<bool> guardarArchivo({
   required String nombre,
   required String extension,
   required Uint8List bytes,
   required String mimeType,
 }) async {
-  await FilePicker.platform.saveFile(
+  final ruta = await FilePicker.platform.saveFile(
     dialogTitle: 'Guardar $nombre.$extension',
     fileName: '$nombre.$extension',
     bytes: bytes,
   );
+  return ruta != null;
 }
 
 String comoTexto(Uint8List bytes) => utf8.decode(bytes, allowMalformed: true);

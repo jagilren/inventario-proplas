@@ -11,6 +11,8 @@ import '../widgets/selector_recargable.dart';
 import '../widgets/confirmar_descarte.dart';
 import '../util/dinero.dart';
 import '../widgets/remision_nuevo.dart';
+import '../widgets/carga_devolucion.dart';
+import '../reportes.dart';
 import 'editar_elemento_page.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
@@ -98,6 +100,11 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   bool _recargandoCentros = false;
   /// Crear artículos en el catálogo: admin y coordinador (RLS `cud_elem`).
   bool _puedeCrear = false;
+  /// Ya se cargó una vez este archivo: lo que queda en pantalla es lo que
+  /// NO entró, y se puede descargar.
+  bool _cargaHecha = false;
+  /// Las filas que la base rechazó al registrarlas, con su motivo.
+  final Map<_FilaDev, String> _errorDeCarga = {};
 
   /// Vuelven a pedir el catálogo al servidor: sirve cuando alguien crea una
   /// bodega o un centro de costo mientras esta pantalla ya estaba abierta.
@@ -174,7 +181,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       return;
     }
 
-    setState(() { _leyendo = true; _archivo = nombre; });
+    setState(() {
+      _leyendo = true;
+      _archivo = nombre;
+      _cargaHecha = false;
+      _errorDeCarga.clear();
+    });
     try {
       final crudas = leerArchivoDevolucion(bytes, nombre);
       final filas = _emparejar(crudas);
@@ -481,8 +493,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     );
     if (ok != true) return;
 
-    setState(() => _cargando = true);
+    setState(() {
+      _cargando = true;
+      _errorDeCarga.clear();
+    });
     int cargados = 0, errores = 0;
+    final entraron = <_FilaDev>{};
     for (final f in validas) {
       try {
         await InventarioService.registrarMovimiento(
@@ -508,8 +524,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               : null,
         );
         cargados++;
-      } catch (_) {
+        entraron.add(f);
+      } catch (e) {
         errores++;
+        _errorDeCarga[f] = e
+            .toString()
+            .replaceAll('PostgrestException(message: ', '')
+            .split('\n')
+            .first;
       }
     }
     final sinEmparejar = _sinEmparejar;
@@ -518,30 +540,87 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     final nuevosPendientes = _nuevosPendientes;
     final nuevosCreados = validas.where((f) => f.creado).length;
     if (!mounted) return;
-    setState(() { _cargando = false; _filas = []; _archivo = null; });
+    // Lo que entró sale de la pantalla; lo que NO, se queda para resolverlo
+    // o descargarlo. Antes se limpiaba todo, y lo pendiente solo se podía
+    // recuperar subiendo el archivo completo… que repetía lo ya cargado.
+    setState(() {
+      _cargando = false;
+      _filas = _filas.where((f) => !entraron.contains(f)).toList();
+      _cargaHecha = _filas.isNotEmpty;
+      if (_filas.isEmpty) _archivo = null;
+    });
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Carga terminada'),
-        content: Column(mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('✓ Cargados: $cargados'),
-            if (omitidosPorCosto > 0)
-              Text('• Sin costo (omitidos, no cargados): $omitidosPorCosto'),
-            if (sinEmparejar > 0) Text('• Sin emparejar (omitidos): $sinEmparejar'),
-            if (serializados > 0) Text('• Serializados (omitidos): $serializados'),
-            if (nuevosCreados > 0)
-              Text('• Artículos nuevos creados en el catálogo: $nuevosCreados'),
-            if (nuevosPendientes > 0)
-              Text('• Nuevos sin resolver (omitidos): $nuevosPendientes'),
-            if (errores > 0) Text('• Con error: $errores'),
-          ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-              child: const Text('Listo')),
+      builder: (_) => DialogoCargaTerminada(
+        resumen: [
+          '✓ Cargados: $cargados',
+          if (omitidosPorCosto > 0)
+            '• Sin costo (omitidos, no cargados): $omitidosPorCosto',
+          if (sinEmparejar > 0) '• Sin emparejar (omitidos): $sinEmparejar',
+          if (serializados > 0) '• Serializados (omitidos): $serializados',
+          if (nuevosCreados > 0)
+            '• Artículos nuevos creados en el catálogo: $nuevosCreados',
+          if (nuevosPendientes > 0)
+            '• Nuevos sin resolver (omitidos): $nuevosPendientes',
+          if (errores > 0) '• Con error: $errores',
         ],
+        pendientes: _filas.length,
+        descargarPendientes: _filas.isEmpty ? null : _descargarPendientes,
       ),
     );
+  }
+
+  /// Por qué una fila no se cargó, en palabras (va en el archivo).
+  String _motivoNoCargada(_FilaDev f) {
+    final error = _errorDeCarga[f];
+    if (error != null) return 'Error al registrar: $error';
+    if (f.nuevoPendiente) return 'Artículo NUEVO sin resolver';
+    final m = f.match;
+    if (m == null) return 'No se reconoció el artículo';
+    if (m.serializado) return 'Serializado: se registra en la entrada individual';
+    if (f.cantidad <= 0) return 'Cantidad en cero';
+    if (f.costoEfectivo <= 0) return 'Costo en \$0 sin asignar';
+    return 'No se cargó';
+  }
+
+  /// La línea tal como debe volver a subirse. Un NUEVO vuelve con lo que
+  /// propuso el ingeniero (su costo estimado y su firma), aunque aquí ya se
+  /// hubiera resuelto: se resuelve otra vez, con un toque, al subirlo. Los
+  /// demás van con el nombre EXACTO del catálogo si ya se sabe cuál es,
+  /// para que la próxima vez emparejen al 100 %.
+  PendienteDevolucion _pendiente(_FilaDev f) => f.nuevo
+      ? PendienteDevolucion(
+          elemento: f.textoOriginal,
+          cantidad: f.cantidad,
+          nuevo: true,
+          unidad: f.unidadPropuesta,
+          costoEstimado: f.costoEstimado,
+          estimadoPor: f.estimadoPor,
+          motivo: _motivoNoCargada(f),
+        )
+      : PendienteDevolucion(
+          elemento: f.match?.nombre ?? f.textoOriginal,
+          cantidad: f.cantidad,
+          costoPromedio: f.match?.costoPromedio,
+          motivo: _motivoNoCargada(f),
+        );
+
+  /// Guarda el CSV con lo que quedó en pantalla. false si se canceló.
+  Future<bool> _descargarPendientes() => Reportes.descargarCsv(
+        'devolucion_pendiente',
+        filasCsvPendientes([for (final f in _filas) _pendiente(f)]),
+      );
+
+  Future<void> _descargarPendientesDesdePantalla() async {
+    try {
+      final ok = await _descargarPendientes();
+      if (!mounted) return;
+      _msg(ok
+          ? '✓ Guardado lo que no se cargó (${_filas.length} línea(s)).'
+          : 'No se guardó: se canceló el diálogo.');
+    } catch (e) {
+      if (mounted) _msg('No se pudo guardar: $e');
+    }
   }
 
   void _msg(String m) =>
@@ -582,7 +661,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   Widget build(BuildContext context) {
     return ConfirmarDescarte(
       hayTrabajoSinGuardar: _filas.isNotEmpty && !_cargando,
-      queSePierde: '${_filas.length} línea(s) del archivo',
+      queSePierde: _cargaHecha
+          ? '${_filas.length} línea(s) que no se cargaron'
+          : '${_filas.length} línea(s) del archivo',
+      siSale: _cargaHecha
+          ? 'Si sales ahora se pierden. NO vuelvas a subir el archivo '
+              'completo: repetiría lo que ya entró. Antes de salir, toca '
+              '"Descargar lo que no se cargó".'
+          : null,
       child: _contenido(),
     );
   }
@@ -683,8 +769,23 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('${_filas.length} filas · $_listas listas para cargar',
+                child: Text(
+                    _cargaHecha
+                        ? 'Quedaron ${_filas.length} sin cargar · '
+                            '$_listas listas para cargar'
+                        : '${_filas.length} filas · $_listas listas para cargar',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          // Después de cargar, lo que quedó se puede bajar en cualquier
+          // momento, no solo en el diálogo del resumen.
+          if (_cargaHecha && _filas.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: OutlinedButton.icon(
+                onPressed: _descargarPendientesDesdePantalla,
+                icon: const Icon(Icons.file_download),
+                label: const Text('Descargar lo que no se cargó'),
               ),
             ),
           // Aviso visible ANTES de tocar "Cargar": antes solo se enteraba

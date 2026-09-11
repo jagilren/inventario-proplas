@@ -48,6 +48,31 @@ de accesibilidad de Flutter y 360 px con la letra al doble. Control negativo:
 al romper a propósito la regla 1, el bloqueo del nombre repetido y el permiso
 de crear, **fallaron las tres pruebas** que las cuidan.
 
+### Después: "Descargar lo que no se cargó" (2026-09-11)
+
+**La pregunta que lo destapó:** *¿qué pasa si quien carga no tiene permiso
+para crear artículos?* El botón "Crear en el catálogo" sale apagado y lo dice,
+y la base igual lo rechaza. Pero la fila quedaba sin cargar y, al terminar,
+**la pantalla se limpiaba**: la única forma de cargarla después era subir el
+archivo completo otra vez… y eso **repetía las líneas que ya habían
+entrado**. Pasaba lo mismo, desde antes, con las filas sin reconocer y las
+que estaban en $0.
+
+| Qué | Cómo quedó |
+|---|---|
+| Después de cargar | Lo que entró sale de la pantalla; lo que **no**, se queda para resolverlo ahí mismo |
+| El resumen | Botón **"Descargar lo que no se cargó (N)"**, y el mismo botón en la pantalla mientras queden líneas |
+| El archivo | El formato de la remisión + una columna final **POR QUE NO SE CARGO**. Se sube otra vez a Devoluciones tal cual. Un NUEVO vuelve con su costo estimado y su firma; los demás, con el nombre exacto del catálogo si ya se sabía cuál era |
+| En el celular | El diálogo del sistema para guardar se puede cancelar. Antes la app decía "✓ generado" igual; ahora `guardarArchivo` devuelve si de verdad se guardó, y la pantalla dice *"No se guardó"*. Se aplicó también a la remisión y a la plantilla |
+| Salir con líneas pendientes | El aviso de siempre decía *"toca volver a subir el archivo"*: justo lo que duplica. Tras una carga parcial dice que **no** se suba el archivo completo y que se descargue lo pendiente |
+
+**Cómo se probó.** 10 pruebas nuevas (175): el archivo de pendientes se
+vuelve a leer con el NUEVO intacto, un porqué con punto y coma o comillas no
+desordena nada, y el diálogo en 360 px con la letra al doble, con las guías de
+accesibilidad. Control negativo: al hacer que dijera "guardado" aunque se
+cancelara, y al quitarle la marca NUEVO al pendiente, fallaron las pruebas que
+lo cuidan. La APK compiló (81,6 MB).
+
 ---
 
 ## 1. Objetivo y alcance

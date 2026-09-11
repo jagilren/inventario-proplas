@@ -7,7 +7,8 @@ import 'dart:typed_data';
 ///
 /// Se crea un enlace temporal apuntando a los bytes y se "pulsa" solo. Es el
 /// mismo mecanismo que usa cualquier página para ofrecer una descarga.
-Future<void> guardarArchivo({
+/// Devuelve true: el navegador no avisa si el usuario la cancela.
+Future<bool> guardarArchivo({
   required String nombre,
   required String extension,
   required Uint8List bytes,
@@ -22,6 +23,7 @@ Future<void> guardarArchivo({
   // Liberar la referencia: si no, el navegador guarda los bytes en memoria
   // hasta que se recargue la página.
   html.Url.revokeObjectUrl(url);
+  return true;
 }
 
 /// Se conserva por si algún día hace falta el contenido como texto.

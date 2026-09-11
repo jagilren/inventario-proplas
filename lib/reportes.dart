@@ -29,13 +29,14 @@ class Reportes {
     return Uint8List.fromList([0xEF, 0xBB, 0xBF, ...utf8.encode(csv)]);
   }
 
-  static Future<void> _descargar(
+  /// Devuelve false si en el celular se canceló el diálogo de guardar.
+  static Future<bool> _descargar(
     String nombre,
     List<List<dynamic>> filas,
   ) async {
     final bytes = bytesCsv(filas);
     final fecha = DateTime.now().toIso8601String().substring(0, 10);
-    await guardarArchivo(
+    return guardarArchivo(
       nombre: '${nombre}_$fecha',
       extension: 'csv',
       bytes: bytes,
@@ -45,7 +46,8 @@ class Reportes {
 
   /// Descarga un CSV genérico (reusa el mismo mecanismo: separadores
   /// regionales + BOM). Útil para la remisión de devolución.
-  static Future<void> descargarCsv(String nombre, List<List<dynamic>> filas) =>
+  /// false si en el celular se canceló el diálogo de guardar.
+  static Future<bool> descargarCsv(String nombre, List<List<dynamic>> filas) =>
       _descargar(nombre, filas);
 
   static String _fecha(dynamic iso) {

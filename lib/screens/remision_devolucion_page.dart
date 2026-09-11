@@ -234,7 +234,15 @@ class _RemisionDevolucionPageState extends State<RemisionDevolucionPage> {
         // D4 del plan: la firma del estimado es el correo de quien genera.
         estimadoPor: supabase.auth.currentUser?.email,
       );
-      await Reportes.descargarCsv('remision_devolucion', filas);
+      final guardado =
+          await Reportes.descargarCsv('remision_devolucion', filas);
+      // En el celular se puede cancelar el diálogo de guardar: no decir
+      // "✓ generado" si el archivo no quedó en ninguna parte.
+      if (!guardado) {
+        _msg('No se guardó el CSV: se canceló el diálogo. La lista sigue '
+            'aquí; vuelve a tocar "Generar CSV".');
+        return;
+      }
       _msg(costoAlDia
           ? '✓ CSV generado. Puedes importarlo en "Devoluciones".'
           : '✓ CSV generado SIN conexión: el costo promedio es el de cuando '

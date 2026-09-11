@@ -183,6 +183,64 @@ void main() {
     });
   });
 
+  // "Descargar lo que no se cargó": el archivo vuelve a Devoluciones sin
+  // repetir lo que ya entró, y cada línea dice por qué quedó por fuera.
+  group('lo que no se cargó', () {
+    const nuevaPendiente = PendienteDevolucion(
+      elemento: 'Válvula mariposa 4" wafer',
+      cantidad: 2,
+      nuevo: true,
+      unidad: 'UND',
+      costoEstimado: 185000,
+      estimadoPor: 'ing.perez@rpci.com.co',
+      motivo: 'Artículo NUEVO sin resolver',
+    );
+    const enCero = PendienteDevolucion(
+      elemento: 'Tubo PVC 2"',
+      cantidad: 3,
+      costoPromedio: 0,
+      motivo: 'Costo en \$0 sin asignar',
+    );
+
+    test('mismo formato de la remisión, más el porqué al final', () {
+      final filas = filasCsvPendientes([nuevaPendiente, enCero]);
+      expect(filas.first, [...encabezadoDevolucion, 'POR QUE NO SE CARGO']);
+      expect(filas[1], [
+        'Válvula mariposa 4" wafer', 2, '', 'SI', 'UND', 185000,
+        'ing.perez@rpci.com.co', 'Artículo NUEVO sin resolver',
+      ]);
+      expect(filas[2], ['Tubo PVC 2"', 3, 0, '', '', '', '', 'Costo en \$0 sin asignar']);
+    });
+
+    test('se vuelve a subir tal cual: el NUEVO conserva estimado y firma', () {
+      final leidas = leerArchivoDevolucion(
+          Reportes.bytesCsv(filasCsvPendientes([nuevaPendiente, enCero])),
+          'devolucion_pendiente.csv');
+      expect(leidas.length, 2);
+      expect(leidas[0].nuevo, isTrue);
+      expect(leidas[0].costoEstimado, 185000);
+      expect(leidas[0].estimadoPor, 'ing.perez@rpci.com.co');
+      expect(leidas[0].cantidad, 2);
+      expect(leidas[1].nuevo, isFalse);
+      expect(leidas[1].elemento, 'Tubo PVC 2"');
+      expect(leidas[1].cantidad, 3);
+    });
+
+    test('un porqué con punto y coma, comillas o números no desordena nada',
+        () {
+      const raro = PendienteDevolucion(
+        elemento: 'Tubo PVC 2"',
+        cantidad: 4,
+        motivo: 'Error al registrar: cantidad 999; costo "12500"',
+      );
+      final leidas = leerArchivoDevolucion(
+          Reportes.bytesCsv(filasCsvPendientes([raro])), 'p.csv');
+      expect(leidas.single.elemento, 'Tubo PVC 2"');
+      expect(leidas.single.cantidad, 4);
+      expect(leidas.single.nuevo, isFalse);
+    });
+  });
+
   group('regla 1: un NUEVO nunca se empareja solo', () {
     final catalogo = EmparejadorCatalogo([tubo, codo]);
 

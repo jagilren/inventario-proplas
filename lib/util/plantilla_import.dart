@@ -98,6 +98,52 @@ List<List<dynamic>> filasCsvDevolucion(
           ],
     ];
 
+/// Una línea que NO se cargó en Devoluciones, para bajarla y cargarla
+/// después sin repetir las que ya entraron.
+class PendienteDevolucion {
+  final String elemento;
+  final num cantidad;
+  /// Informativo, como en la remisión. Null si no se sabe.
+  final num? costoPromedio;
+  // Si llegó como NUEVO: lo que propuso el ingeniero, tal cual.
+  final bool nuevo;
+  final String? unidad;
+  final num? costoEstimado;
+  final String? estimadoPor;
+  /// Por qué no se cargó, en palabras.
+  final String motivo;
+
+  const PendienteDevolucion({
+    required this.elemento,
+    required this.cantidad,
+    this.costoPromedio,
+    this.nuevo = false,
+    this.unidad,
+    this.costoEstimado,
+    this.estimadoPor,
+    required this.motivo,
+  });
+}
+
+/// El archivo de lo que no se cargó: el MISMO formato de la remisión, para
+/// subirlo otra vez a Devoluciones tal cual, más una columna final que dice
+/// por qué no entró cada línea. El lector la ignora: busca sus columnas por
+/// nombre, y "POR QUE NO SE CARGO" no se confunde con ninguna.
+List<List<dynamic>> filasCsvPendientes(List<PendienteDevolucion> lineas) => [
+      [...encabezadoDevolucion, 'POR QUE NO SE CARGO'],
+      for (final p in lineas)
+        [
+          p.elemento,
+          p.cantidad,
+          p.nuevo ? '' : (p.costoPromedio?.round() ?? ''),
+          p.nuevo ? 'SI' : '',
+          p.nuevo ? (p.unidad ?? '') : '',
+          p.nuevo ? (p.costoEstimado?.round() ?? '') : '',
+          p.nuevo ? (p.estimadoPor ?? '') : '',
+          p.motivo,
+        ],
+    ];
+
 /// Lo que queda escrito en la observación del movimiento de una fila que
 /// llegó como NUEVO: quién propuso qué y a cuánto, y en qué terminó. Así el
 /// costo estimado se puede auditar después (plan-remision-elementos-nuevos,
@@ -229,11 +275,13 @@ Future<void> descargarPlantillaImport(
           else
             [e.nombre, 1],
     ];
-    await Reportes.descargarCsv(nombreArchivo, filas);
+    final guardado = await Reportes.descargarCsv(nombreArchivo, filas);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✓ Plantilla descargada. Llénala y vuelve a subirla.'),
-        duration: Duration(seconds: 3),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(guardado
+            ? '✓ Plantilla descargada. Llénala y vuelve a subirla.'
+            : 'No se guardó la plantilla: se canceló el diálogo.'),
+        duration: const Duration(seconds: 3),
       ));
     }
   } catch (e) {
