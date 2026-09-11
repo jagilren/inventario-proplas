@@ -24,12 +24,26 @@ class EditarElementoPage extends StatefulWidget {
 
   /// Se llama con el elemento recién creado (solo en creación exitosa).
   final void Function(Elemento)? onCreado;
+
+  /// Al crear: nombre y unidad ya puestos (los que propuso el ingeniero en
+  /// una remisión de devolución).
+  final String? nombreInicial;
+  final String? unidadInicial;
+
+  /// Al crear un artículo NUEVO desde una devolución: sin existencia
+  /// inicial, sin seriales y sin la marca de aprovechamiento. La existencia
+  /// y el costo los pone la propia devolución; una existencia inicial aquí
+  /// los contaría dos veces.
+  final bool desdeDevolucion;
   const EditarElementoPage({
     super.key,
     this.elemento,
     this.modoAdmin = false,
     this.forzarAprovechamiento = false,
     this.onCreado,
+    this.nombreInicial,
+    this.unidadInicial,
+    this.desdeDevolucion = false,
   });
   @override
   State<EditarElementoPage> createState() => _EditarElementoPageState();
@@ -68,7 +82,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   // Fotos elegidas antes de que el elemento exista (solo al crear).
   List<Uint8List> _fotosPendientes = [];
 
-  static const _unidades = ['UND', 'MT', 'Par', 'KG', 'LT'];
+  static const _unidades = unidadesElemento;
 
   bool get _esNuevo => widget.elemento == null;
 
@@ -76,9 +90,13 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   // (no editable) y no aplican seriales ni existencia inicial (esos
   // elementos reciben su stock aparte, como tramos, en ese módulo).
   bool get _flagAprovechamientoEditable => !widget.forzarAprovechamiento;
-  bool get _mostrarSeriales => _esNuevo && !widget.forzarAprovechamiento;
+  bool get _mostrarSeriales =>
+      _esNuevo && !widget.forzarAprovechamiento && !widget.desdeDevolucion;
   bool get _mostrarExistenciaInicial =>
-      _esNuevo && !_serializado && !widget.forzarAprovechamiento;
+      _esNuevo &&
+      !_serializado &&
+      !widget.forzarAprovechamiento &&
+      !widget.desdeDevolucion;
 
   /// ¿Se está registrando existencia inicial? Solo entonces hace falta
   /// saber en qué bodega está.
@@ -103,11 +121,14 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
   void initState() {
     super.initState();
     final e = widget.elemento;
-    _nombre = TextEditingController(text: e?.nombre ?? '');
+    _nombre = TextEditingController(text: e?.nombre ?? widget.nombreInicial ?? '');
     _sch = TextEditingController(text: e?.sch ?? '');
     _stockMin = TextEditingController(text: (e?.stockMinimo ?? 0).toString());
     _codigoBarras = TextEditingController(text: e?.codigoBarras ?? '');
-    _unidad = (e != null && _unidades.contains(e.unidad)) ? e.unidad : 'UND';
+    final unidadPedida = e?.unidad ?? widget.unidadInicial;
+    _unidad = (unidadPedida != null && _unidades.contains(unidadPedida))
+        ? unidadPedida
+        : 'UND';
     _activo = e?.activo ?? true;
     _serializado = e?.serializado ?? false;
     _esAprovechamiento = widget.forzarAprovechamiento
@@ -450,7 +471,7 @@ class _EditarElementoPageState extends State<EditarElementoPage> {
               onChanged: (v) => setState(() => _activo = v),
             ),
           ],
-          if (_esNuevo || widget.modoAdmin) ...[
+          if ((_esNuevo || widget.modoAdmin) && !widget.desdeDevolucion) ...[
             const Divider(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

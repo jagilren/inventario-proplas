@@ -9,6 +9,10 @@ import 'util/busqueda.dart';
 
 final supabase = Supabase.instance.client;
 
+/// Las unidades en que se maneja un artículo. Una sola lista para el
+/// formulario del catálogo y para proponer un artículo nuevo en la remisión.
+const List<String> unidadesElemento = ['UND', 'MT', 'Par', 'KG', 'LT'];
+
 class Elemento {
   final String id;
   final String nombre;

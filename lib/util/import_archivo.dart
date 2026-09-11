@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:csv/csv.dart';
 import '../data.dart';
+import 'dinero.dart';
 
 /// Lectura y emparejamiento de los archivos de carga masiva (Excel/CSV con
 /// columnas ELEMENTO y CANTIDAD).
@@ -129,6 +130,13 @@ double similitud(String a, String b) {
   if (a == b) return 1;
   if (a.isEmpty || b.isEmpty) return 0;
   if (!medidasCompatibles(a, b)) return _topeMedidaDistinta;
+  return _similitudTexto(a, b);
+}
+
+/// El parecido de las palabras, SIN mirar las medidas.
+double _similitudTexto(String a, String b) {
+  if (a == b) return 1;
+  if (a.isEmpty || b.isEmpty) return 0;
   final ta = a.split(' ').where((t) => t.isNotEmpty).toSet();
   final tb = b.split(' ').where((t) => t.isNotEmpty).toSet();
   double jac = 0;
@@ -170,8 +178,14 @@ String _celda(dynamic v) {
 /// - Columnas de MÁS: se ignoran, se ubican por el nombre del encabezado.
 /// - Sin encabezado reconocible: solo acepta el modo posicional (col A =
 ///   ELEMENTO, col B = CANTIDAD) si el archivo de verdad se ve así.
+///
+/// [extras]: columnas opcionales que se buscan por su nombre COMPLETO
+/// (normalizado: "COSTO ESTIMADO" → "costo estimado"). Su valor se agrega al
+/// final de cada fila, en ese orden; vacío si el archivo no la trae. Por
+/// nombre completo y no "que contenga": con dos columnas de costo, buscar
+/// "costo" se quedaría con la primera.
 List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas,
-    {bool conCosto = false}) {
+    {bool conCosto = false, List<String> extras = const []}) {
   final rows =
       filas.where((f) => f.any((c) => c.toString().trim().isNotEmpty)).toList();
   if (rows.isEmpty) {
@@ -179,6 +193,7 @@ List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas,
   }
 
   int idxHeader = -1, colElem = -1, colCant = -1, colCosto = -1;
+  final colExtras = List<int>.filled(extras.length, -1);
   for (var r = 0; r < rows.length; r++) {
     final fila = rows[r];
     int ce = -1, cc = -1, ck = -1;
@@ -197,6 +212,10 @@ List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas,
       colElem = ce;
       colCant = cc;
       colCosto = ck;
+      for (var c = 0; c < fila.length; c++) {
+        final i = extras.indexOf(normalizarTexto(fila[c].toString()));
+        if (i >= 0 && colExtras[i] < 0) colExtras[i] = c;
+      }
       break;
     }
   }
@@ -241,7 +260,13 @@ List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas,
         ? fila[colCosto].toString().trim()
         : '';
     if (texto.isEmpty && cant.isEmpty) continue;
-    datos.add([texto, cant, costo]);
+    datos.add([
+      texto,
+      cant,
+      costo,
+      for (final c in colExtras)
+        (c >= 0 && c < fila.length) ? fila[c].toString().trim() : '',
+    ]);
   }
   if (datos.isEmpty) {
     throw const FormatException(
@@ -250,7 +275,7 @@ List<List<dynamic>> _sinEncabezado(List<List<dynamic>> filas,
   return datos;
 }
 
-List<List<dynamic>> _leerXlsx(Uint8List bytes, bool conCosto) {
+List<List<dynamic>> _leerXlsx(Uint8List bytes) {
   final libro = Excel.decodeBytes(bytes);
   if (libro.tables.isEmpty) return [];
   final hoja = libro.tables[libro.tables.keys.first]!;
@@ -258,10 +283,10 @@ List<List<dynamic>> _leerXlsx(Uint8List bytes, bool conCosto) {
   for (final row in hoja.rows) {
     filas.add(row.map((c) => _celda(c?.value)).toList());
   }
-  return _sinEncabezado(filas, conCosto: conCosto);
+  return filas;
 }
 
-List<List<dynamic>> _leerCsvInterno(Uint8List bytes, bool conCosto) {
+List<List<dynamic>> _leerCsvInterno(Uint8List bytes) {
   String txt;
   try {
     txt = utf8.decode(bytes);
@@ -274,10 +299,15 @@ List<List<dynamic>> _leerCsvInterno(Uint8List bytes, bool conCosto) {
       .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
   final delim =
       primera.split(';').length > primera.split(',').length ? ';' : ',';
-  final filas = const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
+  return const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
       .convert(txt.replaceAll('\r\n', '\n'), fieldDelimiter: delim);
-  return _sinEncabezado(filas, conCosto: conCosto);
 }
+
+/// Las filas crudas del archivo, Excel o CSV según el nombre.
+List<List<dynamic>> _filasCrudas(Uint8List bytes, String nombre) =>
+    nombre.toLowerCase().endsWith('.csv')
+        ? _leerCsvInterno(bytes)
+        : _leerXlsx(bytes);
 
 /// Lee el archivo (Excel o CSV según el nombre) y devuelve las filas
 /// [textoElemento, cantidadTexto].
@@ -286,9 +316,66 @@ List<List<dynamic>> _leerCsvInterno(Uint8List bytes, bool conCosto) {
 /// rechaza las entradas sin costo, y es el que recalcula el promedio móvil).
 List<List<dynamic>> leerArchivoImport(Uint8List bytes, String nombre,
         {bool conCosto = false}) =>
-    nombre.toLowerCase().endsWith('.csv')
-        ? _leerCsvInterno(bytes, conCosto)
-        : _leerXlsx(bytes, conCosto);
+    _sinEncabezado(_filasCrudas(bytes, nombre), conCosto: conCosto);
+
+/// Una fila del archivo de DEVOLUCIÓN (el que genera la remisión). Puede
+/// ser un artículo del catálogo o uno NUEVO que propuso el ingeniero, con
+/// su unidad, su costo estimado y quién lo estimó.
+class FilaArchivoDevolucion {
+  final String elemento;
+  final num cantidad;
+  final bool nuevo;
+  final String? unidad;
+  final num? costoEstimado;
+  final String? estimadoPor;
+
+  const FilaArchivoDevolucion({
+    required this.elemento,
+    required this.cantidad,
+    this.nuevo = false,
+    this.unidad,
+    this.costoEstimado,
+    this.estimadoPor,
+  });
+}
+
+/// Con qué artículo del catálogo se carga una fila del archivo de
+/// devolución. Una fila NUEVO no se empareja NUNCA sola, aunque su nombre
+/// sea casi igual a otro: se cargaría como ese otro, en silencio, y al costo
+/// de ese otro. Queda (null, 0) y una persona decide.
+(Elemento?, double) emparejarFilaDevolucion(
+        FilaArchivoDevolucion fila, EmparejadorCatalogo catalogo) =>
+    fila.nuevo ? (null, 0) : catalogo.mejor(fila.elemento);
+
+/// "SI", "Sí", "X", "1"… marcan una fila como NUEVO. Vacío o "NO", no.
+bool _esSi(String v) =>
+    const {'si', 's', 'x', '1', 'true', 'verdadero'}.contains(normalizarTexto(v));
+
+/// Lee un archivo de devolución. Los de dos y tres columnas (sin NUEVO) se
+/// leen igual que siempre: todas sus filas son del catálogo.
+List<FilaArchivoDevolucion> leerArchivoDevolucion(
+    Uint8List bytes, String nombre) {
+  final datos = _sinEncabezado(_filasCrudas(bytes, nombre),
+      extras: const ['nuevo', 'unidad', 'costo estimado', 'estimado por']);
+  String? texto(dynamic v) {
+    final t = v.toString().trim();
+    return t.isEmpty ? null : t;
+  }
+
+  return [
+    for (final d in datos)
+      if (d[0].toString().trim().isNotEmpty)
+        FilaArchivoDevolucion(
+          elemento: d[0].toString().trim(),
+          cantidad: parseCantidad(d[1].toString()),
+          nuevo: _esSi(d[3].toString()),
+          unidad: texto(d[4]),
+          // Dinero: "185.000" son ciento ochenta y cinco mil (dinero.dart).
+          costoEstimado: leerPesos(d[5].toString()),
+          estimadoPor: texto(d[6]),
+        ),
+  ];
+}
 
 /// Empareja textos sueltos contra el catálogo, por parecido de nombre.
 /// Guarda los nombres ya normalizados para no repetir ese trabajo en cada
@@ -316,5 +403,41 @@ class EmparejadorCatalogo {
       if (bestScore == 1) break;
     }
     return (bestScore >= umbral ? best : null, bestScore);
+  }
+
+  /// Los [n] más parecidos que pasan de [minimo], del más al menos parecido.
+  /// Para mostrar "¿Es alguno de estos?" antes de aceptar un artículo nuevo:
+  /// casi siempre ya existe, escrito de otra forma.
+  ///
+  /// Aquí NO sirve [similitud]: con medidas distintas devuelve siempre el
+  /// mismo tope (0,45), y una válvula de 6" quedaría igual de "parecida" a
+  /// una de 4" que un tubo de PVC. Se ordena por las palabras, y la medida
+  /// distinta solo resta: la de 6" sí debe salir — el ingeniero pudo
+  /// equivocarse de medida — pero después de las que coinciden.
+  List<(Elemento, double)> parecidos(String texto,
+      {int n = 3, double minimo = 0.45}) {
+    final nq = normalizarTexto(texto);
+    if (nq.isEmpty) return const [];
+    double puntaje(String otro) {
+      final s = _similitudTexto(nq, otro);
+      return medidasCompatibles(nq, otro) ? s : s * 0.85;
+    }
+
+    final todos = <(Elemento, double)>[
+      for (var i = 0; i < catalogo.length; i++)
+        (catalogo[i], puntaje(_norm[i])),
+    ]..retainWhere((p) => p.$2 >= minimo);
+    todos.sort((a, b) => b.$2.compareTo(a.$2));
+    return todos.take(n).toList();
+  }
+
+  /// ¿Hay en el catálogo uno con EXACTAMENTE ese nombre (sin contar tildes,
+  /// mayúsculas ni espacios)? La base no deja crear otro igual.
+  Elemento? mismoNombre(String texto) {
+    final nq = normalizarTexto(texto);
+    for (var i = 0; i < catalogo.length; i++) {
+      if (_norm[i] == nq) return catalogo[i];
+    }
+    return null;
   }
 }

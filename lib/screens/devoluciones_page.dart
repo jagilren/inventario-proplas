@@ -10,6 +10,8 @@ import '../util/plantilla_import.dart';
 import '../widgets/selector_recargable.dart';
 import '../widgets/confirmar_descarte.dart';
 import '../util/dinero.dart';
+import '../widgets/remision_nuevo.dart';
+import 'editar_elemento_page.dart';
 
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 final _qty = NumberFormat.decimalPattern('es_CO');
@@ -26,7 +28,29 @@ class _FilaDev {
   // $0 de consumo al centro de costo aunque físicamente sí volvieron
   // unidades. `null` = usar el costo promedio del elemento, sin tocar.
   num? costoManual;
-  _FilaDev(this.textoOriginal, this.cantidad, {this.match, this.score = 0});
+
+  // Solo si la fila llegó marcada como NUEVO (un artículo que no está en el
+  // catálogo, propuesto en la remisión): plan-remision-elementos-nuevos.
+  final bool nuevo;
+  final String? unidadPropuesta;
+  final num? costoEstimado;
+  final String? estimadoPor;
+  /// Los parecidos del catálogo, para "¿Es alguno de estos?".
+  List<Elemento> parecidos;
+  /// Si se resolvió CREANDO el artículo en el catálogo.
+  bool creado = false;
+
+  _FilaDev(this.textoOriginal, this.cantidad,
+      {this.match,
+      this.score = 0,
+      this.nuevo = false,
+      this.unidadPropuesta,
+      this.costoEstimado,
+      this.estimadoPor,
+      this.parecidos = const []});
+
+  /// Llegó como NUEVO y nadie la ha resuelto: no se carga.
+  bool get nuevoPendiente => nuevo && match == null;
 
   num get costoEfectivo => costoManual ?? (match?.costoPromedio ?? 0);
 }
@@ -72,6 +96,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   String? _archivo;
   bool _recargandoBodegas = false;
   bool _recargandoCentros = false;
+  /// Crear artículos en el catálogo: admin y coordinador (RLS `cud_elem`).
+  bool _puedeCrear = false;
 
   /// Vuelven a pedir el catálogo al servidor: sirve cuando alguien crea una
   /// bodega o un centro de costo mientras esta pantalla ya estaba abierta.
@@ -111,6 +137,12 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     InventarioService.todosElementos().then((e) {
       if (mounted) setState(() => _emparejador = EmparejadorCatalogo(e));
     });
+    InventarioService.misRoles().then((r) {
+      if (mounted) {
+        setState(() => _puedeCrear =
+            r.contains(Roles.admin) || r.contains(Roles.coordinador));
+      }
+    });
   }
 
   // ---- Lectura del archivo ----
@@ -144,7 +176,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
 
     setState(() { _leyendo = true; _archivo = nombre; });
     try {
-      final crudas = leerArchivoImport(bytes, nombre);
+      final crudas = leerArchivoDevolucion(bytes, nombre);
       final filas = _emparejar(crudas);
       if (mounted) setState(() => _filas = filas);
     } on FormatException catch (e) {
@@ -189,18 +221,112 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   }
 
 
-  List<_FilaDev> _emparejar(List<List<dynamic>> crudas) {
+  List<_FilaDev> _emparejar(List<FilaArchivoDevolucion> crudas) {
     final out = <_FilaDev>[];
     final emp = _emparejador;
     if (emp == null) return out; // el catálogo aún no ha llegado
     for (final r in crudas) {
-      final texto = r[0].toString().trim();
-      if (texto.isEmpty) continue;
-      final cant = parseCantidad(r.length > 1 ? r[1].toString() : '');
-      final (match, score) = emp.mejor(texto);
-      out.add(_FilaDev(texto, cant, match: match, score: score));
+      final (match, score) = emparejarFilaDevolucion(r, emp);
+      if (r.nuevo) {
+        // Un NUEVO nunca se empareja solo (emparejarFilaDevolucion): una
+        // persona decide, con sus parecidos a la vista.
+        out.add(_FilaDev(r.elemento, r.cantidad,
+            nuevo: true,
+            unidadPropuesta: r.unidad,
+            costoEstimado: r.costoEstimado,
+            estimadoPor: r.estimadoPor,
+            parecidos: [for (final p in emp.parecidos(r.elemento)) p.$1]));
+        continue;
+      }
+      out.add(_FilaDev(r.elemento, r.cantidad, match: match, score: score));
     }
-    return out;
+    // Los NUEVOS primero: en una lista de 80 líneas, uno por resolver al
+    // final no se ve.
+    return [...out.where((f) => f.nuevo), ...out.where((f) => !f.nuevo)];
+  }
+
+  // ---- Artículos NUEVOS: resolverlos antes de cargar ----
+  Future<void> _resolverNuevo(_FilaDev f) async {
+    final r = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => HojaResolverNuevo(
+        propuesto: f.textoOriginal,
+        cantidad: f.cantidad,
+        unidad: f.unidadPropuesta,
+        costoEstimado: f.costoEstimado,
+        estimadoPor: f.estimadoPor,
+        parecidos: f.parecidos,
+        puedeCrear: _puedeCrear,
+      ),
+    );
+    if (!mounted || r == null) return;
+    if (r is Elemento) return _resolverConCatalogo(f, r);
+    switch (r as AccionNuevo) {
+      case AccionNuevo.buscar:
+        final sel = await showModalBottomSheet<Elemento>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const _BuscadorElemento(),
+        );
+        if (sel != null && mounted) _resolverConCatalogo(f, sel);
+      case AccionNuevo.crear:
+        await _crearEnCatalogo(f);
+      case AccionNuevo.quitar:
+        setState(() => _filas.remove(f));
+    }
+  }
+
+  /// Era un artículo del catálogo. Su costo es el promedio de ese artículo;
+  /// si está en $0, el estimado se propone como costo (la regla de siempre:
+  /// en $0 la línea exige un costo a mano).
+  void _resolverConCatalogo(_FilaDev f, Elemento e) {
+    setState(() {
+      f.match = e;
+      f.score = 1;
+      f.creado = false;
+      final est = f.costoEstimado;
+      f.costoManual =
+          (e.costoPromedio == 0 && est != null && est > 0) ? est : null;
+    });
+  }
+
+  /// Crea el artículo con el formulario del catálogo (nombre y unidad ya
+  /// puestos, sin existencia inicial: la pone esta carga) y la fila queda
+  /// lista a costo ESTIMADO, que se puede corregir tocando la cantidad.
+  Future<void> _crearEnCatalogo(_FilaDev f) async {
+    Elemento? creado;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditarElementoPage(
+          nombreInicial: f.textoOriginal,
+          unidadInicial: f.unidadPropuesta,
+          desdeDevolucion: true,
+          onCreado: (e) => creado = e,
+        ),
+      ),
+    );
+    final e = creado;
+    if (!mounted || e == null) return;
+    setState(() {
+      f.match = e;
+      f.score = 1;
+      f.creado = true;
+      f.costoManual = f.costoEstimado;
+      // Que los demás nuevos lo vean entre sus parecidos: si el archivo
+      // traía el mismo artículo dos veces, no se crea dos veces.
+      final emp = _emparejador;
+      if (emp != null) {
+        final nuevo = EmparejadorCatalogo([...emp.catalogo, e]);
+        _emparejador = nuevo;
+        for (final o in _filas) {
+          if (o.nuevoPendiente) {
+            o.parecidos = [for (final p in nuevo.parecidos(o.textoOriginal)) p.$1];
+          }
+        }
+      }
+    });
   }
 
   // ---- Corrección manual del emparejamiento ----
@@ -242,10 +368,16 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                 decoration: InputDecoration(
                   labelText: 'Costo unitario',
                   // Vacío: el aviso de siempre. Con algo escrito: cómo quedó
-                  // entendido ("45.000" = $45.000, no 45).
-                  helperText: pesosEntendidos(costoCtrl.text) ??
+                  // entendido ("45.000" = $45.000, no 45). Si la fila llegó
+                  // como NUEVO, además quién lo estimó y en cuánto.
+                  helperText: [
+                    ?pesosEntendidos(costoCtrl.text),
+                    if (fila.costoEstimado case final est?)
+                      'estimado por ${fila.estimadoPor ?? 'quien armó la '
+                          'remisión'}: ${_money.format(est)}',
+                  ].join(' · ').ifEmpty(
                       'Este elemento está en \$0 · sin esto la '
-                          'devolución no resta consumo del centro de costo',
+                          'devolución no resta consumo del centro de costo'),
                   helperMaxLines: 2,
                   border: const OutlineInputBorder(),
                 ),
@@ -290,7 +422,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       isScrollControlled: true,
       builder: (_) => const _BuscadorElemento(),
     );
-    if (sel != null) setState(() { fila.match = sel; fila.score = 1; });
+    if (sel == null) return;
+    if (fila.nuevo) return _resolverConCatalogo(fila, sel);
+    setState(() { fila.match = sel; fila.score = 1; });
   }
 
   // ---- Cargar (registrar las entradas) ----
@@ -326,6 +460,16 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
                   'para poder cargarlas.',
                   style: const TextStyle(color: Colors.red)),
             ],
+            if (_nuevosPendientes > 0) ...[
+              const SizedBox(height: 8),
+              Text('Se omiten $_nuevosPendientes artículo(s) NUEVO(S) sin '
+                  'resolver.',
+                  style: const TextStyle(color: Colors.red)),
+            ],
+            if (validas.any((f) => f.nuevo && f.costoManual != null)) ...[
+              const SizedBox(height: 8),
+              Text(_textoEstimados(validas)),
+            ],
           ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
@@ -347,9 +491,21 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           bodegaId: _bodega!.id,
           cantidad: f.cantidad,
           costoUnitario: f.costoEfectivo,
+          // D1 del plan: un artículo NUEVO también es devolución y le
+          // abona al centro de origen, como las demás filas.
           centroCostoId: _cc?.id,
           centroCostoDestinoId: _ccDestino?.id,
           referencia: 'DEVOLUCION',
+          observacion: f.nuevo
+              ? observacionArticuloNuevo(
+                  propuesto: f.textoOriginal,
+                  estimadoPor: f.estimadoPor,
+                  costoEstimado: f.costoEstimado,
+                  costoCargado: f.costoEfectivo,
+                  creado: f.creado,
+                  nombreFinal: f.match!.nombre,
+                )
+              : null,
         );
         cargados++;
       } catch (_) {
@@ -359,6 +515,8 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     final sinEmparejar = _sinEmparejar;
     final serializados = _filas.where((f) => f.match?.serializado ?? false).length;
     final omitidosPorCosto = _sinCosto;
+    final nuevosPendientes = _nuevosPendientes;
+    final nuevosCreados = validas.where((f) => f.creado).length;
     if (!mounted) return;
     setState(() { _cargando = false; _filas = []; _archivo = null; });
     await showDialog<void>(
@@ -372,6 +530,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               Text('• Sin costo (omitidos, no cargados): $omitidosPorCosto'),
             if (sinEmparejar > 0) Text('• Sin emparejar (omitidos): $sinEmparejar'),
             if (serializados > 0) Text('• Serializados (omitidos): $serializados'),
+            if (nuevosCreados > 0)
+              Text('• Artículos nuevos creados en el catálogo: $nuevosCreados'),
+            if (nuevosPendientes > 0)
+              Text('• Nuevos sin resolver (omitidos): $nuevosPendientes'),
             if (errores > 0) Text('• Con error: $errores'),
           ]),
         actions: [
@@ -392,7 +554,20 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   /// El nombre de la columna ELEMENTO no encontró nada parecido en el
   /// catálogo: la app no sabe qué artículo es, así que no puede cargarlo
   /// hasta que alguien lo elija a mano con el buscador.
-  int get _sinEmparejar => _filas.where((f) => f.match == null).length;
+  int get _sinEmparejar =>
+      _filas.where((f) => f.match == null && !f.nuevo).length;
+
+  /// Llegaron como NUEVO y nadie las ha resuelto.
+  int get _nuevosPendientes => _filas.where((f) => f.nuevoPendiente).length;
+
+  /// "2 artículo(s) nuevo(s) entran a costo ESTIMADO: $370.000." Para el
+  /// diálogo de confirmar: lo estimado se ve antes de cargarlo.
+  String _textoEstimados(List<_FilaDev> validas) {
+    final est = validas.where((f) => f.nuevo && f.costoManual != null);
+    final total = est.fold<num>(0, (a, f) => a + f.cantidad * f.costoEfectivo);
+    return '${est.length} artículo(s) nuevo(s) entran a costo ESTIMADO: '
+        '${_money.format(total)} en total.';
+  }
 
   /// Emparejadas, con cantidad y sin serializar, pero SIN costo (costo
   /// promedio del elemento en $0 y sin costo manual asignado todavía): no
@@ -467,8 +642,7 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
             padding: EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Text(
               'Estos dos centros aplican a TODO el archivo que subas abajo: '
-              'el Excel/CSV solo trae elemento y cantidad, no lleva centro '
-              'de costo por fila.',
+              'el Excel/CSV no lleva centro de costo por fila.',
               style: TextStyle(fontSize: 11.5, color: Colors.grey),
             ),
           ),
@@ -516,14 +690,16 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
           // Aviso visible ANTES de tocar "Cargar": antes solo se enteraba
           // de cuántas líneas quedaban por fuera hasta después de cargar
           // (o si notaba el renglón en rojo al desplazarse por la lista).
-          if (_sinEmparejar > 0 || _sinCosto > 0) _avisoCalidad(),
+          if (_sinEmparejar > 0 || _sinCosto > 0 || _nuevosPendientes > 0)
+            _avisoCalidad(),
           Expanded(
             child: _filas.isEmpty
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Sube un archivo con dos columnas: ELEMENTO y CANTIDAD.\n\n'
+                        'Sube el CSV de la remisión de devolución, o un '
+                        'archivo con las columnas ELEMENTO y CANTIDAD.\n\n'
                         'La app emparejará cada fila con un item de la base '
                         '(coincidencia aproximada). Las que no encuentre las '
                         'dejará en blanco para que las elijas con el buscador.',
@@ -568,6 +744,9 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
   /// notaba el renglón en rojo al desplazarse por una lista larga.
   Widget _avisoCalidad() {
     final partes = [
+      if (_nuevosPendientes > 0)
+        '$_nuevosPendientes artículo(s) NUEVO(S) por resolver (tócalos: ya '
+            'existían con otro nombre, o hay que crearlos)',
       if (_sinEmparejar > 0)
         '$_sinEmparejar artículo(s) no reconocido(s) (el sistema no '
             'encontró con qué emparejarlos)',
@@ -601,7 +780,35 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
     );
   }
 
+  /// Una fila que llegó como NUEVO y falta resolver. Dice con TEXTO qué es
+  /// y qué falta (no solo con un color), y tocarla abre la hoja de resolver.
+  Widget _filaNuevaWidget(_FilaDev f) {
+    final esquema = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(Icons.fiber_new_outlined, color: esquema.tertiary),
+      title: Text(f.textoOriginal),
+      subtitle: Text(
+        [
+          'NUEVO por resolver',
+          '${_qty.format(f.cantidad)} ${f.unidadPropuesta ?? ''}'.trim(),
+          if (f.costoEstimado != null)
+            'estimado ${_money.format(f.costoEstimado)} c/u',
+          if (f.estimadoPor != null) 'por ${f.estimadoPor}',
+        ].join(' · '),
+        style: TextStyle(
+            color: esquema.tertiary, fontWeight: FontWeight.w600, fontSize: 13),
+      ),
+      trailing: IconButton(
+        icon: const Icon(Icons.rule, size: 20),
+        tooltip: 'Resolver ${f.textoOriginal}',
+        onPressed: () => _resolverNuevo(f),
+      ),
+      onTap: () => _resolverNuevo(f),
+    );
+  }
+
   Widget _filaWidget(_FilaDev f) {
+    if (f.nuevoPendiente) return _filaNuevaWidget(f);
     final m = f.match;
     final sinCosto = m != null && !m.serializado && f.costoEfectivo <= 0;
     final Color color = m == null
@@ -657,6 +864,14 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
               ),
             ),
           ]),
+          // De dónde salió: quien revise la carga tiene que saber que esta
+          // línea llegó como NUEVO y qué se decidió.
+          if (f.nuevo)
+            Text(
+                f.creado
+                    ? 'Llegó como NUEVO · creado en el catálogo'
+                    : 'Llegó como NUEVO: "${f.textoOriginal}"',
+                style: const TextStyle(fontSize: 12)),
         ],
       ),
       trailing: Row(
@@ -677,6 +892,10 @@ class _DevolucionesPageState extends State<DevolucionesPage> {
       onTap: () => _corregir(f),
     );
   }
+}
+
+extension on String {
+  String ifEmpty(String otro) => isEmpty ? otro : this;
 }
 
 /// Buscador de elementos (para corregir el emparejamiento manualmente).
