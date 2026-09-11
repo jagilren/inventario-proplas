@@ -860,6 +860,36 @@ class ActivosService {
   // Referencias (catálogo de modelos)
   // ---------------------------------------------------------------------
 
+  /// De estos seriales, cuáles ya existen. Se pregunta solo por los del
+  /// archivo, de a 200: traer TODOS los seriales de la base no escala.
+  static Future<Set<String>> serialesQueYaExisten(List<String> seriales) async {
+    final unicos = seriales.where((s) => s.isNotEmpty).toSet().toList();
+    final hay = <String>{};
+    for (var i = 0; i < unicos.length; i += 200) {
+      final res = await supabase
+          .from('activos')
+          .select('serial')
+          .inFilter('serial', unicos.sublist(i, (i + 200).clamp(0, unicos.length)));
+      hay.addAll([for (final r in (res as List)) r['serial'] as String]);
+    }
+    return hay;
+  }
+
+  /// Carga un LOTE de equipos en una sola operación de la base
+  /// (importar_equipos, schema_v70): entran todos o ninguno. Devuelve
+  /// cuántos equipos y cuántas referencias nuevas se crearon.
+  static Future<({int equipos, int referenciasNuevas})> importarEquipos(
+      List<Map<String, dynamic>> lote) async {
+    final res = await _conMensaje(
+        () => supabase.rpc('importar_equipos', params: {'p_equipos': lote}));
+    final m = res as Map<String, dynamic>;
+    revision.value++;
+    return (
+      equipos: ((m['equipos'] ?? 0) as num).toInt(),
+      referenciasNuevas: ((m['referencias_nuevas'] ?? 0) as num).toInt(),
+    );
+  }
+
   static Future<List<ActivoReferencia>> referencias({
     int offset = 0,
     int limit = 100,

@@ -303,6 +303,13 @@ List<List<dynamic>> _leerCsvInterno(Uint8List bytes) {
       .convert(txt.replaceAll('\r\n', '\n'), fieldDelimiter: delim);
 }
 
+/// Las filas del archivo como texto, sin interpretar: para las cargas que
+/// ubican sus columnas por su cuenta (la de equipos, import_equipos.dart).
+List<List<String>> leerFilasCrudas(Uint8List bytes, String nombre) => [
+      for (final f in _filasCrudas(bytes, nombre))
+        [for (final c in f) c.toString().trim()],
+    ];
+
 /// Las filas crudas del archivo, Excel o CSV según el nombre.
 List<List<dynamic>> _filasCrudas(Uint8List bytes, String nombre) =>
     nombre.toLowerCase().endsWith('.csv')

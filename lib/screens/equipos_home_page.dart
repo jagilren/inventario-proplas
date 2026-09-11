@@ -10,6 +10,7 @@ import 'perfil_page.dart';
 import 'activo_referencias_page.dart';
 import 'activo_terceros_page.dart';
 import 'activo_alta_page.dart';
+import 'importar_equipos_page.dart';
 import 'activo_detalle_page.dart';
 import 'activo_movimiento_page.dart';
 import 'activos_de_referencia_page.dart';
@@ -120,6 +121,12 @@ class _EquiposHomePageState extends State<EquiposHomePage> {
               title: const Text('Terceros'),
               subtitle: const Text('Talleres, clientes y proveedores'),
               onTap: () => _ir(const ActivoTercerosPage()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Importar equipos'),
+              subtitle: const Text('Muchos a la vez, desde Excel o CSV'),
+              onTap: () => _ir(const ImportarEquiposPage()),
             ),
             const Divider(),
             // Ítems COMPARTIDOS con el Drawer de Inventario (sección 8.3).

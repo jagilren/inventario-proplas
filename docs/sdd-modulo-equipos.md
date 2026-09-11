@@ -748,6 +748,41 @@ Dos detalles:
   decir **"Nueva Ref."**, a pedido del usuario: "Nueva" a secas no decía nueva
   qué. Como "Ref." es una abreviatura, el botón lleva la descripción completa
   para el lector de pantalla (*"Crear una nueva referencia"*).
+- *(2026-09-11.)* En la pantalla de un componente de un kit, el botón
+  **"Registrar movimiento"** pasó a decir **"Registrar movimiento
+  componente"**, a pedido del usuario: en la ficha del equipo también se
+  registran movimientos, y así se distingue cuál es cuál. En un celular de
+  360 px con la letra al doble el texto baja de línea sin cortarse (probado).
+
+### 5.7 Cargar muchos equipos a la vez
+
+*(2026-09-11, `schema_v70`. Diseño completo en `docs/plan-importar-equipos.md`.)*
+El catálogo real está en un Excel de 1.414 filas; crearlos uno por uno no es
+realista. Menú del módulo → **Importar equipos**: una plantilla (Excel o CSV)
+para equipos de referencias sencillas o **kits con sus componentes** — el kit
+en una fila y sus componentes en las filas de abajo, con el mismo SERIAL.
+
+Tres decisiones que salen de lecciones anteriores de este SDD:
+
+- **En la base, no en la app** (§9.7). El alta de un equipo eran tres llamadas
+  desde la app (equipo, entrada, componentes). Con cientos de equipos, un
+  corte a mitad dejaría equipos sin su entrada o kits sin componentes. La
+  función `importar_equipos` hace las tres cosas en una transacción, y la app
+  la llama **de a 100**: la base corta a los 8 segundos, y 100 equipos
+  **medidos** tardan 0,86.
+- **Nada entra sin revisión** (§9.5, nada falla en silencio). Al subir el
+  archivo se ve cada fila: qué entra, qué **referencias se crearán** (una sola
+  vez, con las del catálogo a las que se parecen) y qué tiene problemas,
+  escritos en la fila.
+- **Volver a cargar no duplica.** El serial es único en la base y la revisión
+  lo mira: si un lote falla a mitad, se sube el mismo archivo otra vez y solo
+  entra lo que faltaba.
+
+Y una que salió al probar: **una referencia nueva es kit si cualquiera de sus
+equipos trae componentes**, pero eso se decidía fila por fila, y el resultado
+dependía del orden del Excel — un equipo arriba sin componentes se trataba
+como sencillo. Ahora se decide con todas las filas leídas, y hay una prueba
+que pone las filas en el orden "malo".
 
 ---
 
