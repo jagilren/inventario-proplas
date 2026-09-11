@@ -147,6 +147,12 @@ class ActivoDisponibilidad {
   final String? ubicacionTerceroId;
   final DateTime? ubicacionDesde;
 
+  /// En cuál de los tres grupos cae: disponible, no disponible o vendido.
+  /// La misma regla que FiltroEquipos.incluye.
+  FiltroEquipos get categoria => activo.estado == 'entregado'
+      ? FiltroEquipos.vendidos
+      : (disponible ? FiltroEquipos.disponibles : FiltroEquipos.noDisponibles);
+
   ActivoDisponibilidad.fromMap(Map<String, dynamic> m)
     : activo = Activo.fromMap(m),
       disponible = (m['disponible'] ?? false) as bool,
@@ -744,13 +750,34 @@ class ResumenReferencia {
 /// Los filtros de las unidades de una referencia (EQUIPOS POR REFERENCIA).
 /// Se excluyen entre sí: un equipo es disponible, no disponible o vendido.
 enum FiltroEquipos {
-  todas('Todas'),
-  disponibles('Disponibles'),
-  noDisponibles('No disponibles'),
-  vendidos('Vendidas');
+  todas('Todas',
+      explicacion: 'Todas las unidades de esta referencia, en cualquier '
+          'estado.',
+      unidad: ''),
+  disponibles('Disponibles',
+      explicacion: 'Operativas, en una bodega nuestra y listas para '
+          'entregar.',
+      unidad: 'Disponible: operativo, en una bodega nuestra y listo para '
+          'entregar.'),
+  noDisponibles('No disponibles',
+      explicacion: 'Son nuestras pero no se pueden entregar ahora: en '
+          'taller, de baja o para repuestos.',
+      unidad: 'No disponible: es nuestro, pero está en taller, de baja o '
+          'para repuestos.'),
+  vendidos('Vendidas',
+      explicacion: 'Entregadas a un centro de costo: ya no son nuestras.',
+      unidad: 'Vendido: entregado a un centro de costo, ya no es nuestro.');
 
-  const FiltroEquipos(this.etiqueta);
+  const FiltroEquipos(this.etiqueta,
+      {required this.explicacion, required this.unidad});
   final String etiqueta;
+
+  /// El texto corto que aparece al mantener presionado el filtro (o al
+  /// pasar el mouse en el PC). Una sola fuente para los filtros y la ayuda.
+  final String explicacion;
+
+  /// Lo mismo, en singular, para el ícono de estado de una unidad.
+  final String unidad;
 
   /// Si una fila de `activos_disponibilidad` entra en el filtro. La MISMA
   /// regla que la consulta a la base (`ActivosService.disponibles`): la usa

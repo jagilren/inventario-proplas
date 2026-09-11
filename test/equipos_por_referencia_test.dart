@@ -176,6 +176,76 @@ void main() {
     });
   });
 
+  // La explicación de cada filtro: al MANTENER PRESIONADO en el celular (no
+  // hay "pasar el mouse") o al pasar el mouse en el PC. Flota, y se va sola.
+  group('explicación al mantener presionado', () {
+    testWidgets('cada filtro tiene su explicación', (t) async {
+      await _montar(t,
+          FiltrosEquipos(valor: FiltroEquipos.todas, onCambio: (_) {}));
+      for (final f in FiltroEquipos.values) {
+        expect(find.byTooltip(f.explicacion), findsOneWidget,
+            reason: f.etiqueta);
+      }
+    });
+
+    testWidgets('aparece al mantener presionado, NO filtra, y se va sola',
+        (t) async {
+      FiltroEquipos? elegido;
+      await _montar(
+          t,
+          FiltrosEquipos(
+              valor: FiltroEquipos.todas, onCambio: (f) => elegido = f));
+      await t.longPress(find.text('Vendidas'));
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text(FiltroEquipos.vendidos.explicacion), findsOneWidget);
+      // Mantener presionado es para leer, no para filtrar.
+      expect(elegido, isNull);
+      // Se va sola, sin tener que tocar nada.
+      await t.pump(duracionAyudaEquipos + const Duration(seconds: 1));
+      await t.pumpAndSettle();
+      expect(find.text(FiltroEquipos.vendidos.explicacion), findsNothing);
+    });
+
+    testWidgets('el ícono de estado de una unidad también explica', (t) async {
+      await _montar(t,
+          LineaUnidad(unidad: ActivoDisponibilidad.fromMap(_vendido), onTap: () {}));
+      await t.longPress(find.byIcon(Icons.sell_outlined));
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text(FiltroEquipos.vendidos.unidad), findsOneWidget);
+    });
+
+    test('el ícono explica el MISMO grupo en que cae la unidad', () {
+      for (final f in [_disponible, _enTaller, _repuestos, _vendido]) {
+        final d = ActivoDisponibilidad.fromMap(f);
+        expect(d.categoria.incluye(f), isTrue, reason: '${f['serial']}');
+      }
+    });
+
+    testWidgets('360 px con la letra al DOBLE: la explicación no desborda',
+        (t) async {
+      await _montar(
+          t, FiltrosEquipos(valor: FiltroEquipos.todas, onCambio: (_) {}),
+          escalaTexto: 2.0);
+      await t.longPress(find.textContaining('No disponibles'));
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.text(FiltroEquipos.noDisponibles.explicacion), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('con la explicación abierta: 48 dp, nombres y contraste',
+        (t) async {
+      final h = t.ensureSemantics();
+      await _montar(t,
+          FiltrosEquipos(valor: FiltroEquipos.todas, onCambio: (_) {}));
+      await t.longPress(find.text('Disponibles'));
+      await t.pump(const Duration(milliseconds: 300));
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(t, meetsGuideline(textContrastGuideline));
+      h.dispose();
+    });
+  });
+
   group('LineaUnidad', () {
     testWidgets('un vendido lo DICE con texto y no muestra bodega', (t) async {
       await _montar(

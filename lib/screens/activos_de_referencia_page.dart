@@ -8,6 +8,21 @@ import 'activo_detalle_page.dart';
 // Formato de dinero de toda la app: signo peso y separador de miles.
 final _money = NumberFormat.currency(locale: 'es_CO', symbol: r'$', decimalDigits: 0);
 
+/// Cuánto se queda a la vista la explicación de un filtro o de un estado.
+/// En el celular no hay "pasar el mouse": aparece al MANTENER PRESIONADO y se
+/// va sola; flota encima, así que no corre nada de la pantalla.
+const duracionAyudaEquipos = Duration(seconds: 4);
+
+final _temaAyuda = TooltipThemeData(
+  showDuration: duracionAyudaEquipos,
+  // En el PC, al pasar el mouse: sin esperar tanto que parezca que no hay.
+  waitDuration: Duration(milliseconds: 400),
+  // Que no tape el dedo: sale debajo y con margen.
+  preferBelow: true,
+  verticalOffset: 24,
+  textStyle: TextStyle(fontSize: 13, color: Colors.white),
+);
+
 /// Nivel 2 del módulo: las unidades individuales de una referencia, con los
 /// filtros rápidos Todas / Disponibles / No disponibles / Vendidos.
 ///
@@ -294,19 +309,25 @@ class FiltrosEquipos extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            for (final f in FiltroEquipos.values)
-              ChoiceChip(
-                label: Text(cuentas == null
-                    ? f.etiqueta
-                    : '${f.etiqueta} (${cuentas!.cuantas(f)})'),
-                selected: valor == f,
-                onSelected: (_) => onCambio(f),
-              ),
-          ],
+        TooltipTheme(
+          data: _temaAyuda,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final f in FiltroEquipos.values)
+                ChoiceChip(
+                  label: Text(cuentas == null
+                      ? f.etiqueta
+                      : '${f.etiqueta} (${cuentas!.cuantas(f)})'),
+                  // Mantener presionado (celular) o pasar el mouse (PC).
+                  // El lector de pantalla lo lee junto con el nombre.
+                  tooltip: f.explicacion,
+                  selected: valor == f,
+                  onSelected: (_) => onCambio(f),
+                ),
+            ],
+          ),
         ),
         if (valor == FiltroEquipos.vendidos)
           Padding(
@@ -339,15 +360,23 @@ class LineaUnidad extends StatelessWidget {
     final a = unidad.activo;
     final esquema = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(
-        vendido
-            ? Icons.sell_outlined
-            : (unidad.disponible
-                ? Icons.check_circle
-                : Icons.remove_circle_outline),
-        color: vendido
-            ? esquema.tertiary
-            : (unidad.disponible ? Colors.green : Colors.grey),
+      // El ícono explica qué significa al mantenerlo presionado; tocar la
+      // fila sigue abriendo el equipo.
+      leading: TooltipTheme(
+        data: _temaAyuda,
+        child: Tooltip(
+          message: unidad.categoria.unidad,
+          child: Icon(
+            vendido
+                ? Icons.sell_outlined
+                : (unidad.disponible
+                    ? Icons.check_circle
+                    : Icons.remove_circle_outline),
+            color: vendido
+                ? esquema.tertiary
+                : (unidad.disponible ? Colors.green : Colors.grey),
+          ),
+        ),
       ),
       title: Text(a.serial),
       subtitle: Text([
