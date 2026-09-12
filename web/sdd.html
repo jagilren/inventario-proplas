@@ -1,0 +1,1761 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Documento interno: que no lo indexen los buscadores. -->
+<meta name="robots" content="noindex, nofollow">
+<title>SDD · Módulo de Equipos · Inventario PROPLAS</title>
+<style>
+  /* Generado por tool/sdd_a_web.dart — no editar a mano: se sobrescribe. */
+  :root{
+    --teal:#00695c; --teal-600:#00897b; --teal-ink:#004d40;
+    --ink:#132320; --muted:#5c6d69; --line:#e0e7e5;
+    --card:#ffffff; --canvas:#eef2f1; --chip:#eaf1ef; --code:#f4f7f6;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --teal:#4db6ac; --teal-600:#80cbc4; --teal-ink:#b2dfdb;
+      --ink:#e6efed; --muted:#9fb3af; --line:#2a3b38;
+      --card:#132320; --canvas:#0d1817; --chip:#1b2c29; --code:#162422;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.65 var(--sans)}
+  .marco{max-width:1180px;margin:0 auto;padding:24px 16px 64px;display:grid;
+    grid-template-columns:260px minmax(0,1fr);gap:32px;align-items:start}
+  /* En celular el índice se va arriba y se pliega. */
+  @media (max-width:860px){ .marco{grid-template-columns:minmax(0,1fr);gap:16px} }
+
+  header.tapa{grid-column:1/-1;background:var(--teal);color:#fff;border-radius:14px;
+    padding:22px 24px;margin-bottom:8px}
+  header.tapa h1{margin:0 0 4px;font-size:24px;letter-spacing:.2px}
+  header.tapa p{margin:0;opacity:.9;font-size:14px}
+
+  nav.indice{position:sticky;top:16px;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:14px;max-height:calc(100vh - 32px);overflow:auto}
+  @media (max-width:860px){ nav.indice{position:static;max-height:none} }
+  nav.indice strong{display:block;font-size:12px;text-transform:uppercase;
+    letter-spacing:.8px;color:var(--muted);margin:0 0 10px}
+  nav.indice a{display:block;padding:5px 8px;border-radius:8px;text-decoration:none;
+    color:var(--ink);font-size:13.5px;line-height:1.35}
+  nav.indice a:hover{background:var(--chip);color:var(--teal-ink)}
+  nav.indice a.n3{padding-left:22px;font-size:12.5px;color:var(--muted)}
+
+  main{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:8px 28px 32px;min-width:0}
+  @media (max-width:600px){ main{padding:8px 16px 24px} }
+  main h2{margin:34px 0 10px;padding-top:10px;border-top:1px solid var(--line);
+    font-size:22px;color:var(--teal-ink)}
+  main h2:first-of-type{border-top:0}
+  main h3{margin:26px 0 8px;font-size:17.5px;color:var(--teal)}
+  main h4{margin:18px 0 6px;font-size:15px}
+  main p,main li{overflow-wrap:break-word}
+  main a{color:var(--teal);text-decoration-thickness:1px}
+  main code{font:13.5px/1.5 var(--mono);background:var(--code);padding:1px 5px;
+    border-radius:5px}
+  main pre{background:var(--code);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;overflow-x:auto}
+  main pre code{background:none;padding:0}
+  main blockquote{margin:16px 0;padding:12px 16px;background:var(--chip);
+    border-left:4px solid var(--teal);border-radius:0 10px 10px 0}
+  main blockquote p{margin:6px 0}
+  /* Las tablas del SDD son anchas: su propio scroll, y el cuerpo no se mueve. */
+  .tabla{overflow-x:auto;margin:16px 0}
+  table{border-collapse:collapse;width:100%;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--chip);color:var(--teal-ink)}
+  hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+  img{max-width:100%}
+
+  /* Para imprimir o guardar en PDF: sin índice y sin cajas. */
+  @media print{
+    body{background:#fff}
+    .marco{display:block;max-width:none;padding:0}
+    nav.indice{display:none}
+    header.tapa{background:none;color:#000;padding:0;border-radius:0}
+    main{border:0;border-radius:0;padding:0}
+    main h2{page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="marco">
+  <header class="tapa">
+    <h1>SDD · Módulo de Equipos</h1>
+    <p>Inventario PROPLAS · documento de diseño · generado el 2026-09-12</p>
+  </header>
+  <nav class="indice">
+    <strong>Contenido</strong>
+      <a class="n2" href="#antes-de-empezar-qu-es-y-qu-no-es-un-sdd">Antes de empezar: qué es y qué NO es un SDD</a>
+      <a class="n2" href="#1-objetivo-y-alcance">1. Objetivo y alcance</a>
+      <a class="n2" href="#2-relacin-con-lo-que-ya-existe">2. Relación con lo que ya existe</a>
+      <a class="n2" href="#3-modelo-de-datos">3. Modelo de datos</a>
+      <a class="n2" href="#4-las-reglas-de-negocio">4. Las reglas de negocio</a>
+      <a class="n2" href="#5-interfaz">5. Interfaz</a>
+      <a class="n3" href="#51-buscar-un-equipo-por-lo-que-el-usuario-se-sabe-no-por-lo-que-la-base-guarda">5.1 Buscar un equipo: por lo que el usuario se sabe, no por lo que la base guarda</a>
+      <a class="n3" href="#52-origen--destino-el-formato-ya-exista">5.2 Origen ➡️ destino: el formato ya existía</a>
+      <a class="n3" href="#53-accesibilidad-medida-no-supuesta">5.3 Accesibilidad: medida, no supuesta</a>
+      <a class="n3" href="#54-equipos-por-referencia-disponibles-no-disponibles-y-vendidas">5.4 Equipos por referencia: disponibles, no disponibles y vendidas</a>
+      <a class="n3" href="#55-un-adorno-que-se-puede-quitar-el-cono-de-cada-referencia">5.5 Un adorno que se puede quitar: el ícono de cada referencia</a>
+      <a class="n3" href="#56-ajustes-de-texto">5.6 Ajustes de texto</a>
+      <a class="n3" href="#57-cargar-muchos-equipos-a-la-vez">5.7 Cargar muchos equipos a la vez</a>
+      <a class="n3" href="#58-disponibles-una-lista-de-seriales-no-se-lee-agrupada-por-referencia-s">5.8 Disponibles: una lista de seriales no se lee; agrupada por referencia, sí</a>
+      <a class="n2" href="#6-permisos">6. Permisos</a>
+      <a class="n2" href="#7-fases-de-entrega">7. Fases de entrega</a>
+      <a class="n2" href="#8-riesgos">8. Riesgos</a>
+      <a class="n2" href="#9-los-errores-reales-los-que-se-atajaron--y-qu-ensea-cada-uno">9. Los errores reales, los que se atajaron — y qué enseña cada uno</a>
+      <a class="n3" href="#91-el-error-que-el-sdd-s-haba-previsto">9.1 El error que el SDD SÍ había previsto</a>
+      <a class="n3" href="#92-el-error-que-ninguna-prueba-de-base-detect">9.2 El error que ninguna prueba de base detectó</a>
+      <a class="n3" href="#93-el-error-de-no-mirar-al-lado">9.3 El error de no mirar al lado</a>
+      <a class="n3" href="#94-el-error-de-la-regla-escrita-mal">9.4 El error de la regla escrita mal</a>
+      <a class="n3" href="#95-el-error-que-introdujo-el-arreglo-del-91">9.5 El error que introdujo el arreglo del 9.1</a>
+      <a class="n3" href="#96-el-error-de-arreglar-solo-la-mitad-de-un-camino">9.6 El error de arreglar solo la mitad de un camino</a>
+      <a class="n3" href="#97-el-error-de-unificar-desde-una-sola-puerta">9.7 El error de unificar desde una sola puerta</a>
+      <a class="n3" href="#98-los-que-se-atajaron-antes-de-publicar">9.8 Los que se atajaron antes de publicar</a>
+      <a class="n3" href="#99-el-punto-de-miles-que-vala-0">9.9 El punto de miles que valía $0</a>
+      <a class="n2" href="#10-plantilla-para-el-prximo-mdulo">10. Plantilla para el próximo módulo</a>
+      <a class="n2" href="#11-cmo-mantenerlo-vivo">11. Cómo mantenerlo vivo</a>
+  </nav>
+  <main>
+<h1 id="sdd-del-mdulo-de-equipos--y-cmo-escribir-uno">SDD del Módulo de Equipos — y cómo escribir uno</h1>
+<p>Este documento hace dos cosas a la vez:</p>
+<ol>
+<li><strong>Es</strong> el Documento de Diseño de Software (SDD) del Módulo de Equipos.</li>
+<li><strong>Enseña</strong> a escribir uno, usando este módulo como ejemplo trabajado.</li>
+</ol>
+<p>Cada sección trae primero <strong>qué va ahí y por qué</strong>, y después <strong>el contenido
+real</strong> del módulo. Los ejemplos de errores son de verdad: pasaron en este
+desarrollo, en septiembre de 2026. Un tutorial con ejemplos inventados no
+enseña; los tropiezos reales sí.</p>
+<hr />
+<h2 id="antes-de-empezar-qu-es-y-qu-no-es-un-sdd">Antes de empezar: qué es y qué NO es un SDD</h2>
+<p>Un SDD responde <strong>&quot;cómo va a estar construido esto y por qué así&quot;</strong>. Se escribe
+<em>antes</em> de programar y se corrige <em>durante</em>.</p>
+<p><strong>No es</strong> un manual de usuario, ni la documentación del código (esa la da el
+código bien escrito), ni una lista de tareas.</p>
+<p><strong>La prueba de fuego:</strong> si dentro de un año alguien pregunta <em>&quot;¿por qué esto se
+hizo así y no de la otra forma?&quot;</em>, el SDD debe responderlo. Si solo dice <strong>qué</strong>
+se hizo, es documentación redundante — eso ya lo dice el código.</p>
+<blockquote>
+<h3 id="la-regla-que-ms-valor-da">La regla que más valor da</h3>
+<p><strong>Escribe el PORQUÉ, no solo el QUÉ.</strong></p>
+<p>Malo: <em>&quot;activo_ubicaciones guarda la ubicación física.&quot;</em>
+Bueno: <em>&quot;activo_ubicaciones es una tabla aparte y no una columna en <code>activos</code>
+porque hay que conservar el historial: dónde estuvo el equipo, desde cuándo y
+quién lo movió. Una columna solo guarda el presente.&quot;</em></p>
+<p>El primero lo deduces leyendo el código. El segundo no.</p>
+</blockquote>
+<hr />
+<h2 id="1-objetivo-y-alcance">1. Objetivo y alcance</h2>
+<p><strong>Qué va aquí:</strong> el problema que se resuelve, en lenguaje del negocio. Y —tan
+importante como eso— <strong>lo que queda FUERA</strong>. Un alcance sin fronteras se
+desborda solo.</p>
+<p><strong>El del Módulo de Equipos:</strong></p>
+<p>Controlar las máquinas de RPCI (bombas, sopladores, motores) que hoy no están en
+ningún sistema: dónde están, en qué estado, cuánto valen y a quién se
+entregaron.</p>
+<p><strong>Fuera de alcance, a propósito:</strong></p>
+<ul>
+<li>No maneja consumibles ni repuestos sueltos — eso es el módulo de Inventario.</li>
+<li>No es un sistema de mantenimiento preventivo con alertas por horas de uso.</li>
+<li>Los terceros (talleres, clientes) <strong>no</strong> son usuarios de la app; nunca inician
+sesión. Son datos de catálogo.</li>
+</ul>
+<blockquote>
+<p><strong>Por qué escribir lo que queda fuera:</strong> durante el desarrollo surgió tres
+veces la tentación de meterle cosas del módulo de Inventario. Tener la
+frontera escrita permitió decir &quot;eso no va aquí&quot; sin discutirlo de nuevo cada
+vez.</p>
+</blockquote>
+<hr />
+<h2 id="2-relacin-con-lo-que-ya-existe">2. Relación con lo que ya existe</h2>
+<p><strong>Qué va aquí:</strong> qué comparte y qué NO comparte con el resto del sistema. Es la
+sección que evita el error más caro: reutilizar algo que se parece pero no es lo
+mismo.</p>
+<p><strong>El del módulo:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Comparte</th>
+<th>No comparte</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bodegas, centros de costo, usuarios y roles</td>
+<td>Tablas de inventario (<code>elementos</code>, <code>movimientos</code>)</td>
+</tr>
+<tr>
+<td>El mecanismo de auditoría (<code>fn_auditoria</code>)</td>
+<td>Los informes (familia propia)</td>
+</tr>
+<tr>
+<td>Los widgets de la interfaz</td>
+<td>El concepto de &quot;existencia&quot;</td>
+</tr>
+</tbody>
+</table>
+<p><strong>La decisión clave, y su porqué:</strong> el módulo <strong>no tiene ninguna llave foránea
+hacia <code>elementos</code></strong>. La tentación era modelar un equipo como &quot;un elemento
+serializado más&quot;, reutilizando toda la maquinaria de inventario.</p>
+<p>Se descartó por una <strong>medición, no por intuición</strong>: se contaron las bombas y
+motores en el catálogo de elementos y había <strong>cero</strong>. Los equipos nunca
+estuvieron ahí. Forzar la reutilización habría contaminado el inventario de
+piping con reglas que no le aplican.</p>
+<blockquote>
+<p><strong>Lección de método:</strong> cuando dudes entre reutilizar y separar, <strong>busca un dato
+que decida</strong>. &quot;Cero equipos en el catálogo actual&quot; cerró una discusión que
+podía durar una semana.</p>
+</blockquote>
+<hr />
+<h2 id="3-modelo-de-datos">3. Modelo de datos</h2>
+<p><strong>Qué va aquí:</strong> las tablas, sus campos, y <strong>la justificación de cada decisión
+que no sea obvia</strong>. No hay que documentar que un nombre es texto; sí hay que
+documentar por qué algo es una tabla aparte, por qué un campo es obligatorio, o
+por qué existe un índice único.</p>
+<p><strong>El del módulo — 10 tablas y 2 vistas:</strong></p>
+<pre><code>activo_referencias   los modelos (catálogo)
+activos              cada unidad física, siempre con serial
+activo_terceros      talleres, clientes, proveedores
+activo_ubicaciones   historial de DÓNDE ESTÁ (no toca inventario)
+activo_movimientos   entradas y salidas REALES (sí tocan inventario)
+activo_piezas        piezas buenas/malas de un equipo desarmado
+activo_mantenimientos hoja de vida
+activo_observaciones  notas sueltas que no tienen otra casa
+activo_componentes            de qué está hecho un KIT (extensión)
+activo_componente_movimientos la vida de cada componente (extensión)
+
+activos_disponibilidad      qué hay disponible por referencia
+activo_observaciones_todas  las 5 fuentes de observaciones, unidas
+</code></pre>
+<blockquote>
+<p>Las dos últimas tablas son la extensión <strong>Referencias KITZABLES</strong>: una
+referencia marcada como kit vale la suma de sus componentes, y cada
+componente tiene su propia historia (daño, venta, garantía, anulación).
+Tienen su propio documento de diseño, <code>docs/plan-kits-equipos.md</code>, que
+sigue la plantilla de la sección 10 de este SDD — y su sección 0 cuenta qué
+cambió del diseño al construirlas, a la luz de los errores de la §9.</p>
+</blockquote>
+<p><strong>Las decisiones que hay que justificar:</strong></p>
+<p><strong>a) <code>condicion</code> y <code>estado</code> son campos distintos.</strong> Parecen lo mismo y no lo son:</p>
+<ul>
+<li><code>condicion</code> = clasificación comercial (nuevo, usado, repuestos, baja) → decide
+<strong>cuánto vale</strong>.</li>
+<li><code>estado</code> = disponibilidad operativa (operativo, mantenimiento, entregado) →
+decide <strong>si se puede usar</strong>.</li>
+</ul>
+<p>Una bomba <em>usada</em> puede estar perfectamente <em>operativa</em>. Juntarlos en un campo
+obliga a inventar valores como &quot;usado-pero-funcionando&quot;.</p>
+<p><strong>b) <code>activo_ubicaciones</code> es una tabla, no una columna.</strong> Porque hay que
+conservar el historial con fecha y responsable. Una columna solo guarda el
+presente y pierde el pasado.</p>
+<p><strong>c) <code>valor_actual</code> es una columna GENERADA</strong> (<code>valor_nuevo × porcentaje / 100</code>),
+no un campo que la app calcula. Si la app lo calculara, dos pantallas podrían
+mostrar números distintos del mismo equipo. La base es la única fuente.</p>
+<p><strong>d) Las observaciones se UNEN en una vista, no se copian a una tabla.</strong>
+<em>(Agregado el 2026-09-10.)</em></p>
+<p>La ficha mostraba <strong>una sola</strong> observación, la del alta. Los comentarios que el
+usuario escribía al cambiar el estado o la ubicación no se veían por ninguna
+parte: el de ubicación quedaba enterrado en <code>activo_ubicaciones.detalle</code>, y el
+de estado no tenía ni dónde guardarse.</p>
+<p>Lo obvio era crear <code>activo_observaciones</code> y que <strong>todas</strong> las pantallas
+escribieran ahí. Se descartó: el texto de un cambio de ubicación ya vive en
+<code>activo_ubicaciones.detalle</code>, que es lo que muestra el historial de ubicaciones.
+Escribirlo también en otra tabla serían <strong>dos copias del mismo texto</strong> que se
+desincronizan a la primera corrección.</p>
+<p>Lo que se hizo: una tabla <strong>solo para lo que no tenía casa</strong> (el comentario de
+un cambio de estado) y una <strong>vista</strong> que une los tres orígenes:</p>
+<pre><code class="language-sql">create view activo_observaciones_todas
+with (security_invoker = true) as
+  select ... from activo_observaciones            -- origen 'estado' / 'manual'
+  union all
+  select ... from activo_ubicaciones              -- origen 'ubicacion'
+   where detalle is not null and btrim(detalle) &lt;&gt; ''
+  union all
+  select ... from activos where observacion &lt;&gt; '' -- origen 'alta'
+</code></pre>
+<p>Cada texto sigue teniendo <strong>un solo dueño</strong>. Y hubo un premio inesperado: al
+crear la vista aparecieron de una <strong>8 observaciones de ubicación y 2 de alta</strong>
+que ya existían y nadie estaba viendo. Cero migración de datos.</p>
+<blockquote>
+<p><code>security_invoker = true</code> no es decorativo: sin eso la vista corre con los
+permisos de su dueño y se salta la RLS de las tablas de abajo. Misma
+convención que <code>activos_disponibilidad</code>.</p>
+</blockquote>
+<blockquote>
+<p><strong>Patrón general:</strong> todo dato que se pueda DERIVAR, se deriva — nunca se
+guarda a mano. Aplica a <code>valor_actual</code>, a <code>disponible</code>, y ahora al listado
+de observaciones.</p>
+</blockquote>
+<p><strong>e) Observaciones editables, sin reescribir la historia.</strong> <em>(2026-09-10,
+<code>schema_v60</code>.)</em></p>
+<p>El usuario pidió poder <strong>editar</strong> cada observación, y que quedara una
+auditoría con <strong>fecha, diferencia y usuario</strong>.</p>
+<p>La tentación era una tabla nueva de &quot;versiones de observaciones&quot;. No hizo
+falta, y la razón es la decisión (d): como cada texto tiene <strong>un solo dueño</strong>,
+editarlo es un <code>UPDATE</code> en su tabla de origen — y las tres tablas ya tenían el
+trigger <code>fn_auditoria</code>, que guarda por cada cambio el campo, el valor anterior,
+el nuevo, el usuario y la fecha. <strong>La auditoría ya existía. Lo que faltaba era
+poder verla desde la ficha.</strong></p>
+<p>Ahí apareció el problema de verdad: <code>auditoria</code> solo la leen <strong>admin y
+coordinador</strong>. Y así tiene que seguir — guarda los cambios de <strong>todo</strong> el
+sistema, incluidos costos de inventario. Abrírsela al rol <code>equipos</code> para que
+viera el historial de una nota sería regalarle mucho más de lo que pidió.</p>
+<p>La salida es una función <code>SECURITY DEFINER</code>:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Función normal</th>
+<th><code>SECURITY DEFINER</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Corre con los permisos de</td>
+<td>Quien la llama</td>
+<td>El dueño de la función</td>
+</tr>
+<tr>
+<td>Lee <code>auditoria</code> el rol <code>equipos</code></td>
+<td>No</td>
+<td>Sí, pero <strong>solo lo que la función devuelve</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>observacion_historial(origen, id)</code> lee la auditoría con permisos de dueño,
+pero <strong>devuelve únicamente</strong> los cambios del texto de <strong>una</strong> observación, y
+solo si quien la llama tiene acceso al módulo. Es una ventana del tamaño
+exacto de lo pedido.</p>
+<blockquote>
+<p>Una función <code>SECURITY DEFINER</code> es <strong>una llave maestra</strong>. Tres reglas que no
+se negocian: fijarle el <code>search_path</code> (si no, alguien puede meterle una
+función con el mismo nombre en otro esquema), revisar los permisos <strong>adentro</strong>
+y no confiar en quién la llama, y quitársela a <code>anon</code> y a <code>public</code> con
+<code>revoke</code>. Las tres están en la <code>v60</code>.</p>
+</blockquote>
+<p>En pantalla, cada observación tiene un <strong>lápiz</strong> para editarla, y si ya se
+editó dice <strong>&quot;Editada · ver cambios&quot;</strong>, que abre cada cambio con su fecha, su
+usuario, lo que decía <strong>antes</strong> (tachado) y lo que dice <strong>después</strong>. Una nota
+no se puede dejar vacía al editarla: la haría desaparecer del listado sin
+dejar rastro visible.</p>
+<blockquote>
+<p><strong>Lección:</strong> antes de construir un sistema de auditoría, <strong>mira si ya lo
+tienes</strong>. El trabajo aquí no fue guardar los cambios —eso ya pasaba— sino
+abrir una ventana segura para mirarlos.</p>
+</blockquote>
+<p><strong>f) La novedad de un componente de un kit también es una observación.</strong>
+<em>(2026-09-10, <code>schema_v67</code>.)</em></p>
+<p>El usuario lo pidió así: cuando a un componente de un kit le <strong>entran o le
+salen</strong> unidades, eso tiene que quedar en el <strong>listado de observaciones</strong> del
+equipo, con la fecha, el usuario, el componente, si fue adición o resta, las
+cantidades y <strong>el motivo, escrito por quien lo registra</strong>. Su ejemplo: un kit
+con 24 &quot;Tela Filtro Mesh 100 Medios&quot;; se retiran 2; quedan 22 — y hay que
+poder leer <strong>por qué</strong>.</p>
+<p>La historia ya existía en la pantalla de cada componente. Pero ahí solo la ve
+quien entra a buscarla, componente por componente. El listado de
+observaciones es lo que se lee al abrir el equipo.</p>
+<p>Se aplicó la misma decisión (d): <strong>no se copia nada</strong>. El motivo vive en
+<code>activo_componente_movimientos.observacion</code>, su único dueño, y la vista gana un
+<strong>cuarto origen</strong>, <code>'componente'</code>:</p>
+<pre><code class="language-sql">  union all
+  select c.activo_id, m.fecha, m.observacion, 'componente', ...
+         c.nombre, m.tipo, m.signo, m.cantidad,
+         sum(signo × cantidad) over (partition by componente
+                                     order by fecha, (tipo &lt;&gt; 'alta'),
+                                              creado_en, id)  -- cuántos quedaron
+    from activo_componente_movimientos m join activo_componentes c ...
+   where m.tipo &lt;&gt; 'alta'
+</code></pre>
+<p>Tres decisiones dentro de esta:</p>
+<ul>
+<li><strong>La base entrega datos crudos, la app redacta.</strong> La vista no arma la frase
+&quot;Se retiró: salieron 2&quot;; entrega el tipo, el signo y la cantidad. Las
+palabras de cada tipo ya existían en la app (<code>TipoMovComponente</code>): si la
+vista las escribiera también, habría <strong>dos traducciones</strong> de lo mismo, y a la
+primera corrección dirían cosas distintas. Las columnas nuevas van <strong>al
+final</strong> de la vista y valen <code>null</code> en los otros tres orígenes, así la app que
+ya estaba publicada siguió funcionando mientras llegaba la nueva.</li>
+<li><strong>&quot;Quedan 22&quot; es el saldo de ESE momento, no el de hoy.</strong> Si se mostrara la
+cantidad actual del componente, una novedad de hace un mes diría cuántos hay
+hoy, que es otra cosa. La vista lo calcula con una suma acumulada: la misma
+regla con que la base calcula la cantidad (<code>suma(signo × cantidad)</code>), cortada
+en ese movimiento. Derivado, como todo lo demás (decisión d).</li>
+<li><strong>El alta no sale.</strong> Las cantidades con que nació el kit ya se ven en la
+pestaña Componentes; poner una línea por componente al crearlo llenaría el
+listado de ruido.</li>
+</ul>
+<p><strong>El motivo es obligatorio, y lo exige la base.</strong> Un movimiento que no dice
+por qué es justo lo que el usuario pidió evitar. La app no deja registrar sin
+motivo (el campo se llama <strong>&quot;Motivo *&quot;</strong> y dice <em>&quot;Queda en las observaciones
+del equipo&quot;</em>), pero el candado es un <code>raise exception</code> en el trigger que
+prepara el movimiento: <em>&quot;Escribe el motivo: por qué cambia la cantidad de
+«…»&quot;</em>. Aplica a <strong>todos</strong> los tipos menos el alta —también a la anulación, que
+ahora pide su propio motivo en el diálogo de confirmación— y a la edición: el
+candado de inmutabilidad deja cambiar el motivo, pero no dejarlo vacío. Se
+revisó antes de exigirlo: no había <strong>ningún</strong> movimiento de componente sin
+motivo que hubiera quedado huérfano de la regla.</p>
+<p>El motivo se edita con el mismo <strong>lápiz</strong> de las demás observaciones —solo
+admin y coordinador, como cualquier observación (§6)— y el cambio queda en la
+auditoría: <code>observacion_historial</code> ganó el origen <code>'componente'</code>.</p>
+<p><strong>En pantalla</strong>, cada novedad lleva el icono de su tipo (daño, venta, retiro…)
+y se lee de arriba abajo: el componente en negrita, lo que pasó <strong>en
+palabras</strong> —<em>&quot;Se retiró: salieron 2 · quedan 22&quot;</em>, y <em>&quot;a TINTEXA&quot;</em> si fue una
+venta o una garantía—, <em>&quot;Anulado después&quot;</em> si se deshizo, y el <strong>Motivo</strong>. Debajo,
+como en las demás, <em>&quot;Componente del kit · fecha · usuario&quot;</em>. Para el lector de
+pantalla es <strong>una sola frase</strong> en ese orden; sin eso leería cuatro textos
+sueltos. Con palabras y no con &quot;−2&quot; en rojo: un signo y un color no se oyen, y
+en el sol de una bodega el rojo tampoco se ve.</p>
+<blockquote>
+<p><strong>Lección:</strong> cuando el usuario pide ver algo <strong>en otra parte</strong>, casi nunca
+pide un dato nuevo: pide que lo que ya existe <strong>aparezca donde él mira</strong>. Lo
+que había que construir no era una tabla, era una puerta más a la misma.</p>
+</blockquote>
+<p><strong>g) El reingreso también es una observación.</strong> <em>(2026-09-11, <code>schema_v69</code>.)</em></p>
+<p>El usuario lo dijo así: <em>&quot;al registrar el reingreso de un equipo, esto queda
+registrado en los movimientos pero también en el listado de observaciones como
+un elemento más… no olvides esto nunca&quot;</em>. Lo había probado él mismo: vendió
+una bomba de prueba, la reingresó, y el reingreso <strong>no aparecía</strong> en las
+observaciones. Su texto vive en <code>activo_movimientos.observacion</code>, y la
+ubicación que abre el reingreso no lleva detalle: ninguno de los cuatro
+orígenes de la vista lo veía.</p>
+<p>La misma solución de las decisiones (d) y (f): <strong>un quinto origen</strong>,
+<code>'reingreso'</code>, sin copiar nada. Dos diferencias con los otros:</p>
+<ul>
+<li><strong>Sale siempre, aunque no tenga texto.</strong> Una nota sin texto no existe; un
+reingreso sin texto <strong>sí pasó</strong>. Se muestra <em>&quot;Sin observación&quot;</em>, en cursiva,
+y el lápiz permite escribírsela después (queda en la auditoría como
+cualquier edición).</li>
+<li><strong>Se ve igual que en la pestaña Movimientos</strong>: el mismo ícono, el mismo
+morado, <em>&quot;Entrada · REINGRESO&quot;</em> y el mismo flujo <em>🎯 NP00038 ➡️ 🎯 G000002</em>
+(<code>flujoMovimiento</code>). La vista entrega los datos crudos (centro, bodega,
+condición, si se anuló) y la app redacta con las palabras que ya usaba: una
+sola fuente. Si después se anula el reingreso, lo dice: <em>&quot;Anulado después&quot;</em>.</li>
+</ul>
+<blockquote>
+<p><strong>Regla del proyecto (el usuario la pidió explícita):</strong> todo hecho de la vida
+de un equipo que el usuario registra —un reingreso, una novedad de un
+componente, un cambio de estado o de ubicación— tiene que aparecer en el
+listado de observaciones de su ficha, <strong>además</strong> de donde se guarde.</p>
+</blockquote>
+<hr />
+<h2 id="4-las-reglas-de-negocio">4. Las reglas de negocio</h2>
+<p><strong>Qué va aquí:</strong> las reglas en lenguaje del negocio, ANTES de decidir cómo se
+programan. Y <strong>dónde vive cada una</strong>.</p>
+<p><strong>La regla central del módulo</strong>, que costó trabajo formular:</p>
+<blockquote>
+<p><strong>Cambiar la UBICACIÓN física no toca el inventario. Un MOVIMIENTO sí.</strong></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Cambiar ubicación</th>
+<th>Entrada / Salida</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cuándo</td>
+<td>Préstamo, taller, temporal</td>
+<td>Compra, entrega definitiva</td>
+</tr>
+<tr>
+<td>¿Afecta el inventario?</td>
+<td><strong>No.</strong> Sigue siendo nuestro</td>
+<td><strong>Sí</strong></td>
+</tr>
+<tr>
+<td>Ejemplo</td>
+<td>Bomba en el taller de Lucho</td>
+<td>Bomba entregada al centro NP00034</td>
+</tr>
+</tbody>
+</table>
+<p><strong>La segunda regla central: qué significa &quot;disponible&quot;.</strong>
+<em>(Escrita el 2026-09-10, después de tres errores seguidos por no tenerla.)</em></p>
+<p><code>estado</code> y <code>condicion</code> son campos distintos (§3a), pero para <strong>disponibilidad
+mandan los dos a la vez</strong>:</p>
+<blockquote>
+<p>Un equipo está <strong>disponible para entregar</strong> si está <code>operativo</code>, <strong>su
+condición no es <code>repuestos</code> ni <code>baja</code></strong>, y está <strong>físicamente en una bodega</strong>.</p>
+</blockquote>
+<p>Las tres partes importan, y cada una tapa un hueco real:</p>
+<table>
+<thead>
+<tr>
+<th>Parte</th>
+<th>Qué tapa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>estado = 'operativo'</code></td>
+<td>No se entrega algo que está en mantenimiento</td>
+</tr>
+<tr>
+<td><code>condicion not in ('repuestos','baja')</code></td>
+<td>Una bomba marcada <strong>para repuestos</strong> aparecía como lista para entregar</td>
+</tr>
+<tr>
+<td>Está en una bodega</td>
+<td>No se entrega algo que está en el taller de un tercero</td>
+</tr>
+</tbody>
+</table>
+<p>Y de ahí sale la regla que unifica la pantalla de estado con la de ubicación:</p>
+<blockquote>
+<p>Poner un equipo en <strong>&quot;Operativo (listo para entregar)&quot;</strong> significa que
+<strong>volvió a su bodega</strong>. Si estaba en un taller, ese regreso es un movimiento
+físico real y va al historial. Marcarlo <strong>de baja</strong> o <strong>para repuestos</strong> no
+lo devuelve a estar disponible, aunque esté en la bodega.</p>
+</blockquote>
+<p><strong>Dónde vive:</strong> en la vista <code>activos_disponibilidad</code>, porque se <strong>deriva</strong> y no
+se guarda nunca. Pero está <strong>duplicada a propósito en dos sitios más</strong>, y eso
+hay que saberlo:</p>
+<table>
+<thead>
+<tr>
+<th>Copia</th>
+<th>Para qué</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lib/local_store.dart</code> (<code>ajustarEstadoActivoLocal</code>)</td>
+<td>Que las listas offline no contradigan a las de línea</td>
+</tr>
+<tr>
+<td>La hoja &quot;Estado y condición&quot;</td>
+<td>Avisar al usuario qué va a pasar <strong>antes</strong> de guardar</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Cuándo se permite duplicar una regla:</strong> cuando las copias no <em>deciden</em> nada
+—solo predicen— y la base sigue siendo la única que manda. Las dos copias de
+arriba se pueden equivocar sin corromper un dato. Aun así van comentadas
+apuntando a <code>schema_v55</code>, porque una fórmula en tres sitios se desincroniza
+sola si nadie dejó dicho dónde están las otras dos.</p>
+</blockquote>
+<p><strong>La tercera regla central: entregar es salir del inventario, de verdad.</strong>
+<em>(Escrita el 2026-09-10.)</em></p>
+<p>Cuando un equipo se entrega a un centro de costo <strong>deja de ser nuestro</strong>. Eso
+tiene consecuencias en cuatro sitios, y solo una estaba programada:</p>
+<table>
+<thead>
+<tr>
+<th>Consecuencia</th>
+<th>¿Estaba?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>estado = 'entregado'</code></td>
+<td>Sí</td>
+</tr>
+<tr>
+<td>Se <strong>cierra</strong> su ubicación vigente</td>
+<td><strong>No</strong> — la ficha seguía diciendo &quot;Está en: Bodega RPCI&quot;</td>
+</tr>
+<tr>
+<td>No se le puede cambiar la <strong>ubicación</strong> a mano</td>
+<td><strong>No</strong> — el botón seguía activo</td>
+</tr>
+<tr>
+<td>No se le puede cambiar el <strong>estado</strong> a mano</td>
+<td>Sí</td>
+</tr>
+</tbody>
+</table>
+<p>Y al revés, <strong>al reingresarlo</strong>:</p>
+<blockquote>
+<p>El equipo vuelve a ser nuestro <strong>con la condición con la que regresó</strong>. Si
+salió <code>nuevo</code> y vuelve <code>usado</code>, su ficha dice <code>usado</code> — y por lo tanto se
+valoriza como usado.</p>
+</blockquote>
+<p>Eso tampoco estaba: <code>fn_aplicar_activo_movimiento</code> usaba <code>new.condicion</code> para
+decidir el <strong>estado</strong>, pero nunca la copiaba a <code>activos.condicion</code>. Una bomba
+que salió nueva y volvió usada se seguía valorizando como nueva.</p>
+<p><strong>Los cuatro caminos, ahora completos</strong> (<code>schema_v57</code>):</p>
+<pre><code>salida             -&gt; entregado · se CIERRA la ubicación
+entrada            -&gt; estado según condición · se COPIA la condición
+                      · se ABRE ubicación en la bodega
+anular una salida  -&gt; operativo · se REABRE en su bodega dueña
+anular una entrada -&gt; entregado · se CIERRA la ubicación
+</code></pre>
+<blockquote>
+<p><strong>La lección del 9.6, aplicada antes de que muerda:</strong> los cuatro caminos se
+escribieron y se <strong>probaron en transacción con rollback</strong>, incluidas las dos
+anulaciones — que son la mitad que siempre se olvida porque nadie las ejerce
+hasta que toca deshacer algo un viernes.</p>
+</blockquote>
+<p><strong>Reingresar &quot;para repuestos&quot;.</strong> <em>(2026-09-10, <code>schema_v58</code>.)</em> Un equipo que
+salió entero a un centro de costo puede volver desarmado. El diseño original
+lo prohibía a propósito —<em>&quot;nunca 'repuestos' en un movimiento: es una
+reclasificación posterior&quot;</em>— y el alta mandaba <code>usado</code> en su lugar.</p>
+<p>Esa decisión se revirtió, y la razón vale la pena: <strong>dos decisiones que por
+separado eran correctas se volvieron un bug al juntarse.</strong> El truco del alta
+(&quot;mandar usado en vez de repuestos&quot;) era inofensivo mientras la entrada no
+tocara la condición de la ficha. En cuanto <code>schema_v57</code> hizo que la entrada
+copiara su condición, ese mismo truco habría dejado como &quot;usado&quot; un alta que
+era &quot;para repuestos&quot;. Nadie lo reportó; se encontró leyendo el código antes de
+tocarlo.</p>
+<p>Qué estado queda, y por qué <strong>no</strong> <code>baja</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Problema</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>estado = 'baja'</code></td>
+<td>El valorizado <strong>excluye</strong> los de baja, y un donante de piezas <strong>sí vale</strong></td>
+</tr>
+<tr>
+<td>Un estado nuevo <code>no_disponible</code></td>
+<td>Duplica lo que ya calcula la vista de disponibilidad</td>
+</tr>
+<tr>
+<td><strong><code>estado = 'operativo'</code></strong> ✔</td>
+<td>Está en la bodega y fuera de mantenimiento; la vista lo marca <strong>no disponible</strong> por su condición</td>
+</tr>
+</tbody>
+</table>
+<p>En pantalla, un equipo operativo pero para repuestos o de baja <strong>no dice
+&quot;Operativo&quot;</strong>: dice <strong>&quot;No disponible&quot;</strong>, en gris. Y no se le puede dar salida
+— ni desde su ficha ni desde la pestaña Movimientos, que antes lo mandaba
+directo a la pantalla de entrega por ser &quot;operativo&quot;.</p>
+<blockquote>
+<p><strong>Lección:</strong> cuando cambies lo que hace un trigger, busca <strong>quién le estaba
+mandando datos pensando en el comportamiento viejo.</strong> El alta no se tocó en
+la <code>v57</code>, y aun así se rompió por ella.</p>
+</blockquote>
+<p><strong>Una entrada no es siempre lo mismo: el REINGRESO.</strong> <em>(2026-09-10,
+<code>schema_v63</code>.)</em> Una entrada puede ser el <strong>alta</strong> de un equipo nuevo o el
+<strong>reingreso</strong> de uno que se había entregado a un centro de costo y vuelve. En
+la ficha y en los informes las dos decían solo &quot;Entrada&quot;. Ahora un reingreso
+dice <strong>&quot;Entrada · REINGRESO&quot;</strong>, con su propio ícono y en otro color, y el
+informe de movimientos lo trae así en la columna <em>Tipo</em> — filtrable en Excel.</p>
+<p>La decisión de diseño, y por qué:</p>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Problema</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Derivarlo al consultar (&quot;¿hubo una salida antes?&quot;)</td>
+<td>Se complica con las anulaciones, y cada informe repetiría la lógica</td>
+</tr>
+<tr>
+<td><strong>Estamparlo al insertar</strong> ✔</td>
+<td>Es un hecho del momento — igual que el valor de una salida, que ya se estampa así</td>
+</tr>
+</tbody>
+</table>
+<p>El criterio: <strong>es reingreso si el equipo estaba <code>entregado</code> en el momento de
+entrar.</strong> Funciona por un detalle del orden de los triggers: el que cambia el
+estado (<code>fn_aplicar_activo_movimiento</code>) corre <strong>AFTER</strong> insert, así que uno
+<strong>BEFORE</strong> todavía ve el estado viejo. Y lo decide siempre la base: si la app
+manda la marca, se sobreescribe. Se probó mandando <code>false</code> en un reingreso
+real y <code>true</code> en un alta: la base corrigió las dos.</p>
+<p><strong>El detalle que casi se escapa.</strong> El candado de inmutabilidad de los
+movimientos (<code>fn_activo_mov_solo_observacion</code>) nombra las columnas <strong>una por
+una</strong>. Una columna nueva que no esté en esa lista queda <strong>editable sin que
+nadie se entere</strong> — la app podría haber volteado la marca después. Se agregó
+a la lista y se probó que voltearla falla.</p>
+<blockquote>
+<p><strong>Lección:</strong> cuando agregues una columna a una tabla con candado, <strong>revisa
+el candado</strong>. Una lista explícita de columnas protege lo que había el día
+que se escribió, no lo que se agregue después.</p>
+</blockquote>
+<p>La etiqueta (&quot;Entrada · REINGRESO&quot;) se define <strong>en un solo sitio</strong>
+(<code>ActivoMovimiento.etiquetaTipo</code>) y la usan la ficha y el informe. Si cada uno
+armara la suya, tarde o temprano dirían cosas distintas.</p>
+<p><strong>Dónde vive cada regla — y esto es diseño, no detalle:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Regla</th>
+<th>Dónde</th>
+<th>Por qué ahí</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Serial único</td>
+<td>Índice en la base</td>
+<td>Debe cumplirse aunque falle la app</td>
+</tr>
+<tr>
+<td>&quot;Disponible&quot;</td>
+<td>Vista SQL</td>
+<td>Se deriva; nunca se guarda</td>
+</tr>
+<tr>
+<td>Estado tras una entrada</td>
+<td>Trigger</td>
+<td>Debe pasar siempre, venga de donde venga</td>
+</tr>
+<tr>
+<td>Sugerir 70% para un usado</td>
+<td>La app</td>
+<td>Es una sugerencia, no una ley</td>
+</tr>
+<tr>
+<td>Los componentes de un kit nuevo entran <strong>todos o ninguno</strong> <em>(2026-09-10)</em></td>
+<td>Función de la base (<code>agregar_componentes</code>)</td>
+<td>Con una llamada por componente, un corte de red deja un kit a medias valiendo menos, <strong>sin que nadie lo note</strong></td>
+</tr>
+<tr>
+<td>Proponer la composición del kit anterior <em>(2026-09-10)</em></td>
+<td>La base la consulta (<code>plantilla_kit</code>), la app la ofrece</td>
+<td>Es una sugerencia editable: el kit nuevo no queda amarrado al anterior</td>
+</tr>
+<tr>
+<td>El desglose de los kits va en un <strong>informe aparte</strong> <em>(2026-09-10)</em></td>
+<td>Informe &quot;Composición de kits&quot;</td>
+<td>Con el kit y sus componentes en el mismo archivo, sumar la columna de valor en Excel <strong>cuenta cada kit dos veces</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Criterio:</strong> si la regla debe cumplirse <strong>siempre</strong>, va en la base. Si es una
+ayuda al usuario, va en la app. Poner una regla dura solo en la app significa
+que una carga masiva o una corrección manual pueden violarla.</p>
+</blockquote>
+<hr />
+<h2 id="5-interfaz">5. Interfaz</h2>
+<p><strong>Qué va aquí:</strong> cómo navega el usuario y <strong>por qué esa forma y no otra</strong>. No
+hacen falta mockups bonitos; hace falta la lógica.</p>
+<p><strong>El del módulo:</strong> cuatro pestañas — Por referencia, Movimiento, Disponibles, En
+mantenimiento.</p>
+<p><strong>La decisión que hay que justificar:</strong> en Inventario hay botones separados de
+<em>Entrada</em> y <em>Salida</em>. Aquí <strong>no</strong>. ¿Por qué?</p>
+<p>Porque un tornillo es <strong>fungible</strong> —da igual cuál— así que primero eliges la
+acción y después el elemento. Un equipo <strong>no</strong>: es un objeto individual. Primero
+buscas <em>esa</em> bomba, y <strong>su estado decide</strong> si lo que cabe es una entrada o una
+salida. El usuario no tiene que saberlo de antemano.</p>
+<blockquote>
+<p><strong>Lección:</strong> cuando una pantalla nueva se parece a una que ya existe, pregunta
+si el <strong>objeto</strong> es el mismo tipo de cosa. Copiar la forma sin copiar la
+naturaleza produce interfaces que &quot;se sienten raras&quot; sin que nadie sepa
+explicar por qué.</p>
+</blockquote>
+<p><strong>Condición no negociable de este proyecto:</strong> todo tiene que verse bien en un
+celular de 360 px. Área táctil de 48 dp, nada de anchos fijos, máximo 4 botones
+en la barra inferior.</p>
+<h3 id="51-buscar-un-equipo-por-lo-que-el-usuario-se-sabe-no-por-lo-que-la-base-guarda">5.1 Buscar un equipo: por lo que el usuario se sabe, no por lo que la base guarda</h3>
+<p><em>(2026-09-10, <code>schema_v59</code>.)</em> La pestaña Movimientos buscaba <strong>solo por
+serial</strong>. El que no se sabía el serial de memoria —casi todo el mundo— no
+encontraba el equipo.</p>
+<p>Ahora busca por <strong>serial, nombre de la referencia, marca, modelo y tipo</strong>, sin
+importar mayúsculas ni tildes, y <strong>cada palabra por separado</strong>: <em>&quot;grundfos
+diafragma&quot;</em> encuentra la bomba de diafragma marca Grundfos, aunque una palabra
+esté en la marca y la otra en el nombre.</p>
+<p><strong>Por qué se hizo en la base y no en la app.</strong> La referencia vive en <strong>otra
+tabla</strong>. Filtrar <em>&quot;serial O nombre de referencia&quot;</em> desde la app obligaría a
+bajar primero las referencias que coinciden y mandarlas de vuelta como
+<code>IN(id1, id2, …)</code>. Con miles de referencias eso <strong>revienta el largo de la
+URL</strong>. Una función SQL (<code>buscar_activos</code>) lo resuelve en un solo viaje, y
+devuelve <code>setof activos</code> para que PostgREST siga pudiendo paginar, filtrar y
+hacer <em>embeds</em> encima.</p>
+<p><strong>Y el hallazgo de paso:</strong> el serial ya tenía un índice, pero de tipo prefijo
+(<code>text_pattern_ops</code>), que <strong>no sirve</strong> para un <code>LIKE '%texto%'</code>. O sea que hasta
+la búsqueda por serial de antes recorría la tabla entera. Con 2 equipos no se
+nota; con 20.000, sí. Se agregaron índices de <strong>trigramas</strong> (<code>pg_trgm</code>) a los
+dos campos.</p>
+<p>Tres detalles de pantalla que completan la idea:</p>
+<ul>
+<li>Cada resultado muestra <strong>referencia · marca</strong>. Si alguien busca &quot;grundfos&quot;,
+tiene que ver de una por qué salió ese equipo.</li>
+<li>El caché <strong>offline</strong> guarda también marca, modelo y tipo, y filtra con la
+misma regla de &quot;cada palabra&quot;. Sin eso, la búsqueda funcionaría distinto con
+y sin internet.</li>
+<li>El texto de ayuda dice lo que de verdad busca: <em>&quot;Serial, referencia, marca o
+tipo…&quot;</em>, no <em>&quot;Buscar por serial…&quot;</em>.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> un buscador se diseña desde <strong>lo que el usuario recuerda</strong>, no
+desde la llave que tiene la tabla. Nadie se sabe el serial; todo el mundo se
+sabe que es &quot;la bomba Grundfos&quot;.</p>
+</blockquote>
+<h3 id="52-origen--destino-el-formato-ya-exista">5.2 Origen ➡️ destino: el formato ya existía</h3>
+<p><em>(2026-09-10.)</em> El listado de movimientos de un equipo mostraba <strong>solo el
+centro de costo de origen</strong>. El destino no aparecía por ninguna parte.</p>
+<p>El proyecto <strong>ya tenía resuelto</strong> cómo mostrarlo: <code>flujoMovimiento()</code> en
+<code>util/movimiento_fmt.dart</code>, que usa el Kardex de Inventario —
+<code>🎯 NP00034 ➡️ 🎯 NP00039</code>, con <code>🏬</code> para las bodegas. El listado de Equipos
+simplemente no la usaba. Ahora sí, y con un ajuste: las salidas de equipos no
+guardan bodega en el movimiento, así que se le pasa la <strong>bodega dueña</strong> del
+equipo para que no salga <code>🏬 — ➡️ 🎯 NP00034</code>.</p>
+<blockquote>
+<p><strong>Lección:</strong> es el error 9.3 otra vez — <em>mirar al lado antes de escribir</em>. La
+diferencia es que esta vez se buscó antes de programar, y en vez de inventar
+un formato nuevo se reutilizó el que el usuario ya reconoce del Kardex.</p>
+</blockquote>
+<h3 id="53-accesibilidad-medida-no-supuesta">5.3 Accesibilidad: medida, no supuesta</h3>
+<p><em>(2026-09-10, pantallas de los kits.)</em> &quot;Se ve bien en mi pantalla&quot; no es una
+verificación. Flutter trae pruebas automáticas de accesibilidad, y las piezas
+visuales de los kits (<code>lib/widgets/kit_componentes.dart</code>) las pasan <strong>en el
+CI, antes de cada publicación</strong> (<code>test/kit_componentes_widget_test.dart</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Qué se mide</th>
+<th>Por qué importa aquí</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Todo lo que se toca mide <strong>48 dp</strong> (Android e iOS)</td>
+<td>Se usa con el dedo en una tablet de bodega, a veces con guantes</td>
+</tr>
+<tr>
+<td>Todo lo que se toca tiene <strong>nombre</strong> para el lector de pantalla</td>
+<td>Un botón que solo es un ícono, para quien no ve, no existe</td>
+</tr>
+<tr>
+<td><strong>Contraste</strong> del texto, con el tema real de la app</td>
+<td>Un componente agotado va en el gris del tema, <strong>no con opacidad</strong>: la opacidad baja el contraste por debajo de lo legible</td>
+</tr>
+<tr>
+<td><strong>360 px con la letra al doble</strong>, sin desbordes</td>
+<td>Así usa el celular quien agranda la letra en Ajustes</td>
+</tr>
+</tbody>
+</table>
+<p>Y cuatro decisiones de diseño que salen de lo mismo:</p>
+<ul>
+<li><strong>Una frase, no cifras sueltas.</strong> Cada tarjeta le dice al lector de pantalla
+<em>&quot;Tela filtros de los medios. 24 unidades a $45.000 cada una. Subtotal
+$1.080.000. Al 70 por ciento, $756.000&quot;</em> — en vez de leer &quot;24 por 45.000&quot; y
+tres números sin decir qué es cada uno.</li>
+<li><strong>Nunca solo color.</strong> Un kit se marca con ícono <strong>y</strong> la palabra KIT; un
+agotado dice &quot;Agotado&quot;. Quien no distingue colores, o no ve, también se entera.</li>
+<li><strong>Un control deshabilitado dice por qué.</strong> El interruptor &quot;Es un kit&quot; de una
+referencia con equipos no solo se apaga: explica que ya tiene equipos y qué
+hacer. Lo mismo el valor bloqueado en el alta de un kit.</li>
+<li><strong>Los números, como se escriben en Colombia.</strong> &quot;45.000&quot; en un campo decimal se
+lee como 45. El valor unitario solo acepta dígitos y muestra en vivo cómo quedó
+entendido. (El campo &quot;Valor a nuevo&quot; del alta, que ya existía, <strong>sí</strong> tiene ese
+problema — &quot;1.540.000&quot; queda en $0 — y está anotado como pendiente.)</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> una verificación que nunca ha fallado no demuestra que sepa
+detectar un fallo. Antes de confiar en estas pruebas se corrieron tres
+controles <strong>dañados a propósito</strong> —un botón de 20 px, texto gris claro sobre
+blanco, una fila más ancha que la pantalla— y las tres verificaciones los
+atraparon.</p>
+</blockquote>
+<h3 id="54-equipos-por-referencia-disponibles-no-disponibles-y-vendidas">5.4 Equipos por referencia: disponibles, no disponibles y vendidas</h3>
+<p><em>(2026-09-11, pedido del usuario, <code>schema_v68</code>.)</em> La vista <strong>EQUIPOS POR
+REFERENCIA</strong> decía <em>&quot;3 disponibles · 3 no disponibles&quot;</em>, y la pantalla de
+cada referencia tenía los filtros Todas / Disponibles / No disponibles. Pero
+&quot;no disponibles&quot; se calculaba como <strong>total − disponibles</strong>: metía en el mismo
+grupo un equipo que está en el taller y uno que ya se <strong>vendió</strong>, que ni
+siquiera es nuestro. Para quien busca un equipo para despachar, son cosas
+opuestas: uno vuelve pronto, el otro no vuelve.</p>
+<p><strong>Qué es &quot;vendida&quot;.</strong> Una unidad con <code>estado = 'entregado'</code>: salió a un centro
+de costo y dejó de ser nuestra (la tercera regla central de la §4). Las tres
+categorías <strong>no se pisan</strong>, porque &quot;disponible&quot; exige <code>estado = 'operativo'</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Categoría</th>
+<th>Regla</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Disponible</td>
+<td>La de siempre: operativo, ni de baja ni para repuestos, y en una bodega (§4)</td>
+</tr>
+<tr>
+<td><strong>Vendida</strong></td>
+<td><code>estado = 'entregado'</code></td>
+</tr>
+<tr>
+<td>No disponible</td>
+<td>Todo lo demás: en taller, de baja, para repuestos</td>
+</tr>
+</tbody>
+</table>
+<p>Y así los tres números <strong>suman el total</strong>: <em>3 disponibles · 1 no disponible · 2
+vendidas</em>, con las <strong>6 unidades</strong> al lado.</p>
+<p><strong>Dónde vive cada cosa:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Qué</th>
+<th>Dónde</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Las tres cuentas de la lista de referencias</td>
+<td>La función <code>activos_resumen_por_referencia()</code>, que ganó la columna <code>vendidos</code></td>
+</tr>
+<tr>
+<td>Los cuatro filtros de una referencia, con su número</td>
+<td>Los números salen de <strong>esa misma función</strong>: así los de los filtros y los de la lista anterior no se pueden contradecir</td>
+</tr>
+<tr>
+<td>El filtro con señal</td>
+<td>La consulta a <code>activos_disponibilidad</code> (<code>ActivosService.disponibles</code>, <code>filtro:</code>)</td>
+</tr>
+<tr>
+<td>El filtro <strong>sin</strong> señal</td>
+<td><code>FiltroEquipos.incluye</code>, sobre el caché: la misma regla, escrita una vez para el caché y probada contra las mismas filas</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tres detalles de la construcción:</strong></p>
+<ul>
+<li><strong>La función cambió lo que devuelve</strong>, y eso Postgres no lo permite con
+<code>create or replace</code>: se borró y se creó en la misma migración. La columna
+nueva va <strong>al final</strong>: la app que ya estaba publicada lee por nombre y la
+ignoró sin romperse mientras llegaba la nueva. Al recrearla se le quitó el
+permiso a <code>anon</code> (antes lo tenía; no le servía de nada porque la RLS no le
+devolvía filas, pero tampoco tenía por qué tenerlo).</li>
+<li><strong>Una unidad vendida no muestra bodega.</strong> La lista decía &quot;Bodega RPCI&quot; al
+lado de un equipo vendido: es su bodega <em>dueña</em>, no donde está. Ahora dice
+<strong>&quot;Vendido&quot;</strong> con su propio ícono (no solo un color), y con el filtro
+&quot;Vendidas&quot; elegido una línea explica qué es: <em>entregadas a un centro de
+costo, ya no son nuestras</em>. En la ficha del equipo el estado sigue
+diciéndose &quot;Entregado&quot;: es el mismo estado, visto desde el equipo.</li>
+<li><strong>Cómo se probó.</strong> En la base, deshecho al final: al simular la venta de la
+bomba de diafragma, su referencia pasó a 0 disponibles · 0 no disponibles ·
+1 vendida, y la bomba dosificadora que está en el taller siguió como no
+disponible. En la app, 14 pruebas: cada unidad cae en <strong>una sola</strong>
+categoría, las cuentas suman el total, una respuesta de la base vieja (sin
+<code>vendidos</code>) no rompe, y los filtros con su número en 360 px con la letra al
+doble. Control negativo: al volver al cálculo viejo (total − disponibles),
+<strong>fallaron cuatro pruebas</strong>.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> un &quot;resto&quot; (<em>total menos lo que sí me interesa</em>) es una
+categoría que nadie diseñó. Mete en el mismo grupo todo lo que no es lo otro,
+y tarde o temprano junta cosas opuestas. Cada categoría que se muestra
+merece su propia regla.</p>
+</blockquote>
+<p><strong>Qué significa cada filtro, a la mano.</strong> <em>(2026-09-11.)</em> El usuario pidió un
+texto corto al pasar sobre cada tag. En el celular <strong>no existe el &quot;hover&quot;</strong>
+—no hay mouse—, así que se usó la pieza estándar de Flutter (<code>Tooltip</code>), que
+funciona según el aparato:</p>
+<table>
+<thead>
+<tr>
+<th>Dónde</th>
+<th>Cómo aparece</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PC (web)</td>
+<td>Al pasar el mouse</td>
+</tr>
+<tr>
+<td>Celular (APK o web)</td>
+<td>Al <strong>mantener presionado</strong> el tag</td>
+</tr>
+<tr>
+<td>Los dos</td>
+<td>Se va solo a los <strong>4 segundos</strong>, y flota encima: no corre nada de la pantalla</td>
+</tr>
+</tbody>
+</table>
+<p>Tocar el tag sigue filtrando; mantenerlo presionado <strong>no</strong> filtra (probado).
+El ícono de estado de cada unidad (disponible, no disponible, vendido) explica
+lo mismo, en singular. Los textos viven <strong>una sola vez</strong>, en <code>FiltroEquipos</code>
+(<code>explicacion</code> y <code>unidad</code>), y el lector de pantalla los lee junto con el nombre
+del tag. Control negativo: sin la explicación, y con una duración de 60
+segundos, fallaron las pruebas que lo cuidan.</p>
+<h3 id="55-un-adorno-que-se-puede-quitar-el-cono-de-cada-referencia">5.5 Un adorno que se puede quitar: el ícono de cada referencia</h3>
+<p><em>(2026-09-11, pedido del usuario.)</em> La lista &quot;Por referencia&quot; se veía pálida:
+solo texto gris. Ahora cada referencia lleva un círculo de color con un ícono
+según el tipo de equipo —una gota azul las bombas, una caja morada los kits;
+también motor, compresor, filtro, válvula, tanque, centrífuga y tablero— o su
+<strong>inicial</strong> si no se reconoce el tipo.</p>
+<p>Tres condiciones que puso el usuario, y cómo se cumplen:</p>
+<table>
+<thead>
+<tr>
+<th>Condición</th>
+<th>Cómo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No cargar la base</strong></td>
+<td>El tipo se adivina por palabras del <strong>nombre</strong>, que la lista ya tiene. Cero consultas nuevas, cero columnas</td>
+</tr>
+<tr>
+<td><strong>Que se vea bien en el celular</strong></td>
+<td>Colores oscuros con blanco encima: la prueba de contraste de Flutter mide cada color de la paleta. Una fila en 360 px con la letra al doble no se desborda</td>
+</tr>
+<tr>
+<td><strong>Poderlo quitar después</strong></td>
+<td>Todo vive en <code>lib/widgets/avatar_referencia.dart</code>. Se <strong>apaga</strong> en las dos listas con <code>mostrarAvatarReferencias = false</code>; se <strong>borra</strong> quitando ese archivo y sus dos usos</td>
+</tr>
+</tbody>
+</table>
+<p>El mismo ícono se puso después en la pestaña <strong>&quot;Disponibles&quot;</strong>, a pedido del
+usuario, para que una bomba se vea igual en las dos listas. Tampoco consulta
+nada: ese nombre ya venía en la lista (y en el caché sin señal).</p>
+<p><em>(Actualizado el 2026-09-12.)</em> Al agrupar &quot;Disponibles&quot; por referencia (§5.8),
+el ícono <strong>se movió de la fila al grupo</strong>: ya no adorna cada unidad, sino la
+cabecera que las contiene — que es justamente donde vive el nombre de la
+referencia. El widget es el mismo, con el mismo tamaño y el mismo color; lo que
+cambió es de qué cuelga.</p>
+<p>Dos detalles:</p>
+<ul>
+<li><strong>Es decorativo para el lector de pantalla.</strong> El nombre ya está escrito al
+lado; oír &quot;B, bomba de diafragma&quot; no ayuda a nadie. Una prueba revisa que la
+fila se lea solo con su nombre — y la primera versión de esa prueba <strong>no
+servía</strong>: al quitarle la marca de decorativo a propósito, siguió pasando.
+Se reescribió para revisar exactamente lo que se oye en la fila, y ahí sí
+falló cuando debía.</li>
+<li><strong>El color de la inicial sale de sumar las letras del nombre, no de
+<code>hashCode</code></strong>, que puede dar distinto en la web y en el celular: la misma
+referencia tiene que verse igual en los dos.</li>
+</ul>
+<blockquote>
+<p><strong>Por qué adivinar por el nombre y no usar el campo <code>tipo</code>:</strong> <code>tipo</code> es texto
+libre (hoy hay &quot;BOMBA ELECTRICZA DOSIFICACION&quot; y &quot;Bomba dosificadora&quot; para
+lo mismo), y traerlo obligaba a cambiar la consulta. Para un adorno que se
+puede quitar, adivinar bien la mayoría basta; si algún día se vuelve algo
+serio, lo correcto es una lista de tipos en la base, no más palabras aquí.</p>
+</blockquote>
+<h3 id="56-ajustes-de-texto">5.6 Ajustes de texto</h3>
+<ul>
+<li><em>(2026-09-11.)</em> En el catálogo de referencias, el botón <strong>&quot;Nueva&quot;</strong> pasó a
+decir <strong>&quot;Nueva Ref.&quot;</strong>, a pedido del usuario: &quot;Nueva&quot; a secas no decía nueva
+qué. Como &quot;Ref.&quot; es una abreviatura, el botón lleva la descripción completa
+para el lector de pantalla (<em>&quot;Crear una nueva referencia&quot;</em>).</li>
+<li><em>(2026-09-11.)</em> En la pantalla de un componente de un kit, el botón
+<strong>&quot;Registrar movimiento&quot;</strong> pasó a decir <strong>&quot;Registrar movimiento
+componente&quot;</strong>, a pedido del usuario: en la ficha del equipo también se
+registran movimientos, y así se distingue cuál es cuál. En un celular de
+360 px con la letra al doble el texto baja de línea sin cortarse (probado).</li>
+</ul>
+<h3 id="57-cargar-muchos-equipos-a-la-vez">5.7 Cargar muchos equipos a la vez</h3>
+<p><em>(2026-09-11, <code>schema_v70</code>. Diseño completo en <code>docs/plan-importar-equipos.md</code>.)</em>
+El catálogo real está en un Excel de 1.414 filas; crearlos uno por uno no es
+realista. Menú del módulo → <strong>Importar equipos</strong>: una plantilla (Excel o CSV)
+para equipos de referencias sencillas o <strong>kits con sus componentes</strong> — el kit
+en una fila y sus componentes en las filas de abajo, con el mismo SERIAL.</p>
+<p>Tres decisiones que salen de lecciones anteriores de este SDD:</p>
+<ul>
+<li><strong>En la base, no en la app</strong> (§9.7). El alta de un equipo eran tres llamadas
+desde la app (equipo, entrada, componentes). Con cientos de equipos, un
+corte a mitad dejaría equipos sin su entrada o kits sin componentes. La
+función <code>importar_equipos</code> hace las tres cosas en una transacción, y la app
+la llama <strong>de a 100</strong>: la base corta a los 8 segundos, y 100 equipos
+<strong>medidos</strong> tardan 0,86.</li>
+<li><strong>Nada entra sin revisión</strong> (§9.5, nada falla en silencio). Al subir el
+archivo se ve cada fila: qué entra, qué <strong>referencias se crearán</strong> (una sola
+vez, con las del catálogo a las que se parecen) y qué tiene problemas,
+escritos en la fila.</li>
+<li><strong>Volver a cargar no duplica.</strong> El serial es único en la base y la revisión
+lo mira: si un lote falla a mitad, se sube el mismo archivo otra vez y solo
+entra lo que faltaba.</li>
+</ul>
+<p>Y una que salió al probar: <strong>una referencia nueva es kit si cualquiera de sus
+equipos trae componentes</strong>, pero eso se decidía fila por fila, y el resultado
+dependía del orden del Excel — un equipo arriba sin componentes se trataba
+como sencillo. Ahora se decide con todas las filas leídas, y hay una prueba
+que pone las filas en el orden &quot;malo&quot;.</p>
+<hr />
+<h3 id="58-disponibles-una-lista-de-seriales-no-se-lee-agrupada-por-referencia-s">5.8 Disponibles: una lista de seriales no se lee; agrupada por referencia, sí</h3>
+<p><em>(2026-09-12, a pedido del usuario.)</em> La pestaña <strong>Disponibles</strong> era una lista
+plana: una fila por unidad, con el serial de título. Con 4 equipos se lee bien.
+Con los 1.412 del inventario real son <strong>32 flotadores GENEBRE seguidos</strong>, 20
+difusores seguidos y 18 bombas dosificadoras seguidas — una pared de seriales
+donde no se distingue nada.</p>
+<p>Ahora cada <strong>referencia</strong> es una fila que se abre y se cierra con un chevron, y
+sus seriales cuelgan de ella, ocultos hasta que alguien los pide. El título del
+grupo es la referencia; el ícono, el de §5.5.</p>
+<p><strong>Las dos decisiones de fondo:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Decisión</th>
+<th>Por qué</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>El contador del grupo lo calcula la BASE</strong>, no la app contando lo descargado</td>
+<td>La lista venía paginada de 50 en 50. Contar lo que se alcanzó a bajar diría <em>&quot;3 disponibles&quot;</em> cuando hay 7 y cuatro venían en la página siguiente — un número que el jefe de bodega puede creer y usar. Los grupos salen de <code>activos_resumen_por_referencia()</code>, que cuenta en SQL</td>
+</tr>
+<tr>
+<td><strong>Los seriales se piden al abrir el chevron</strong>, no antes</td>
+<td>Bajar todas las unidades de todas las referencias para mostrarlas escondidas es tráfico que nadie mira. Se piden una vez por grupo y se guardan: cerrar y volver a abrir no vuelve a consultar</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Y el hueco que destapó:</strong> <code>activos_resumen_por_referencia()</code> <strong>no tenía
+respaldo sin señal</strong>. La pestaña &quot;Por referencia&quot; llevaba desde su nacimiento
+mostrando la pantalla de error cuando no había internet, aunque el caché local
+tuviera todos los equipos. Nadie lo había notado porque en la oficina siempre
+hay señal — y el módulo lo usa gente <strong>en bodega</strong>. Se le agregó el mismo
+respaldo que ya tenía <code>disponibles()</code>: contar sobre el caché, con los mismos
+filtros independientes que usa el SQL (<code>disponible</code> y <code>estado='entregado'</code> se
+cuentan aparte, y <em>no disponibles</em> sale de la resta).</p>
+<blockquote>
+<p><strong>Lección:</strong> al agrupar una lista paginada, el contador del grupo no puede
+salir de lo que hay en memoria. O lo cuenta la base, o el número miente
+justo hasta que alguien carga la página siguiente — y para entonces ya
+tomó la decisión.</p>
+</blockquote>
+<blockquote>
+<p><strong>Lección:</strong> una función nueva hereda las obligaciones de las viejas. Si en
+este módulo <em>toda</em> consulta tiene respaldo en el caché porque se usa sin
+señal, la que se agregue después también lo necesita; si no, abre un hueco
+que solo aparece donde no hay quien lo reporte.</p>
+</blockquote>
+<p><strong>Detalle de implementación que cuesta un bug si se olvida:</strong> cada <code>ExpansionTile</code>
+lleva <code>PageStorageKey(referenciaId)</code>. Sin esa llave, el <code>ListView</code> recicla las
+filas al desplazarse y el chevron que el usuario abrió <strong>se cierra solo</strong> al
+volver a subir.</p>
+<h2 id="6-permisos">6. Permisos</h2>
+<p><strong>Qué va aquí:</strong> quién puede hacer qué, y <strong>dónde se hace cumplir</strong>.</p>
+<p><strong>El del módulo:</strong> un rol nuevo, <code>equipos</code>, que da acceso completo. <code>admin</code> y
+<code>coordinador</code> entran por defecto.</p>
+<p>Se aplica en <strong>RLS de la base de datos</strong>, no en la app. Ocultar un botón no es
+seguridad: cualquiera con el token puede llamar la API igual.</p>
+<p><strong>Una excepción al &quot;acceso completo&quot;.</strong> <em>(2026-09-10, <code>schema_v62</code>.)</em></p>
+<table>
+<thead>
+<tr>
+<th>Acción</th>
+<th align="center">admin</th>
+<th align="center">coordinador</th>
+<th align="center">equipos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agregar una observación</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+</tr>
+<tr>
+<td><strong>Modificar</strong> una observación ya escrita</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center"><strong>✘</strong></td>
+</tr>
+<tr>
+<td><strong>Anular</strong> un movimiento de equipo o de componente de un kit</td>
+<td align="center">✔</td>
+<td align="center"><strong>✘</strong></td>
+<td align="center"><strong>✘</strong></td>
+</tr>
+<tr>
+<td>Mover un componente de un kit <strong>sin escribir el motivo</strong></td>
+<td align="center">✘</td>
+<td align="center">✘</td>
+<td align="center">✘</td>
+</tr>
+</tbody>
+</table>
+<p>El motivo de un movimiento de componente es una observación más (§3, decisión
+f): se edita con las mismas reglas que las otras —admin y coordinador— y
+<strong>nadie</strong> puede registrarlo ni dejarlo vacío (<code>schema_v67</code>).</p>
+<p>Los roles de operario (<code>operario_mas</code>, <code>operario_menos</code>) son del Inventario y
+<strong>no entran</strong> al módulo de Equipos. Hoy los tres bodegueros entran porque
+también son coordinadores — y por eso sí editan.</p>
+<p><strong>Cómo se hace cumplir una regla sobre UNA columna.</strong> No se puede quitarle el
+permiso de <code>UPDATE</code> al rol <code>equipos</code> sobre esas tablas: lo necesita para
+cambiar el estado, cerrar ubicaciones, etc. Lo que se bloquea es cambiar una
+columna concreta, con un trigger <code>before update of &lt;columna&gt;</code> que solo se
+dispara si esa columna viene en el <code>UPDATE</code>. Una sola función para las tres
+tablas: el nombre de la columna le llega como argumento del trigger.</p>
+<p>El lápiz de editar tampoco se le muestra al rol <code>equipos</code>. Pero eso <strong>no</strong> es
+el candado — es cortesía, para no ofrecerle un botón que la base le va a
+rechazar.</p>
+<p><strong>El hueco que apareció al probarlo.</strong> Para probar la regla había que darle el
+rol <code>equipos</code> a un usuario de prueba… y <strong>la base no lo dejó</strong>. La restricción
+de <code>usuario_roles</code> tenía seis roles y <strong>le faltaba <code>equipos</code></strong>. Quedó así desde
+la Fase 1: el rol se agregó a la app (<code>Roles.todos</code>) y a todas las políticas
+RLS del módulo, pero no a la lista de valores permitidos. <strong>Nadie podía
+tenerlo.</strong> Si el admin intentaba asignárselo a alguien desde la app, fallaba.</p>
+<p>No se había notado porque los tres usuarios que entran a Equipos lo hacen como
+coordinadores.</p>
+<blockquote>
+<p><strong>Lección:</strong> una prueba de permisos tiene que probar <strong>el rol</strong>, no a una
+persona. Si se hubiera probado con un usuario que tuviera <em>solo</em> el rol
+<code>equipos</code>, esto habría saltado el día que se creó el módulo. Probar con los
+usuarios que ya existen solo prueba los roles que ya se usan.</p>
+</blockquote>
+<hr />
+<h2 id="7-fases-de-entrega">7. Fases de entrega</h2>
+<p><strong>Qué va aquí:</strong> el orden, y <strong>qué desbloquea cada fase</strong>. Ordenar por
+dependencia, no por lo que se ve más bonito.</p>
+<table>
+<thead>
+<tr>
+<th>Fase</th>
+<th>Qué</th>
+<th>Por qué en ese orden</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>SQL</td>
+<td>Sin tablas no hay nada</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Capa de datos</td>
+<td>Aísla la app de la base</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Navegación</td>
+<td>Riesgo alto: toca el login de todos</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Pantallas</td>
+<td>Lo más largo</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Informes</td>
+<td>Necesitan datos reales</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Despliegue</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Lección de la Fase 3:</strong> era la única que tocaba el login de <strong>todos</strong> los
+usuarios. Se desplegó primero en una URL de prueba y solo pasó a producción
+tras confirmarlo. Marcar en el SDD <strong>cuál fase es la peligrosa</strong> hace que se
+trate distinto llegado el momento.</p>
+</blockquote>
+<hr />
+<h2 id="8-riesgos">8. Riesgos</h2>
+<p><strong>Qué va aquí:</strong> qué puede salir mal, dicho <strong>antes</strong> de que salga mal. Esta
+sección es la que más se omite y la que más vale.</p>
+<p><strong>Los que se anotaron y se cumplieron:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Riesgo anotado</th>
+<th>Qué pasó</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cambiar el <code>AuthGate</code> rompe el login de todos</td>
+<td>Se probó aparte. No pasó nada</td>
+</tr>
+<tr>
+<td>El texto libre en <code>mantenimiento_actor</code> se va a chocar con <code>activo_ubicaciones</code></td>
+<td><strong>Se cumplió.</strong> Ver abajo</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9-los-errores-reales-los-que-se-atajaron--y-qu-ensea-cada-uno">9. Los errores reales, los que se atajaron — y qué enseña cada uno</h2>
+<p>Esta es la sección más útil del documento. <strong>Un SDD también sirve para escribir
+lo que salió mal</strong>, no solo lo que se planeó.</p>
+<h3 id="91-el-error-que-el-sdd-s-haba-previsto">9.1 El error que el SDD SÍ había previsto</h3>
+<p><code>mantenimiento_actor</code> se dejó como <strong>texto libre</strong> por decisión explícita. Al
+escribir el diseño se anotó: <em>&quot;posible solapamiento futuro con
+activo_ubicaciones, vigilar&quot;</em>.</p>
+<p>Se cumplió exactamente. El usuario llevó una bomba al taller MetalAndes usando
+&quot;Cambiar estado&quot; y <strong>no apareció en el historial de ubicaciones</strong>, porque ese
+campo no crea registro. Había dos caminos para la misma acción y no se hablaban.</p>
+<p><strong>Agravante:</strong> el catálogo de terceros estaba vacío, así que el camino correcto
+ni siquiera ofrecía opciones. La app empujaba al único camino que no dejaba
+rastro.</p>
+<blockquote>
+<p><strong>Lección:</strong> anotar un riesgo <strong>no lo evita</strong>. Si al escribir el diseño dices
+&quot;esto puede chocar&quot;, o lo resuelves ahí, o pones una fecha para revisarlo.
+Un riesgo anotado y olvidado es igual que no haberlo anotado.</p>
+</blockquote>
+<h3 id="92-el-error-que-ninguna-prueba-de-base-detect">9.2 El error que ninguna prueba de base detectó</h3>
+<p>Las consultas a la vista <code>activos_disponibilidad</code> fallaban con <strong>PGRST201</strong>: la
+vista llega a <code>bodegas</code> por dos caminos y hay que decir cuál.</p>
+<p>Todas las pruebas SQL pasaban. <strong>Porque las pruebas SQL no pasan por PostgREST</strong>,
+que es la capa por la que habla la app de verdad.</p>
+<blockquote>
+<p><strong>Lección:</strong> prueba en la <strong>misma capa</strong> por la que va a pasar el usuario. Una
+prueba en la capa equivocada da una confianza falsa, que es peor que no probar.</p>
+</blockquote>
+<h3 id="93-el-error-de-no-mirar-al-lado">9.3 El error de no mirar al lado</h3>
+<p><code>materiales</code> llevaba años con un índice único normalizado para que no se
+duplicaran nombres. A <code>activo_referencias</code> no se le puso. Resultado: se podían
+crear &quot;BOMBA CENTRIFUGA&quot; y &quot;bomba  centrifuga&quot; como dos referencias distintas.</p>
+<p>El mismo descuido apareció tres veces más: topes de 200 registros en selectores,
+formato de dinero sin separador de miles, y desplegables sin buscador — todas
+cosas que el resto de la app <strong>ya tenía resueltas</strong>.</p>
+<blockquote>
+<p><strong>Lección:</strong> antes de escribir una pantalla nueva, <strong>mira cómo resolvió el
+proyecto el problema equivalente</strong>. El SDD debería incluir una lista de
+&quot;convenciones que ya existen y hay que respetar&quot;.</p>
+</blockquote>
+<h3 id="94-el-error-de-la-regla-escrita-mal">9.4 El error de la regla escrita mal</h3>
+<p>En el diseño quedó escrito un SQL que excluía los aprovechamientos poniendo la
+condición en el <code>ON</code> de un <code>LEFT JOIN</code>. Ahí <strong>no excluye nada</strong>: la fila
+sobrevive igual. Va en un <code>FILTER</code>.</p>
+<p>Se detectó comparando el resultado contra un informe que ya existía y daba el
+número correcto.</p>
+<blockquote>
+<p><strong>Lección doble:</strong> (1) el SQL de un documento de diseño <strong>no está probado</strong> —
+trátalo como borrador. (2) Cuando calcules una cifra nueva, <strong>compárala contra
+una que ya sea confiable</strong>.</p>
+</blockquote>
+<h3 id="95-el-error-que-introdujo-el-arreglo-del-91">9.5 El error que introdujo el arreglo del 9.1</h3>
+<p><em>Detectado el 2026-09-10, corregido el mismo día.</em></p>
+<p>El 9.1 se arregló unificando estado y ubicación: mandar un equipo a un taller
+pasó a ser <strong>una sola acción</strong>, y para eso la hoja empezó a exigir que se
+eligiera el taller del catálogo.</p>
+<p>La regla quedó escrita así:</p>
+<pre><code class="language-dart">bool get _faltaTaller =&gt;
+    _estado == 'mantenimiento_externo' &amp;&amp; _taller == null;
+</code></pre>
+<p>Léela con un equipo que <strong>ya estaba</strong> en un taller. El usuario abre la hoja solo
+para cambiar la condición de <em>usado</em> a <em>para repuestos</em>. <code>_estado</code> arranca en
+<code>mantenimiento_externo</code> — no lo cambió nadie, ya era así — y <code>_taller</code> arranca
+en <code>null</code>, porque nunca se precargaba. Entonces <code>_faltaTaller</code> es verdadero, y
+<code>_guardar()</code> se devolvía en su primera línea:</p>
+<pre><code class="language-dart">if (_faltaTaller) { setState(() {}); return; }
+</code></pre>
+<p><strong>Sin guardar y sin decir nada.</strong> El usuario oprimía Guardar y no pasaba
+absolutamente nada. Ni error, ni cierre de la hoja, ni cambio en la ficha.</p>
+<p>Dos defectos distintos en cuatro líneas:</p>
+<ol>
+<li><strong>La condición confundió &quot;estar&quot; con &quot;entrar&quot;.</strong> Se exige el taller cuando el
+equipo <strong>entra</strong> a un taller, no mientras esté en uno. Corregido comparando
+contra el estado con el que se abrió la hoja:
+<code>_estado == 'mantenimiento_externo' &amp;&amp; widget.activo.estado != 'mantenimiento_externo'</code>.</li>
+<li><strong>Falló en silencio.</strong> <code>setState(() {})</code> repinta el campo en rojo, pero la
+hoja está scrolleada y el usuario nunca ve el rojo. Ahora hay un
+<code>SnackBar</code> que dice qué falta.</li>
+</ol>
+<p><strong>Y el arreglo casi introduce un tercero.</strong> Al precargar el taller para que
+quedara seleccionado, guardar un simple cambio de condición habría vuelto a
+llamar <code>cambiarUbicacion()</code> — registrando <strong>otra vez la misma ubicación</strong> y
+llenando de filas repetidas justo el historial que el 9.1 vino a arreglar. Se
+cerró guardando el taller original y comparando: solo se registra ubicación si
+el taller <strong>cambió</strong>.</p>
+<blockquote>
+<p><strong>Lección triple:</strong>
+(1) <strong>El arreglo de un error es código nuevo, y puede traer su propio error.</strong>
+El 9.1 y el 9.5 son la misma pantalla, con seis días de diferencia.
+(2) <strong>Un campo obligatorio hay que leerlo en el estado que ya existe</strong>, no
+solo en el flujo feliz de crear algo desde cero. La pregunta que faltó fue:
+<em>&quot;¿y si el equipo ya está así?&quot;</em>.
+(3) <strong>Nada puede fallar en silencio.</strong> Si una acción no se puede completar,
+tiene que decirlo. Un botón que no hace nada es peor que un error.</p>
+</blockquote>
+<p><strong>Post-scriptum del mismo día:</strong> al buscar el patrón en el resto del archivo
+apareció <strong>el mismo <code>return</code> mudo</strong> en la hoja de &quot;Cambiar ubicación&quot;, que
+nadie había reportado todavía:</p>
+<pre><code class="language-dart">if (_enBodega &amp;&amp; _bodega == null) return;
+if (!_enBodega &amp;&amp; _tercero == null) return;
+</code></pre>
+<p>Corregido igual, con su mensaje. <strong>Cuando encuentres un defecto, búscalo en
+todo el archivo antes de darlo por cerrado</strong> — es la misma lección del 9.3, y
+el usuario ya la había tenido que dar una vez (&quot;le pusiste la X a 2 de 6
+hojas&quot;).</p>
+<h3 id="96-el-error-de-arreglar-solo-la-mitad-de-un-camino">9.6 El error de arreglar solo la mitad de un camino</h3>
+<p><em>Detectado el 2026-09-10 por el usuario, sobre el equipo <code>A9772113810000036 P12209</code>.</em></p>
+<p>Este es el 9.1 <strong>otra vez</strong>, en la dirección contraria.</p>
+<p>El 9.1 se arregló haciendo que mandar un equipo a un taller registrara la
+ubicación. Se probó, funcionó, se dio por cerrado. Pero solo se programó la
+<strong>ida</strong>:</p>
+<pre><code class="language-dart">if (_estado == 'mantenimiento_externo' &amp;&amp; _taller != null) {
+  await ActivosService.cambiarUbicacion(...);   // va al taller
+}
+// ...y no hay ningún else. Volver no registra nada.
+</code></pre>
+<p>El usuario devolvió la bomba a Bodega RPCI cambiando el estado de &quot;En un
+taller externo&quot; a &quot;Operativo&quot; — que es exactamente lo que significa que
+regresó — y <strong>no se registró nada</strong>. El historial siguió diciendo que el
+equipo estaba en TALLER METALANDES.</p>
+<p>Los datos quedaron contándose dos historias distintas:</p>
+<table>
+<thead>
+<tr>
+<th>Fuente</th>
+<th>Decía</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>activo_ubicaciones</code> (vigente)</td>
+<td>TALLER METALANDES, desde las 15:13</td>
+</tr>
+<tr>
+<td>La ficha del equipo</td>
+<td>Operativo, en Bodega RPCI</td>
+</tr>
+</tbody>
+</table>
+<p><strong>La regla que faltaba escribir</strong>, y que ahora está en el código:</p>
+<blockquote>
+<p>El estado y la ubicación tienen que contar la <strong>misma</strong> historia, en las
+<strong>dos</strong> direcciones. Si <code>estado = mantenimiento_externo</code>, el equipo está en
+un tercero. Si deja de estarlo, volvió a su bodega — y eso es un movimiento
+físico real que va al historial con su fecha y su responsable.</p>
+</blockquote>
+<p>De paso se corrigieron dos cosas más de la misma pantalla:</p>
+<ul>
+<li>La preselección del taller ahora sale de <strong>la ubicación vigente</strong>, no de
+adivinar partiendo el texto de <code>mantenimiento_actor</code>. El dato duro estaba
+ahí desde el principio y se estaba usando el blando.</li>
+<li>La ventana ahora <strong>dice qué va a pasar</strong> antes de guardar: <em>&quot;El equipo
+vuelve a Bodega RPCI. Queda en el historial de ubicaciones.&quot;</em> La ambigüedad
+entre esta pantalla y &quot;Cambiar ubicación&quot; es lo que produjo el error.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> cuando arregles un camino, <strong>recórrelo en los dos sentidos</strong>.
+Un cambio de estado que implica un movimiento físico lo implica también al
+revés, y la mitad que no se programa no falla con un error: falla
+<strong>callada</strong>, dejando los datos mintiendo.</p>
+<p><strong>Y la lección de segundo orden, que es la que más duele:</strong> el 9.1, el 9.5
+y el 9.6 son <strong>la misma pantalla y el mismo tema</strong>, en seis días. Dar por
+cerrado un arreglo sin preguntarse <em>&quot;¿qué otro camino toca esto mismo?&quot;</em> es
+lo que hace que un error vuelva con otra cara.</p>
+</blockquote>
+<p><strong>Cómo se corrigió el dato que ya estaba mal.</strong> Arreglar el código evita que
+vuelva a pasar, pero no arregla la bomba que ya había quedado descuadrada — y
+esa, además, <strong>no aparecía en la lista de disponibles</strong>, porque su ubicación
+vigente seguía siendo un taller. Se corrigió directo en la base, con dos
+detalles que vale la pena copiar:</p>
+<ul>
+<li><strong>La hora se sacó de la auditoría, no se inventó.</strong> <code>auditoria</code> tenía el
+instante exacto en que el estado pasó de <code>mantenimiento_externo</code> a
+<code>operativo</code> (15:35:44). El registro de ubicación se puso con esa hora, no
+con la de la corrección. Si se hubiera usado <code>now()</code>, el historial diría que
+el equipo estuvo 40 minutos más en el taller de lo que estuvo.</li>
+<li><strong>La nota de corrección va en el propio registro.</strong> El <code>detalle</code> dice qué
+pasó, que es una corrección y por qué. Quien lea el historial en un año no
+tiene que adivinar por qué hay una fila que no creó la app.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> la auditoría no es solo para buscar culpables. Es la fuente
+para <strong>reconstruir la verdad</strong> cuando un camino del código falló en
+silencio. Por eso vale la pena tenerla encendida en todas las tablas desde
+el día uno.</p>
+</blockquote>
+<h3 id="97-el-error-de-unificar-desde-una-sola-puerta">9.7 El error de unificar desde una sola puerta</h3>
+<p><em>Reportado por el usuario el 2026-09-10, el mismo día que el 9.6, sobre el
+mismo equipo.</em></p>
+<p>Después del 9.6 quedó escrita la regla: <em>el estado y la ubicación cuentan la
+misma historia, en las dos direcciones.</em> Y se programó — <strong>en la ventana de
+Estado</strong>. Mandar a un taller desde ahí registraba la ubicación; volver,
+también.</p>
+<p>Pero había <strong>otra puerta</strong>. La ventana de <strong>&quot;Cambiar ubicación&quot;</strong> llama a la
+función <code>cambiar_ubicacion_activo</code>, y esa función solo movía la ubicación. <strong>No
+miraba el estado nunca.</strong> El usuario mandó la bomba al TALLER JUAN GABRIEL
+MONTOYA por ahí, y la ficha siguió diciendo <strong>&quot;Operativo&quot;</strong> en verde.</p>
+<table>
+<thead>
+<tr>
+<th>Puerta</th>
+<th>Ida al taller</th>
+<th>Regreso</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ventana de Estado</td>
+<td>✔ (arreglado en 9.1)</td>
+<td>✔ (arreglado en 9.6)</td>
+</tr>
+<tr>
+<td>Ventana de Ubicación</td>
+<td><strong>✘ nunca tocó el estado</strong></td>
+<td><strong>✘ nunca tocó el estado</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Tres errores seguidos (9.1, 9.6, 9.7) y <strong>los tres se arreglaron en la
+pantalla</strong>. Por eso volvían: cada arreglo tapaba una puerta y dejaba abierta
+la de al lado.</p>
+<p><strong>El arreglo de verdad fue sacar la regla de la pantalla y meterla en la
+base</strong> (<code>schema_v61</code>). Ahora es <code>cambiar_ubicacion_activo</code> la que decide:</p>
+<pre><code>a un tercero tipo 'taller'  -&gt; estado mantenimiento_externo
+                               + el taller en mantenimiento_actor
+a una bodega, desde taller  -&gt; estado operativo, sin mantenimiento_actor
+un equipo entregado         -&gt; se rechaza: ya no es nuestro
+</code></pre>
+<p>Así, <strong>no importa por qué puerta entre el usuario</strong>: la regla vive en un solo
+sitio y las dos pantallas pasan por ella. La de Estado sigue funcionando igual
+porque pone el estado <em>antes</em> de llamar a la función, y al llegar no queda nada
+por cambiar — así que no pisa lo que el usuario eligió (por ejemplo, volver
+del taller directo a mantenimiento interno).</p>
+<p>Dos detalles más de la misma función:</p>
+<ul>
+<li><code>select ... for update</code> al leer el estado: si dos personas mueven el mismo
+equipo a la vez, ninguna puede dejar el estado de una y la ubicación de la
+otra.</li>
+<li>Un equipo <strong>entregado</strong> ya no se puede mover ni por la API. Antes solo se
+escondía el botón (regla 3), que es lo que un error de la sección 6 dice que
+<strong>no</strong> es seguridad.</li>
+</ul>
+<p>Y la ficha dejó de decir &quot;Operativo&quot; en verde para cualquier equipo que no se
+pueda entregar: si está para repuestos, de baja, <strong>o fuera de la bodega</strong> (un
+préstamo a un cliente), dice <strong>&quot;No disponible&quot;</strong> en gris. La ventana de
+ubicación, igual que la de estado, avisa <strong>antes</strong> de guardar qué va a pasar:
+<em>&quot;Al guardar: pasa a 'En mantenimiento (externo)' en TALLER JUAN GABRIEL
+MONTOYA. NO queda disponible mientras esté allá.&quot;</em></p>
+<p>La bomba se corrigió en la base con la nota obligatoria en sus observaciones,
+y se verificó con una consulta que <strong>ningún otro equipo</strong> quedara en la misma
+contradicción.</p>
+<blockquote>
+<p><strong>Lección — la más importante de toda esta sección:</strong> si una regla de
+negocio tiene que cumplirse <strong>siempre</strong>, no puede vivir en una pantalla.
+Una pantalla es <strong>una</strong> puerta; la base es <strong>la casa</strong>. El SDD lo decía desde
+la sección 4 (<em>&quot;si la regla debe cumplirse siempre, va en la base&quot;</em>) y aun
+así se programó tres veces en la pantalla. <strong>Escribir un principio no es lo
+mismo que aplicarlo.</strong></p>
+</blockquote>
+<h3 id="98-los-que-se-atajaron-antes-de-publicar">9.8 Los que se atajaron antes de publicar</h3>
+<p><em>2026-09-10, Fase 2 de Referencias KITZABLES.</em></p>
+<p>Los siete errores de arriba llegaron a producción. Estos <strong>no</strong>, y vale la
+pena contarlos porque enseñan lo mismo desde el otro lado: <strong>qué verificación
+los paró</strong>. En este proyecto el push a <code>main</code> publica solo (CI/CD), así que lo
+que no se ataje antes del commit lo ve el usuario.</p>
+<p><strong>a) El arreglo que rompía una pantalla que funcionaba.</strong> Para que el usuario
+viera mensajes claros y no <code>PostgrestException(message: …, code: 23505)</code>, se
+envolvió <code>editarReferencia()</code> para traducir los errores. Parecía una mejora
+sin riesgo. Pero la pantalla de referencias <strong>ya existía</strong>, y reconoce un
+nombre duplicado buscando el texto <code>activo_referencias_uniq</code> o <code>23505</code>
+<strong>dentro del error crudo</strong>. Con la traducción, esas palabras desaparecían: el
+aviso de &quot;ya existe&quot; habría dejado de salir y el usuario habría visto un error
+genérico.</p>
+<p>Se atajó con una búsqueda de un minuto — <code>grep &quot;23505\|_uniq&quot;</code> sobre la
+pantalla — antes de seguir. La traducción quedó solo en las funciones nuevas
+de kits, que nadie más lee todavía.</p>
+<blockquote>
+<p><strong>Lección:</strong> antes de cambiar <strong>cómo sale</strong> un error, busca <strong>quién lee</strong> ese
+error. Un mensaje de error no es solo texto: a veces es la entrada de otro
+código.</p>
+</blockquote>
+<p><strong>b) El error que el análisis no vio porque se analizaba la carpeta
+equivocada.</strong> Durante todo el día se corrió <code>flutter analyze lib/</code>. Una prueba
+nueva tenía una variable llamada <code>daño</code> — y Dart no acepta la <code>ñ</code> en nombres.
+El archivo estaba en <code>test/</code>, no en <code>lib/</code>, así que el análisis salía limpio.
+Lo detectó <code>flutter test</code>. El CI corre <code>flutter analyze</code> sobre <strong>todo</strong> el
+proyecto: allá habría fallado y frenado la publicación, pero después del
+commit.</p>
+<blockquote>
+<p><strong>Lección:</strong> verifica <strong>exactamente lo mismo que verifica el CI</strong>, con los
+mismos comandos. Una verificación local &quot;parecida&quot; da una confianza que no
+corresponde.</p>
+</blockquote>
+<p><strong>c) La regla que no se copió al concepto hermano.</strong> Al diseñar la pantalla
+para anular movimientos de componentes de un kit (Fase 5), se revisó quién
+anula un movimiento de <strong>equipo</strong>: la base solo se lo deja al administrador.
+La Fase 1 de los kits había copiado de los movimientos de equipo casi todo —la
+anulación con movimiento contrario, el índice que impide anular dos veces, el
+candado que no deja editarlos— <strong>menos el permiso</strong>. Un coordinador podía anular
+un movimiento de componente pero no uno de equipo: dos reglas distintas para lo
+mismo, en el mismo módulo. Se corrigió en la base (<code>schema_v66</code>) antes de que
+existiera la pantalla que lo usaría.</p>
+<blockquote>
+<p><strong>Lección:</strong> cuando construyas algo <strong>paralelo</strong> a lo que ya existe (aquí,
+movimientos de componente al lado de movimientos de equipo), haz la lista de
+<strong>todas</strong> las reglas del hermano —cómo se valida, cómo se anula, qué candado
+tiene y <strong>quién puede</strong>— y revisa una por una. El permiso es la que más se
+olvida, porque no se ve en el código de la tabla sino en el de la función.</p>
+</blockquote>
+<p><strong>d) &quot;Quedan −2&quot;: el empate que desordenó la historia.</strong> <em>(<code>schema_v67</code>.)</em>
+Para mostrar cuántos quedaban después de cada novedad de un componente, la
+vista suma los movimientos en orden de fecha. La prueba en <code>rollback</code> creó el
+componente con 24 y le retiró 2… y la vista dijo <strong>&quot;quedan −2&quot;</strong>. En la prueba,
+el alta y el retiro estaban en la misma transacción, y en Postgres <code>now()</code>
+devuelve <strong>la misma hora</strong> durante toda una transacción: empate. El desempate
+era el <code>id</code>, un UUID <strong>aleatorio</strong>, así que a veces el retiro &quot;pasaba&quot; antes
+del alta. Se arregló poniendo como segundo criterio lo que sí tiene sentido —el
+alta va primero— y la prueba dio 22, 23 y 25 donde tenía que darlos.</p>
+<p>En producción era difícil que pasara (cada movimiento es su propia
+transacción), pero <strong>no imposible</strong>, y el día que pasara el número estaría mal
+sin que nadie supiera por qué.</p>
+<blockquote>
+<p><strong>Lección:</strong> ordenar por fecha no es ordenar. Cuando el orden <strong>decide un
+número</strong>, pregúntate qué pasa con dos filas de la misma hora, y desempata con
+algo que signifique algo — nunca con un identificador al azar.</p>
+</blockquote>
+<p><strong>e) La misma regla hermana, otra vez.</strong> <em>(2026-09-11, <code>schema_v69</code>.)</em> Al
+poner el reingreso en el listado —con su lápiz para editar— se revisó quién
+puede cambiar el texto de un movimiento. La regla <em>&quot;solo admin y coordinador
+modifican una observación ya escrita&quot;</em> (<code>schema_v62</code>) estaba en las <strong>cuatro</strong>
+tablas que alimentaban el listado… y <strong>no</strong> en <code>activo_movimientos</code>, que nunca
+había sido una de ellas. Con el lápiz, el rol <code>equipos</code> habría podido cambiar
+el texto de un reingreso. Se le puso el mismo trigger y se probó con un usuario
+al que se le dejó <strong>solo</strong> el rol <code>equipos</code>: lo ve, pero no lo edita.</p>
+<p>Es la lección del (c) repetida: cuando una tabla <strong>empieza a jugar un papel
+nuevo</strong> (aquí, alimentar el listado de observaciones), hereda todas las reglas
+de ese papel, y hay que ir a ponérselas.</p>
+<p><strong>Y al lado, otro hueco — este sin cerrar todavía.</strong> La tabla
+<code>activo_movimientos</code> tiene una política <code>equipos_del</code> que deja <strong>borrar</strong>
+movimientos a admin, coordinador y rol <code>equipos</code>, cuando la regla del módulo es
+que un movimiento <strong>nunca se borra: se anula</strong>. Ninguna pantalla borra, pero la
+API sí lo permitiría, y un borrado no deshace lo que el movimiento hizo (el
+estado y la ubicación los cambia un trigger que solo corre al insertar).
+Queda anotado y se le preguntó al usuario antes de cerrarlo. (La tabla de
+componentes no tiene ese hueco: no tiene política de borrado.)</p>
+<p><strong>f) Las ocho migraciones que no estaban en el repo.</strong> <em>(Corregido el
+2026-09-11.)</em> La carpeta <code>supabase/</code> saltaba de la <code>v46</code> a la <code>v54</code>: las
+<code>v47</code> a <code>v53</code> (con la <code>v49b</code>) se habían aplicado a la base desde el MCP <strong>sin
+escribir antes su archivo</strong>. La base funcionaba, pero reconstruirla desde los
+archivos —la razón de tenerlos— habría dejado fuera el resumen por
+referencia, la auditoría de Equipos, las referencias sin duplicados y la
+búsqueda de seriales sin tildes. Se recuperaron de
+<code>supabase_migrations.schema_migrations</code>, que guarda el texto <strong>exacto</strong> que
+corrió, en vez de reescribirlas de memoria.</p>
+<blockquote>
+<p><strong>Lección:</strong> el archivo de la migración se escribe <strong>antes</strong> de aplicarla,
+no después. Aplicarla primero &quot;para probar&quot; es como se pierde: funciona, y
+ya nadie vuelve a escribir el archivo. Desde la <code>v54</code> todas se escriben
+primero, se prueban en una transacción que se deshace, y solo entonces se
+aplican.</p>
+</blockquote>
+<p>Y un detalle de método que se agregó ese día al validar consultas contra la
+API: además de las 8 consultas nuevas (HTTP 200), se mandó <strong>una dañada a
+propósito</strong>, que respondió 400. Una prueba que nunca ha fallado no demuestra
+que sepa detectar un fallo.</p>
+<h3 id="99-el-punto-de-miles-que-vala-0">9.9 El punto de miles que valía $0</h3>
+<p><em>Hallado el 2026-09-10 al construir los kits; corregido el mismo día. No dañó
+datos: se revisó la base.</em></p>
+<p>Cada pantalla que capturaba dinero lo leía así:</p>
+<pre><code class="language-dart">num.tryParse(texto.replaceAll(',', '.'))
+</code></pre>
+<p>La idea era aceptar la coma decimal. Pero en Colombia <strong>el punto separa
+miles</strong>, y ese código trata el punto como decimal:</p>
+<table>
+<thead>
+<tr>
+<th>Escrito</th>
+<th>Quería decir</th>
+<th>Se guardaba</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>45.000</code></td>
+<td>cuarenta y cinco mil</td>
+<td><strong>45</strong></td>
+</tr>
+<tr>
+<td><code>1.540.000</code></td>
+<td>un millón quinientos cuarenta mil</td>
+<td><strong>$0</strong> (no se puede leer)</td>
+</tr>
+</tbody>
+</table>
+<p>Las dos cosas pasaban <strong>en silencio</strong>. Estaba en siete pantallas, incluido el
+costo unitario de los movimientos de Inventario, que se usa todos los días;
+allí <code>num.parse</code> además se reventaba con &quot;1.540.000&quot;.</p>
+<p><strong>El arreglo</strong> (<code>lib/util/dinero.dart</code>): un solo lector de pesos para toda la
+app, <code>leerPesos()</code>, con las reglas de cómo escribe una persona en Colombia —
+varios puntos son miles; un punto seguido de tres dígitos son miles (un valor en
+pesos no tiene tres decimales); uno o dos dígitos después, decimal; si hay punto
+y coma, el último es el decimal. Y debajo de cada campo de dinero, <strong>cómo quedó
+entendido lo escrito</strong>: <em>&quot;= $1.540.000&quot;</em>. Así el valor que se va a guardar se
+ve antes de guardarlo.</p>
+<p>Tres cuidados:</p>
+<ul>
+<li><strong>Solo dinero.</strong> Las cantidades y longitudes no se tocaron: ahí &quot;2.5&quot; puede
+ser, de verdad, dos metros y medio.</li>
+<li><strong>Lo precargado que no se toca, no se vuelve a leer.</strong> Un costo importado de
+12,345 pesos, convertido a texto como &quot;12.345&quot;, se leería como doce mil. Si el
+campo queda igual a como vino, se guarda el número original exacto.</li>
+<li><strong>Se revisó si ya había daño</strong>: costos con tres decimales exactos (la huella
+de un &quot;12.345&quot; mal leído), equipos y mantenimientos con valores sospechosamente
+pequeños. No apareció ninguno.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> el formato de los números es <strong>del usuario, no del
+programador</strong>. <code>replaceAll(',', '.')</code> resolvía el caso que el programador
+imaginó (la coma decimal) y rompía el que el usuario escribe todos los días
+(el punto de miles). Un número que se lee distinto de como se escribió tiene
+que <strong>mostrarse</strong> antes de guardarse.</p>
+</blockquote>
+<hr />
+<h2 id="10-plantilla-para-el-prximo-mdulo">10. Plantilla para el próximo módulo</h2>
+<pre><code>1. Objetivo y alcance          ← incluye lo que queda FUERA
+2. Relación con lo existente   ← qué comparte y qué no, con datos
+3. Modelo de datos             ← justifica lo no obvio
+4. Reglas de negocio           ← y DÓNDE vive cada una
+5. Interfaz                    ← por qué esa forma
+6. Permisos                    ← dónde se hacen cumplir
+7. Fases                       ← ordenadas por dependencia
+8. Riesgos                     ← con fecha de revisión
+9. Convenciones a respetar     ← lo que el proyecto YA resolvió
+10. Decisiones descartadas     ← qué se pensó y por qué no
+</code></pre>
+<p><strong>La sección 10 es la que nadie escribe y la que más se agradece.</strong> Cuando dentro
+de un año alguien proponga &quot;¿y si los equipos fueran elementos serializados?&quot;,
+la respuesta ya está escrita, con la medición que la sustenta.</p>
+<hr />
+<h2 id="11-cmo-mantenerlo-vivo">11. Cómo mantenerlo vivo</h2>
+<p>Un SDD que no se corrige se vuelve mentira, y una mentira documentada es peor que
+no tener nada — porque la gente le cree.</p>
+<p><strong>Reglas simples:</strong></p>
+<ul>
+<li>Cuando una decisión cambie, <strong>corrige el documento en el mismo commit</strong>.</li>
+<li>Cuando un riesgo se cumpla, <strong>anótalo</strong> — es lo que enseña al siguiente.</li>
+<li>Cuando algo se descarte, <strong>escribe por qué</strong>.</li>
+<li>Tachar lo superado (<del>así</del>) y dejarlo visible enseña más que borrarlo.</li>
+</ul>
+<p><strong>Mantenimiento de paquetes.</strong> <em>(2026-09-11.)</em> Se subieron <code>file_picker</code>
+(8 → 12), <code>csv</code> (6 → 8), <code>connectivity_plus</code> (6 → 7), <code>intl</code> (0.19 → 0.20) y
+<code>supabase_flutter</code>. Los dos primeros cambiaron su forma de uso —
+<code>FilePicker.platform.pickFiles()</code> pasó a <code>FilePicker.pickFile()</code>, y los
+convertidores de CSV a un objeto <code>Csv</code>— y con ellos las cuatro pantallas de
+carga de archivos, la descarga y el lector de Excel/CSV. De paso, el mínimo de
+iOS subió a 14, que es lo que ahora exige <code>file_picker</code>. <code>image</code> sigue sin
+poder subir: <code>excel</code> (el que lee los .xlsx) exige versiones viejas de dos
+dependencias que comparten.</p>
+<blockquote>
+<p>La red de pruebas fue lo que permitió hacerlo sin miedo: las 247 pruebas
+—incluidas las de ida y vuelta de CSV— pasan igual antes y después, y la web
+y la APK compilan.</p>
+</blockquote>
+<p>En este proyecto, <code>plan-modulo-equipos.md</code> se corrigió durante todo el
+desarrollo: fases tachadas al completarse, el SQL mal escrito corregido con una
+nota de por qué estaba mal, y las desviaciones del plan anotadas con su
+justificación.</p>
+<hr />
+<p><strong>Ver también:</strong> <a href="plan-modulo-equipos.md"><code>plan-modulo-equipos.md</code></a> es el
+documento de diseño real, con el detalle completo. Este SDD es la versión
+enseñable.</p>
+
+  </main>
+</div>
+<script>
+  // Las tablas salen "desnudas" del markdown; se les envuelve para que en
+  // celular se desplacen solas en vez de estirar la página.
+  for (const t of document.querySelectorAll('main table')) {
+    const caja = document.createElement('div');
+    caja.className = 'tabla';
+    t.parentNode.insertBefore(caja, t);
+    caja.appendChild(t);
+  }
+</script>
+</body>
+</html>
