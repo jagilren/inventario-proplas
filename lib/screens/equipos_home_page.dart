@@ -543,14 +543,33 @@ class _ListaDisponibilidad extends StatefulWidget {
 }
 
 class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
-  static const _porPagina = 50;
+  /// Cuántas unidades se piden al abrir un grupo. Una referencia no llega a
+  /// tantas: la más repetida del inventario de equipos son 32 unidades, así
+  /// que DENTRO del grupo no hace falta paginar.
+  static const _porGrupo = 500;
 
-  final List<ActivoDisponibilidad> _filas = [];
-  int _offset = 0;
-  bool _hayMas = true;
+  /// Los grupos: una fila por referencia. El contador lo calcula la BASE, no
+  /// se cuenta lo descargado — contar lo descargado diría "3 disponibles"
+  /// cuando hay 7 y cuatro venían en la página siguiente.
+  List<ResumenReferencia> _grupos = [];
   bool _cargando = true;
-  bool _cargandoMas = false;
   String? _error;
+
+  /// Las unidades de cada referencia. Se piden la PRIMERA vez que se abre su
+  /// chevron y se guardan, para que cerrar y volver a abrir no consulte otra
+  /// vez.
+  final Map<String, List<ActivoDisponibilidad>> _unidades = {};
+  final Set<String> _cargandoRef = {};
+  final Map<String, String> _errorRef = {};
+
+  /// Qué chevrones dejó abiertos el usuario: si otro usuario mueve un equipo
+  /// hay que volver a pedir las unidades de ESOS grupos, y
+  /// `onExpansionChanged` no se dispara solo.
+  final Set<String> _abiertos = {};
+
+  FiltroEquipos get _filtro => widget.disponible
+      ? FiltroEquipos.disponibles
+      : FiltroEquipos.noDisponibles;
 
   @override
   void initState() {
@@ -565,43 +584,121 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
     super.dispose();
   }
 
-  void _recargar() => _cargar(desdeCero: true);
+  void _recargar() => _cargar();
 
-  Future<void> _cargar({bool desdeCero = false}) async {
-    if (!mounted || _cargandoMas) return;
+  Future<void> _cargar() async {
+    if (!mounted) return;
     setState(() {
+      // Solo la primera vez se tapa la lista con la rueda: en un aviso en
+      // vivo el usuario está mirando y no se le debe borrar lo que lee.
+      _cargando = _grupos.isEmpty;
       _error = null;
-      if (desdeCero) {
-        _offset = 0;
-        _hayMas = true;
-        _filas.clear();
-        _cargando = true;
-      } else if (_offset > 0) {
-        _cargandoMas = true;
-      }
     });
     try {
-      final res = await ActivosService.disponibles(
-          disponible: widget.disponible,
-          offset: _offset,
-          limit: _porPagina);
+      final res = await ActivosService.resumenPorReferencia();
       if (!mounted) return;
+      final grupos = res.where((r) => r.cuantas(_filtro) > 0).toList()
+        ..sort((a, b) =>
+            a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
       setState(() {
-        _filas.addAll(res);
-        _offset += res.length;
-        // Una página incompleta significa que ya no queda nada detrás.
-        if (res.length < _porPagina) _hayMas = false;
+        _grupos = grupos;
+        _unidades.clear();
+        _errorRef.clear();
         _cargando = false;
-        _cargandoMas = false;
       });
+      for (final id in _abiertos) {
+        _cargarUnidades(id);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = '$e';
         _cargando = false;
-        _cargandoMas = false;
       });
     }
+  }
+
+  Future<void> _cargarUnidades(String referenciaId) async {
+    if (_cargandoRef.contains(referenciaId)) return;
+    setState(() {
+      _cargandoRef.add(referenciaId);
+      _errorRef.remove(referenciaId);
+    });
+    try {
+      final res = await ActivosService.disponibles(
+        filtro: _filtro,
+        referenciaId: referenciaId,
+        limit: _porGrupo,
+      );
+      if (!mounted) return;
+      setState(() {
+        _unidades[referenciaId] = res;
+        _cargandoRef.remove(referenciaId);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorRef[referenciaId] = '$e';
+        _cargandoRef.remove(referenciaId);
+      });
+    }
+  }
+
+  /// "4 disponibles" / "1 no disponible", con el singular bien puesto.
+  String _cuenta(int n) => widget.disponible
+      ? '$n ${n == 1 ? 'disponible' : 'disponibles'}'
+      : '$n ${n == 1 ? 'no disponible' : 'no disponibles'}';
+
+  /// Lo que se ve al abrir un chevron: la rueda, el error con su reintento,
+  /// o los seriales.
+  List<Widget> _unidadesDe(ResumenReferencia g) {
+    final error = _errorRef[g.referenciaId];
+    if (error != null) {
+      return [
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 72, right: 8),
+          title: Text('No se pudieron cargar las unidades: $error'),
+          trailing: TextButton(
+            onPressed: () => _cargarUnidades(g.referenciaId),
+            child: const Text('Reintentar'),
+          ),
+        ),
+      ];
+    }
+    final unidades = _unidades[g.referenciaId];
+    if (unidades == null) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (unidades.isEmpty) {
+      return const [
+        ListTile(
+          contentPadding: EdgeInsets.only(left: 72, right: 16),
+          title: Text('Sin unidades que mostrar.'),
+        ),
+      ];
+    }
+    return unidades
+        .map((d) => ListTile(
+              // Sangrado a la altura del texto del grupo: la unidad se lee
+              // como que cuelga de su referencia.
+              contentPadding: const EdgeInsets.only(left: 72, right: 16),
+              title: Text(d.activo.serial),
+              // La referencia ya está en el título del grupo; aquí sobra.
+              subtitle: Text(d.activo.bodegaNombre ?? '—'),
+              trailing: Text(_money.format(d.activo.valorActual),
+                  style: const TextStyle(fontSize: 12)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
+              ),
+            ))
+        .toList();
   }
 
   @override
@@ -610,46 +707,50 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
     if (_error != null) {
       return _MensajeError(error: _error!, onReintentar: _recargarAsync);
     }
-    if (_filas.isEmpty) {
+    if (_grupos.isEmpty) {
       return const _Vacio(texto: 'No hay equipos disponibles ahora mismo.');
     }
     return RefreshIndicator(
       onRefresh: _recargarAsync,
       child: ListView.separated(
-        itemCount: _filas.length + 1, // +1: pie de "Cargar más"
+        itemCount: _grupos.length,
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
-          if (i == _filas.length) {
-            return PieCargarMas(
-              cargando: _cargandoMas,
-              hayMas: _hayMas,
-              onCargarMas: _cargar,
-            );
-          }
-          final d = _filas[i];
-          return ListTile(
-            // El mismo adorno de "Por referencia", con el nombre de la
-            // referencia de esta unidad (ver widgets/avatar_referencia.dart).
+          final g = _grupos[i];
+          return ExpansionTile(
+            // SIN esta llave el ListView recicla las filas al desplazarse y
+            // el chevron que el usuario abrió se cerraría solo.
+            key: PageStorageKey(g.referenciaId),
+            // El MISMO adorno de la pestaña Referencias, con su tamaño y su
+            // color (ver widgets/avatar_referencia.dart): la referencia se
+            // reconoce igual en las dos listas.
             leading: mostrarAvatarReferencias
-                ? AvatarReferencia(nombre: d.activo.referenciaNombre ?? '')
+                ? AvatarReferencia(nombre: g.nombre)
                 : null,
-            title: Text(d.activo.serial),
-            subtitle: Text(
-                '${d.activo.referenciaNombre ?? '—'} · ${d.activo.bodegaNombre ?? '—'}'),
-            trailing: Text(_money.format(d.activo.valorActual),
-                style: const TextStyle(fontSize: 12)),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
-            ),
+            title: Text(g.nombre),
+            subtitle: Text([
+              g.marca,
+              g.modelo,
+              _cuenta(g.cuantas(_filtro)),
+            ].where((e) => e != null && e.isNotEmpty).join(' · ')),
+            onExpansionChanged: (abierto) {
+              if (abierto) {
+                _abiertos.add(g.referenciaId);
+                if (!_unidades.containsKey(g.referenciaId)) {
+                  _cargarUnidades(g.referenciaId);
+                }
+              } else {
+                _abiertos.remove(g.referenciaId);
+              }
+            },
+            children: _unidadesDe(g),
           );
         },
       ),
     );
   }
 
-  Future<void> _recargarAsync() => _cargar(desdeCero: true);
+  Future<void> _recargarAsync() => _cargar();
 }
 
 // ---------------------------------------------------------------------

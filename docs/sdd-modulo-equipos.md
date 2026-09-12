@@ -720,9 +720,14 @@ Tres condiciones que puso el usuario, y cómo se cumplen:
 | **Poderlo quitar después** | Todo vive en `lib/widgets/avatar_referencia.dart`. Se **apaga** en las dos listas con `mostrarAvatarReferencias = false`; se **borra** quitando ese archivo y sus dos usos |
 
 El mismo ícono se puso después en la pestaña **"Disponibles"**, a pedido del
-usuario: allí cada fila es una unidad, y el ícono sale del nombre de su
-referencia — así una bomba se ve igual en las dos listas. Tampoco consulta
+usuario, para que una bomba se vea igual en las dos listas. Tampoco consulta
 nada: ese nombre ya venía en la lista (y en el caché sin señal).
+
+*(Actualizado el 2026-09-12.)* Al agrupar "Disponibles" por referencia (§5.8),
+el ícono **se movió de la fila al grupo**: ya no adorna cada unidad, sino la
+cabecera que las contiene — que es justamente donde vive el nombre de la
+referencia. El widget es el mismo, con el mismo tamaño y el mismo color; lo que
+cambió es de qué cuelga.
 
 Dos detalles:
 
@@ -785,6 +790,49 @@ como sencillo. Ahora se decide con todas las filas leídas, y hay una prueba
 que pone las filas en el orden "malo".
 
 ---
+
+### 5.8 Disponibles: una lista de seriales no se lee; agrupada por referencia, sí
+
+*(2026-09-12, a pedido del usuario.)* La pestaña **Disponibles** era una lista
+plana: una fila por unidad, con el serial de título. Con 4 equipos se lee bien.
+Con los 1.412 del inventario real son **32 flotadores GENEBRE seguidos**, 20
+difusores seguidos y 18 bombas dosificadoras seguidas — una pared de seriales
+donde no se distingue nada.
+
+Ahora cada **referencia** es una fila que se abre y se cierra con un chevron, y
+sus seriales cuelgan de ella, ocultos hasta que alguien los pide. El título del
+grupo es la referencia; el ícono, el de §5.5.
+
+**Las dos decisiones de fondo:**
+
+| Decisión | Por qué |
+|---|---|
+| **El contador del grupo lo calcula la BASE**, no la app contando lo descargado | La lista venía paginada de 50 en 50. Contar lo que se alcanzó a bajar diría *"3 disponibles"* cuando hay 7 y cuatro venían en la página siguiente — un número que el jefe de bodega puede creer y usar. Los grupos salen de `activos_resumen_por_referencia()`, que cuenta en SQL |
+| **Los seriales se piden al abrir el chevron**, no antes | Bajar todas las unidades de todas las referencias para mostrarlas escondidas es tráfico que nadie mira. Se piden una vez por grupo y se guardan: cerrar y volver a abrir no vuelve a consultar |
+
+**Y el hueco que destapó:** `activos_resumen_por_referencia()` **no tenía
+respaldo sin señal**. La pestaña "Por referencia" llevaba desde su nacimiento
+mostrando la pantalla de error cuando no había internet, aunque el caché local
+tuviera todos los equipos. Nadie lo había notado porque en la oficina siempre
+hay señal — y el módulo lo usa gente **en bodega**. Se le agregó el mismo
+respaldo que ya tenía `disponibles()`: contar sobre el caché, con los mismos
+filtros independientes que usa el SQL (`disponible` y `estado='entregado'` se
+cuentan aparte, y *no disponibles* sale de la resta).
+
+> **Lección:** al agrupar una lista paginada, el contador del grupo no puede
+> salir de lo que hay en memoria. O lo cuenta la base, o el número miente
+> justo hasta que alguien carga la página siguiente — y para entonces ya
+> tomó la decisión.
+
+> **Lección:** una función nueva hereda las obligaciones de las viejas. Si en
+> este módulo *toda* consulta tiene respaldo en el caché porque se usa sin
+> señal, la que se agregue después también lo necesita; si no, abre un hueco
+> que solo aparece donde no hay quien lo reporte.
+
+**Detalle de implementación que cuesta un bug si se olvida:** cada `ExpansionTile`
+lleva `PageStorageKey(referenciaId)`. Sin esa llave, el `ListView` recicla las
+filas al desplazarse y el chevron que el usuario abrió **se cierra solo** al
+volver a subir.
 
 ## 6. Permisos
 

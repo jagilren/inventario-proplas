@@ -1063,10 +1063,48 @@ class ActivosService {
 
   /// Nivel 1: resumen por modelo, contado en la base.
   static Future<List<ResumenReferencia>> resumenPorReferencia() async {
-    final res = await supabase.rpc('activos_resumen_por_referencia');
-    return (res as List)
-        .map((e) => ResumenReferencia.fromMap(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final res = await supabase.rpc('activos_resumen_por_referencia');
+      return (res as List)
+          .map((e) => ResumenReferencia.fromMap(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      SyncService.enLinea.value = false;
+      // Sin señal se cuenta sobre el caché, que guarda las filas de
+      // `activos_disponibilidad` con su `disponible`, su `estado` y su
+      // referencia. Mismas cuentas que la función de la base
+      // (schema_v68): las dos son filtros INDEPENDIENTES, no un si/sino,
+      // y `noDisponibles` sale de total − disponibles − vendidos.
+      final filas = await LocalStore.leerActivos();
+      final porRef = <String, Map<String, dynamic>>{};
+      for (final a in filas) {
+        final id = a['referencia_id'] as String?;
+        if (id == null) continue;
+        final ref = (a['activo_referencias'] as Map?) ?? const {};
+        final acc = porRef.putIfAbsent(
+            id,
+            () => <String, dynamic>{
+                  'referencia_id': id,
+                  'nombre': (ref['nombre'] ?? '—').toString(),
+                  'marca': ref['marca'],
+                  'modelo': ref['modelo'],
+                  'total': 0,
+                  'disponibles': 0,
+                  'vendidos': 0,
+                });
+        acc['total'] = (acc['total'] as int) + 1;
+        if (a['disponible'] == true) {
+          acc['disponibles'] = (acc['disponibles'] as int) + 1;
+        }
+        if (a['estado'] == 'entregado') {
+          acc['vendidos'] = (acc['vendidos'] as int) + 1;
+        }
+      }
+      // La función de la base devuelve `order by r.nombre`; aquí igual, para
+      // que la lista no se vea distinta según haya señal o no.
+      return porRef.values.map(ResumenReferencia.fromMap).toList()
+        ..sort((x, y) => x.nombre.compareTo(y.nombre));
+    }
   }
 
   static const _selectActivo =
