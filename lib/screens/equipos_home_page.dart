@@ -567,6 +567,20 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
   /// `onExpansionChanged` no se dispara solo.
   final Set<String> _abiertos = {};
 
+  // --- Buscador ------------------------------------------------------------
+  // Busca lo mismo que el de la pestaña Movimientos (serial, referencia,
+  // marca, modelo), pero en DOS tiempos, porque aquí la lista está agrupada:
+  //
+  //  - Por texto de la REFERENCIA: instantáneo, los grupos ya están en
+  //    memoria (igual que el filtro de la pestaña Referencias).
+  //  - Por SERIAL: va a la base, porque los seriales NO están en memoria —
+  //    cuelgan de su grupo y se piden al abrirlo. Buscarlos aquí sería
+  //    buscar en lo que no hay.
+  final _buscador = TextEditingController();
+  Timer? _teclado;
+  String _q = '';
+  List<ActivoDisponibilidad> _porSerial = [];
+
   FiltroEquipos get _filtro => widget.disponible
       ? FiltroEquipos.disponibles
       : FiltroEquipos.noDisponibles;
@@ -580,6 +594,8 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
 
   @override
   void dispose() {
+    _teclado?.cancel();
+    _buscador.dispose();
     ActivosService.revision.removeListener(_recargar);
     super.dispose();
   }
@@ -609,6 +625,8 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
       for (final id in _abiertos) {
         _cargarUnidades(id);
       }
+      // Lo que se movió también pudo cambiar el resultado de la búsqueda.
+      if (_q.isNotEmpty) _buscarSerial();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -644,14 +662,97 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
     }
   }
 
+  void _alEscribir(String texto) {
+    setState(() => _q = texto.trim());
+    _teclado?.cancel();
+    // La misma espera que en Movimientos: en un móvil, tener que rematar con
+    // Enter hace que la pantalla parezca rota.
+    _teclado = Timer(const Duration(milliseconds: 400), _buscarSerial);
+  }
+
+  void _limpiar() {
+    _teclado?.cancel();
+    _buscador.clear();
+    setState(() {
+      _q = '';
+      _porSerial = [];
+    });
+  }
+
+  Future<void> _buscarSerial() async {
+    final q = _q;
+    if (q.isEmpty) {
+      if (mounted) setState(() => _porSerial = []);
+      return;
+    }
+    try {
+      final res = await ActivosService.disponibles(
+        filtro: _filtro,
+        serial: q,
+        limit: _porGrupo,
+      );
+      // Si mientras iba y venía el usuario escribió otra cosa, esta respuesta
+      // ya no es la que se está esperando: se descarta.
+      if (!mounted || q != _q) return;
+      setState(() => _porSerial = res);
+    } catch (_) {
+      if (!mounted || q != _q) return;
+      setState(() => _porSerial = []);
+    }
+  }
+
+  /// Las unidades de este grupo cuyo serial coincide con lo buscado.
+  List<ActivoDisponibilidad> _coincidenciasDe(ResumenReferencia g) => _q.isEmpty
+      ? const []
+      : _porSerial
+          .where((d) => d.activo.referenciaId == g.referenciaId)
+          .toList();
+
+  /// Los grupos que se ven: los que coinciden por el texto de la referencia
+  /// —palabra por palabra, sin importar tildes ni mayúsculas, igual que en
+  /// la pestaña Referencias— más los que contienen un serial que coincide.
+  List<ResumenReferencia> get _visibles {
+    if (_q.isEmpty) return _grupos;
+    final palabras =
+        normalizarTexto(_q).split(' ').where((p) => p.isNotEmpty);
+    final conSerial = _porSerial.map((d) => d.activo.referenciaId).toSet();
+    return _grupos.where((g) {
+      if (conSerial.contains(g.referenciaId)) return true;
+      final texto = normalizarTexto(g.etiqueta);
+      return palabras.every(texto.contains);
+    }).toList();
+  }
+
   /// "4 disponibles" / "1 no disponible", con el singular bien puesto.
   String _cuenta(int n) => widget.disponible
       ? '$n ${n == 1 ? 'disponible' : 'disponibles'}'
       : '$n ${n == 1 ? 'no disponible' : 'no disponibles'}';
 
-  /// Lo que se ve al abrir un chevron: la rueda, el error con su reintento,
-  /// o los seriales.
+  Widget _fila(ActivoDisponibilidad d) => ListTile(
+        // Sangrado a la altura del texto del grupo: la unidad se lee como
+        // que cuelga de su referencia.
+        contentPadding: const EdgeInsets.only(left: 72, right: 16),
+        title: Text(d.activo.serial),
+        // La referencia ya está en el título del grupo; aquí sobra.
+        subtitle: Text(d.activo.bodegaNombre ?? '—'),
+        trailing: Text(_money.format(d.activo.valorActual),
+            style: const TextStyle(fontSize: 12)),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
+        ),
+      );
+
+  /// Lo que se ve al abrir un chevron: lo que coincide con la búsqueda, la
+  /// rueda, el error con su reintento, o los seriales.
   List<Widget> _unidadesDe(ResumenReferencia g) {
+    // Si el grupo salió porque uno de SUS seriales coincide, se muestra solo
+    // ese, no las 32 unidades de la referencia: el usuario preguntó por un
+    // serial, no por el modelo.
+    final coinciden = _coincidenciasDe(g);
+    if (coinciden.isNotEmpty) return coinciden.map(_fila).toList();
+
     final error = _errorRef[g.referenciaId];
     if (error != null) {
       return [
@@ -682,23 +783,7 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
         ),
       ];
     }
-    return unidades
-        .map((d) => ListTile(
-              // Sangrado a la altura del texto del grupo: la unidad se lee
-              // como que cuelga de su referencia.
-              contentPadding: const EdgeInsets.only(left: 72, right: 16),
-              title: Text(d.activo.serial),
-              // La referencia ya está en el título del grupo; aquí sobra.
-              subtitle: Text(d.activo.bodegaNombre ?? '—'),
-              trailing: Text(_money.format(d.activo.valorActual),
-                  style: const TextStyle(fontSize: 12)),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => ActivoDetallePage(activoId: d.activo.id)),
-              ),
-            ))
-        .toList();
+    return unidades.map(_fila).toList();
   }
 
   @override
@@ -710,43 +795,89 @@ class _ListaDisponibilidadState extends State<_ListaDisponibilidad> {
     if (_grupos.isEmpty) {
       return const _Vacio(texto: 'No hay equipos disponibles ahora mismo.');
     }
-    return RefreshIndicator(
-      onRefresh: _recargarAsync,
-      child: ListView.separated(
-        itemCount: _grupos.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) {
-          final g = _grupos[i];
-          return ExpansionTile(
-            // SIN esta llave el ListView recicla las filas al desplazarse y
-            // el chevron que el usuario abrió se cerraría solo.
-            key: PageStorageKey(g.referenciaId),
-            // El MISMO adorno de la pestaña Referencias, con su tamaño y su
-            // color (ver widgets/avatar_referencia.dart): la referencia se
-            // reconoce igual en las dos listas.
-            leading: mostrarAvatarReferencias
-                ? AvatarReferencia(nombre: g.nombre)
-                : null,
-            title: Text(g.nombre),
-            subtitle: Text([
-              g.marca,
-              g.modelo,
-              _cuenta(g.cuantas(_filtro)),
-            ].where((e) => e != null && e.isNotEmpty).join(' · ')),
-            onExpansionChanged: (abierto) {
-              if (abierto) {
-                _abiertos.add(g.referenciaId);
-                if (!_unidades.containsKey(g.referenciaId)) {
-                  _cargarUnidades(g.referenciaId);
-                }
-              } else {
-                _abiertos.remove(g.referenciaId);
-              }
-            },
-            children: _unidadesDe(g),
-          );
-        },
-      ),
+    final visibles = _visibles;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: TextField(
+            controller: _buscador,
+            textInputAction: TextInputAction.search,
+            onChanged: _alEscribir,
+            onSubmitted: (_) => _buscarSerial(),
+            decoration: InputDecoration(
+              hintText: 'Serial, referencia, marca o modelo…',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              isDense: true,
+              suffixIcon: _q.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Limpiar',
+                      onPressed: _limpiar,
+                    ),
+            ),
+          ),
+        ),
+        if (visibles.isEmpty)
+          const Expanded(
+            child: _Vacio(texto: 'Ningún equipo coincide con la búsqueda.'),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _recargarAsync,
+              child: ListView.separated(
+                itemCount: visibles.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final g = visibles[i];
+                  final porSerial = _coincidenciasDe(g).isNotEmpty;
+                  return ExpansionTile(
+                    // Con una coincidencia de serial el grupo se abre solo.
+                    //
+                    // OJO con la llave: `ExpansionTile` con `PageStorageKey`
+                    // RESTAURA el estado guardado e IGNORA
+                    // `initiallyExpanded`, así que para abrirlo hay que darle
+                    // una llave sin estado previo — una `ValueKey` que
+                    // incluye el texto buscado. Fuera de la búsqueda sí se
+                    // quiere la `PageStorageKey`: sin ella el `ListView`
+                    // recicla las filas al desplazarse y el chevron que el
+                    // usuario abrió se cerraría solo.
+                    key: porSerial
+                        ? ValueKey('${g.referenciaId}|$_q')
+                        : PageStorageKey(g.referenciaId),
+                    initiallyExpanded: porSerial,
+                    // El MISMO adorno de la pestaña Referencias, con su
+                    // tamaño y su color (ver widgets/avatar_referencia.dart):
+                    // la referencia se reconoce igual en las dos listas.
+                    leading: mostrarAvatarReferencias
+                        ? AvatarReferencia(nombre: g.nombre)
+                        : null,
+                    title: Text(g.nombre),
+                    subtitle: Text([
+                      g.marca,
+                      g.modelo,
+                      _cuenta(g.cuantas(_filtro)),
+                    ].where((e) => e != null && e.isNotEmpty).join(' · ')),
+                    onExpansionChanged: (abierto) {
+                      if (abierto) {
+                        _abiertos.add(g.referenciaId);
+                        if (!_unidades.containsKey(g.referenciaId)) {
+                          _cargarUnidades(g.referenciaId);
+                        }
+                      } else {
+                        _abiertos.remove(g.referenciaId);
+                      }
+                    },
+                    children: _unidadesDe(g),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 

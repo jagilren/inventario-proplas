@@ -1127,6 +1127,59 @@ que solo aparece donde no hay quien lo reporte.</p>
 lleva <code>PageStorageKey(referenciaId)</code>. Sin esa llave, el <code>ListView</code> recicla las
 filas al desplazarse y el chevron que el usuario abrió <strong>se cierra solo</strong> al
 volver a subir.</p>
+<h4 id="el-buscador-en-dos-tiempos">El buscador, en dos tiempos</h4>
+<p><em>(2026-09-12, el mismo día: lo pidió el usuario al notar que &quot;Movimientos&quot; sí
+tenía buscador y esta vista no.)</em> Y era peor después de agrupar: para ver un
+serial ahora hay que abrir el chevron correcto.</p>
+<p>Busca lo mismo que el de Movimientos —serial, referencia, marca, modelo— pero
+por <strong>dos caminos distintos a la vez</strong>, y la razón es la agrupación:</p>
+<table>
+<thead>
+<tr>
+<th>Qué se busca</th>
+<th>Dónde</th>
+<th>Por qué ahí</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Texto de la <strong>referencia</strong></td>
+<td>En memoria, mientras se escribe</td>
+<td>Los grupos ya están cargados. Es el mismo filtro de la pestaña &quot;Por referencia&quot;: palabra por palabra, sin importar tildes ni mayúsculas</td>
+</tr>
+<tr>
+<td><strong>Serial</strong></td>
+<td>En la base, 400 ms después de dejar de escribir</td>
+<td>Los seriales <strong>no</strong> están en memoria: cuelgan de su grupo y se piden al abrirlo. Filtrar lo descargado diría &quot;no existe&quot; de un equipo que sí está</td>
+</tr>
+</tbody>
+</table>
+<p>Cuando la coincidencia viene de un serial, su grupo <strong>se abre solo y muestra
+únicamente ese serial</strong>, no las 32 unidades de la referencia: el usuario
+preguntó por un equipo, no por el modelo.</p>
+<p><strong>Dos trampas que hubo que sortear:</strong></p>
+<ul>
+<li><strong>La respuesta que llega tarde.</strong> Si el usuario sigue escribiendo, la consulta
+anterior puede volver después de la nueva y pintar un resultado viejo. Antes
+de aplicarla se compara el texto con el que está buscándose ahora, y si no es
+el mismo se descarta.</li>
+<li><strong><code>initiallyExpanded</code> no funciona con <code>PageStorageKey</code>.</strong> <code>ExpansionTile</code>
+<strong>restaura</strong> el estado guardado y <strong>ignora</strong> <code>initiallyExpanded</code>, así que el
+grupo del serial no se abría. Mientras hay búsqueda se le da una <code>ValueKey</code>
+que incluye el texto —widget nuevo, sin estado previo— y fuera de la búsqueda
+vuelve la <code>PageStorageKey</code>, que es la que evita que el chevron se cierre al
+desplazarse.</li>
+</ul>
+<blockquote>
+<p><strong>Lección:</strong> dos cosas que el usuario ve como &quot;una sola búsqueda&quot; pueden vivir
+en sitios distintos. Antes de escribir el filtro hay que preguntarse <strong>dónde
+está de verdad cada dato</strong> — la mitad estaba en memoria y la otra mitad no, y
+buscar las dos en el mismo sitio habría jurado que un equipo no existe.</p>
+</blockquote>
+<p><strong>De paso:</strong> <code>disponibles(serial:)</code> existía en el servicio pero <strong>ninguna
+pantalla lo había llamado nunca</strong>. Se probó contra la API real antes de
+publicar (consulta buena → 200; la misma con la columna mal escrita → 400, para
+confirmar que el 200 no era un falso positivo).</p>
 <h2 id="6-permisos">6. Permisos</h2>
 <p><strong>Qué va aquí:</strong> quién puede hacer qué, y <strong>dónde se hace cumplir</strong>.</p>
 <p><strong>El del módulo:</strong> un rol nuevo, <code>equipos</code>, que da acceso completo. <code>admin</code> y

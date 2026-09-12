@@ -834,6 +834,47 @@ lleva `PageStorageKey(referenciaId)`. Sin esa llave, el `ListView` recicla las
 filas al desplazarse y el chevron que el usuario abrió **se cierra solo** al
 volver a subir.
 
+#### El buscador, en dos tiempos
+
+*(2026-09-12, el mismo día: lo pidió el usuario al notar que "Movimientos" sí
+tenía buscador y esta vista no.)* Y era peor después de agrupar: para ver un
+serial ahora hay que abrir el chevron correcto.
+
+Busca lo mismo que el de Movimientos —serial, referencia, marca, modelo— pero
+por **dos caminos distintos a la vez**, y la razón es la agrupación:
+
+| Qué se busca | Dónde | Por qué ahí |
+|---|---|---|
+| Texto de la **referencia** | En memoria, mientras se escribe | Los grupos ya están cargados. Es el mismo filtro de la pestaña "Por referencia": palabra por palabra, sin importar tildes ni mayúsculas |
+| **Serial** | En la base, 400 ms después de dejar de escribir | Los seriales **no** están en memoria: cuelgan de su grupo y se piden al abrirlo. Filtrar lo descargado diría "no existe" de un equipo que sí está |
+
+Cuando la coincidencia viene de un serial, su grupo **se abre solo y muestra
+únicamente ese serial**, no las 32 unidades de la referencia: el usuario
+preguntó por un equipo, no por el modelo.
+
+**Dos trampas que hubo que sortear:**
+
+- **La respuesta que llega tarde.** Si el usuario sigue escribiendo, la consulta
+  anterior puede volver después de la nueva y pintar un resultado viejo. Antes
+  de aplicarla se compara el texto con el que está buscándose ahora, y si no es
+  el mismo se descarta.
+- **`initiallyExpanded` no funciona con `PageStorageKey`.** `ExpansionTile`
+  **restaura** el estado guardado y **ignora** `initiallyExpanded`, así que el
+  grupo del serial no se abría. Mientras hay búsqueda se le da una `ValueKey`
+  que incluye el texto —widget nuevo, sin estado previo— y fuera de la búsqueda
+  vuelve la `PageStorageKey`, que es la que evita que el chevron se cierre al
+  desplazarse.
+
+> **Lección:** dos cosas que el usuario ve como "una sola búsqueda" pueden vivir
+> en sitios distintos. Antes de escribir el filtro hay que preguntarse **dónde
+> está de verdad cada dato** — la mitad estaba en memoria y la otra mitad no, y
+> buscar las dos en el mismo sitio habría jurado que un equipo no existe.
+
+**De paso:** `disponibles(serial:)` existía en el servicio pero **ninguna
+pantalla lo había llamado nunca**. Se probó contra la API real antes de
+publicar (consulta buena → 200; la misma con la columna mal escrita → 400, para
+confirmar que el 200 no era un falso positivo).
+
 ## 6. Permisos
 
 **Qué va aquí:** quién puede hacer qué, y **dónde se hace cumplir**.
